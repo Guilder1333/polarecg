@@ -30,6 +30,7 @@ fun PairingScreen(
     selectedDeviceId: String?,
     onRescan: () -> Unit,
     onSelect: (FoundDevice) -> Unit,
+    connectionPanel: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -45,6 +46,8 @@ fun PairingScreen(
             )
         }
         Text(stringResource(R.string.pair_hint))
+
+        if (selectedDeviceId != null) connectionPanel()
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onRescan, enabled = !scanning) {

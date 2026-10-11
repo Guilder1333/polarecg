@@ -22,4 +22,13 @@
     <string name="pair_device_details">ID %1$s · %2$d dBm</string>
     <string name="pair_use">Use</string>
     <string name="pair_in_use">In use</string>
+
+    <string name="conn_title">Connection test</string>
+    <string name="conn_connect">Connect</string>
+    <string name="conn_disconnect">Disconnect</string>
+    <string name="conn_state_disconnected">Disconnected</string>
+    <string name="conn_state_connecting">Connecting…</string>
+    <string name="conn_state_connected">Connected, starting streams…</string>
+    <string name="conn_state_streaming">Streaming</string>
+    <string name="conn_stats">HR %1$s bpm · ECG frames %2$d · ACC frames %3$d</string>
 </resources>

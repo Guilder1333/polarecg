@@ -219,7 +219,7 @@ data, and logs every gap. Everything else depends on this.
   `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `WAKE_LOCK`.
   Runtime permission flow in UI with clear explanations.
 - [x] **P1.2 [AI]** Device pairing screen: scan, show H10 by device ID, save chosen device ID.
-- [ ] **P1.3 [AI]** `PolarConnection` wrapper around the SDK: connect, start ECG (130 Hz),
+- [x] **P1.3 [AI]** `PolarConnection` wrapper around the SDK: connect, start ECG (130 Hz),
   ACC (e.g. 50 Hz, ±8 g), HR/RR. Expose Kotlin `Flow`s of typed frames
   (`EcgFrame(sensorTimeNs, phoneTimeMs, samplesUv: IntArray)`, etc.).
 - [ ] **P1.4 [AI]** `AcquisitionService`: foreground service (`connectedDevice` type) with a

@@ -55,6 +55,7 @@ fun PairingRoute(app: PolarisApp, modifier: Modifier = Modifier) {
             app.deviceStore.deviceId = it.deviceId
             selectedId = it.deviceId
         },
+        connectionPanel = { ConnectionTestPanel(app, selectedId) },
         modifier = modifier,
     )
 }
