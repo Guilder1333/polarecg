@@ -14,8 +14,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.punkunpun.polarisecg.pairing.PairingRoute
 import com.punkunpun.polarisecg.permissions.AppPermissions
 import com.punkunpun.polarisecg.permissions.PermissionsScreen
 import com.punkunpun.polarisecg.ui.theme.PolarisECGTheme
@@ -58,8 +60,18 @@ class MainActivity : ComponentActivity() {
                     batteryGranted = AppPermissions.isIgnoringBatteryOptimizations(this@MainActivity)
                 }
 
+                // rememberSaveable survives screen rotation, plain remember does not.
+                var permissionsAcknowledged by rememberSaveable { mutableStateOf(false) }
+                val allGranted = bluetoothGranted && notificationsGranted && batteryGranted
+                val showPairing = bluetoothGranted && (allGranted || permissionsAcknowledged)
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    PermissionsScreen(
+                    if (showPairing) {
+                        PairingRoute(
+                            app = application as PolarisApp,
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else PermissionsScreen(
                         bluetoothGranted = bluetoothGranted,
                         notificationsGranted = notificationsGranted,
                         batteryGranted = batteryGranted,
@@ -70,6 +82,7 @@ class MainActivity : ComponentActivity() {
                         onRequestBattery = {
                             batteryLauncher.launch(AppPermissions.batteryOptimizationIntent(this))
                         },
+                        onContinue = { permissionsAcknowledged = true },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

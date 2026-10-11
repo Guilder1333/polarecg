@@ -31,6 +31,7 @@ fun PermissionsScreen(
     onRequestBluetooth: () -> Unit,
     onRequestNotifications: () -> Unit,
     onRequestBattery: () -> Unit,
+    onContinue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -59,11 +60,11 @@ fun PermissionsScreen(
             onGrant = onRequestBattery,
         )
 
-        if (bluetoothGranted && notificationsGranted && batteryGranted) {
-            Text(
-                stringResource(R.string.perm_all_granted),
-                style = MaterialTheme.typography.titleMedium,
-            )
+        // Bluetooth is the only hard requirement; the others make overnight recording reliable.
+        if (bluetoothGranted) {
+            Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.perm_continue))
+            }
         }
     }
 }

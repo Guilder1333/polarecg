@@ -11,5 +11,15 @@
     <string name="perm_battery_why">Without this Android may stop the recording during the night. You may also need to set Battery to \"Unrestricted\" for this app in system settings.</string>
     <string name="perm_granted">Granted</string>
     <string name="perm_grant">Grant</string>
-    <string name="perm_all_granted">All set. Next: pick your H10 strap.</string>
+    <string name="perm_continue">Continue</string>
+
+    <string name="pair_title">Choose your H10</string>
+    <string name="pair_hint">Wear the strap with moist electrodes so it wakes up, and close Polar Flow / Polar Beat first.</string>
+    <string name="pair_selected">Selected: %1$s</string>
+    <string name="pair_scan">Scan again</string>
+    <string name="pair_scanning">Scanning…</string>
+    <string name="pair_none_found">No H10 found yet. Check that the strap is worn and moist, then scan again.</string>
+    <string name="pair_device_details">ID %1$s · %2$d dBm</string>
+    <string name="pair_use">Use</string>
+    <string name="pair_in_use">In use</string>
 </resources>
