@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">PolarisECG</string>
+
+    <string name="perm_title">Permissions</string>
+    <string name="perm_intro">PolarisECG needs a few permissions to record your ECG reliably, even overnight with the screen off. Nothing leaves your phone.</string>
+    <string name="perm_bluetooth_title">Bluetooth</string>
+    <string name="perm_bluetooth_why">Needed to find your Polar H10 strap and connect to it. It is not used to determine your location.</string>
+    <string name="perm_notifications_title">Notifications</string>
+    <string name="perm_notifications_why">Android requires a visible notification while recording runs in the background. It also shows connection status.</string>
+    <string name="perm_battery_title">Unrestricted battery use</string>
+    <string name="perm_battery_why">Without this Android may stop the recording during the night. You may also need to set Battery to \"Unrestricted\" for this app in system settings.</string>
+    <string name="perm_granted">Granted</string>
+    <string name="perm_grant">Grant</string>
+    <string name="perm_all_granted">All set. Next: pick your H10 strap.</string>
 </resources>

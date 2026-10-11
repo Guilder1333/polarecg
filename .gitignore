@@ -1,15 +1,48 @@
+# Gradle / build output (any module)
+.gradle/
+build/
+.kotlin/
+local.properties
 *.iml
-.gradle
-/local.properties
+
+# IDE (shared .idea files already tracked are kept; the rest is machine-specific)
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+/.idea/shelf/
+/.idea/dictionaries/
+.vscode/
 .DS_Store
-/build
-/captures
+Thumbs.db
+
+# Android native / packaging / secrets
 .externalNativeBuild
 .cxx
-local.properties
+/captures
+*.apk
+*.aab
+*.ap_
+*.dex
+*.keystore
+*.jks
+google-services.json
+*.hprof
+
+# Personal health data and recordings (never commit)
+data/
+*.bin
+*.csv.gz
+
+# Python tooling (analysis/)
+analysis/.venv/
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Local-only tooling output
+graphify-out/
+.claude/settings.local.json

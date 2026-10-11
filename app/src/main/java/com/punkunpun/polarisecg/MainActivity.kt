@@ -2,46 +2,83 @@ package com.punkunpun.polarisecg
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import com.punkunpun.polarisecg.permissions.AppPermissions
+import com.punkunpun.polarisecg.permissions.PermissionsScreen
 import com.punkunpun.polarisecg.ui.theme.PolarisECGTheme
 
 class MainActivity : ComponentActivity() {
+
+    // Compose re-draws when a "state" value changes. Bumping this counter in onResume() lets the
+    // screen re-check permissions after the user returns from a system dialog or settings page.
+    // `by` delegates the property to the state object, so we read/write it like a plain Int.
+    private var resumeCount by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             PolarisECGTheme {
+                var bluetoothGranted by remember { mutableStateOf(AppPermissions.hasBluetooth(this)) }
+                var notificationsGranted by remember {
+                    mutableStateOf(AppPermissions.hasNotifications(this))
+                }
+                var batteryGranted by remember {
+                    mutableStateOf(AppPermissions.isIgnoringBatteryOptimizations(this))
+                }
+
+                // Launchers must be created during composition; they hand the result to the lambda.
+                val bluetoothLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestMultiplePermissions(),
+                ) { bluetoothGranted = AppPermissions.hasBluetooth(this) }
+                val notificationsLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) { notificationsGranted = it }
+                val batteryLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult(),
+                ) { batteryGranted = AppPermissions.isIgnoringBatteryOptimizations(this) }
+
+                // Runs again whenever resumeCount changes, i.e. each time the app returns to the foreground.
+                LaunchedEffect(resumeCount) {
+                    bluetoothGranted = AppPermissions.hasBluetooth(this@MainActivity)
+                    notificationsGranted = AppPermissions.hasNotifications(this@MainActivity)
+                    batteryGranted = AppPermissions.isIgnoringBatteryOptimizations(this@MainActivity)
+                }
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
+                    PermissionsScreen(
+                        bluetoothGranted = bluetoothGranted,
+                        notificationsGranted = notificationsGranted,
+                        batteryGranted = batteryGranted,
+                        onRequestBluetooth = { bluetoothLauncher.launch(AppPermissions.bluetooth) },
+                        onRequestNotifications = {
+                            notificationsLauncher.launch(AppPermissions.NOTIFICATIONS)
+                        },
+                        onRequestBattery = {
+                            batteryLauncher.launch(AppPermissions.batteryOptimizationIntent(this))
+                        },
+                        modifier = Modifier.padding(innerPadding),
                     )
                 }
             }
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    PolarisECGTheme {
-        Greeting("Android")
+    override fun onResume() {
+        super.onResume()
+        resumeCount++
     }
 }

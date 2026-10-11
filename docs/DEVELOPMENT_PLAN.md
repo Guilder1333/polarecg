@@ -194,27 +194,27 @@ Rough effort estimates assume part-time work with AI assistance.
 
 ### Phase 0 — Project setup (≈ 1 day)
 
-- [ ] **P0.1 [YOU]** Run `git init` and make a first commit. Create a private remote if you want backups.
-- [ ] **P0.2 [AI]** Add `data/`, `analysis/.venv/`, `*.bin`, `*.csv.gz` etc. to `.gitignore`.
-- [ ] **P0.3 [YOU]** Update H10 firmware via Polar Flow app (ECG streaming needs recent firmware),
+- [x] **P0.1 [YOU]** Run `git init` and make a first commit. Create a private remote if you want backups.
+- [x] **P0.2 [AI]** Add `data/`, `analysis/.venv/`, `*.bin`, `*.csv.gz` etc. to `.gitignore`.
+- [x] **P0.3 [YOU]** Update H10 firmware via Polar Flow app (ECG streaming needs recent firmware),
   then **force-close Polar Flow** and disable its background activity while testing.
-- [ ] **P0.4 [AI]** Create modules `:core-dsp` (Kotlin JVM library) and `:tools:cli` (Kotlin JVM
+- [x] **P0.4 [AI]** Create modules `:core-dsp` (Kotlin JVM library) and `:tools:cli` (Kotlin JVM
   application), wire `:app` → `:core-dsp`. Note: the project uses AGP 9 with built-in Kotlin for
   Android; JVM modules need the `org.jetbrains.kotlin.jvm` plugin at the same Kotlin version
   (2.2.10 in `gradle/libs.versions.toml`).
   **Done when:** `./gradlew build` passes and a trivial test in `:core-dsp` runs.
-- [ ] **P0.5 [AI]** Add Polar BLE SDK dependency (check the latest release on GitHub
+- [x] **P0.5 [AI]** Add Polar BLE SDK dependency (check the latest release on GitHub
   `polarofficial/polar-ble-sdk` for the correct coordinates — it has historically been published via
   JitPack and needs RxJava3).
   **Done when:** app builds with the SDK.
-- [ ] **P0.6 [AI]** Create `CLAUDE.md` / README pointer to this plan (done if already present).
+- [x] **P0.6 [AI]** Create `CLAUDE.md` / README pointer to this plan (done if already present).
 
 ### Phase 1 — Reliable acquisition (≈ 1–2 weeks) ⭐ most important
 
 Goal: the app connects to the H10, streams ECG + ACC + RR all night, survives Android, records raw
 data, and logs every gap. Everything else depends on this.
 
-- [ ] **P1.1 [AI]** Permissions & manifest: `BLUETOOTH_SCAN` (with `neverForLocation`),
+- [x] **P1.1 [AI]** Permissions & manifest: `BLUETOOTH_SCAN` (with `neverForLocation`),
   `BLUETOOTH_CONNECT`, `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`,
   `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `WAKE_LOCK`.
   Runtime permission flow in UI with clear explanations.

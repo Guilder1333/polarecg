@@ -19,8 +19,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Polar BLE SDK is published via JitPack
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
 rootProject.name = "PolarisECG"
 include(":app")
+include(":core-dsp")
+include(":tools:cli")
