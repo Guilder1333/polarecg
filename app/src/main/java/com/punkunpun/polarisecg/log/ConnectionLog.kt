@@ -34,6 +34,9 @@ enum class LogType {
 
     /** The user (or the service) ended the session on purpose. */
     STOPPED,
+
+    /** Sensor clock and phone clock suddenly disagree differently than before (P1.8). Not a gap. */
+    CLOCK_JUMP,
 }
 
 data class LogEvent(val timeMs: Long, val type: LogType, val detail: String? = null)
@@ -91,7 +94,7 @@ fun computeGaps(events: List<LogEvent>): List<Gap> {
                 close(e.timeMs)
                 streaming = false
             }
-            LogType.CONNECTING, LogType.CONNECTED -> Unit
+            LogType.CONNECTING, LogType.CONNECTED, LogType.CLOCK_JUMP -> Unit
         }
         lastTimeMs = e.timeMs
     }

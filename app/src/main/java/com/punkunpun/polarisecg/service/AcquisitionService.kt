@@ -81,7 +81,7 @@ class AcquisitionService : Service() {
             app.polarConnection.connect(deviceId)
         }
         if (recorder == null && app.deviceStore.rawRecording) {
-            recorder = RawRecorder(app.sessionsDir, app.polarConnection, deviceId, appVersion()).also { it.start() }
+            recorder = RawRecorder(app.sessionsDir, app.polarConnection, deviceId, appVersion(), app.connectionLog).also { it.start() }
         }
         watchStatusForNotification()
 

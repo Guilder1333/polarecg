@@ -232,7 +232,7 @@ data, and logs every gap. Everything else depends on this.
   `data/sessions/<startUtc>/` with hourly-rotated binary files for ECG, ACC, RR + `session.json`
   (device ID, firmware, settings). Document the binary format in `docs/RAW_FORMAT.md`.
   Add an "export session" action (share as zip) to get files onto the PC.
-- [ ] **P1.8 [AI]** Time mapping: for each connection record (sensor time, phone UTC) pairs; convert
+- [x] **P1.8 [AI]** Time mapping: for each connection record (sensor time, phone UTC) pairs; convert
   sample times to UTC. Detect and log large jumps.
 - [ ] **P1.9 [YOU]** Battery tests: one full night + one full day streaming. Note phone battery %
   used and estimate strap battery drain (Polar Flow shows strap battery level).

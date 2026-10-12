@@ -12,6 +12,7 @@ sessions/<startUtc>/            e.g. 20261012T221530Z   (UTC, yyyyMMdd'T'HHmmss'
     ecg_<hourUtc>.bin           e.g. ecg_20261012T22Z.bin   (one file per UTC clock hour)
     acc_<hourUtc>.bin
     hr_<hourUtc>.bin
+    timemap.csv
 ```
 
 - One session = one run of the acquisition service. Reconnects continue in the same files;
@@ -62,6 +63,17 @@ Written at start (`endUtc` = null) and rewritten when the session ends cleanly; 
 null the app was killed. Fields: `formatVersion`, `startUtc`, `endUtc` (ISO-8601 UTC), `deviceId`,
 `firmware` (null for now), `appVersion`, `phone`, `ecg` (`rateHz`, `resolutionBits`, `unit`),
 `acc` (`rateHz`, `resolutionBits`, `rangeG`, `unit`).
+
+## `timemap.csv`
+
+Sensor-clock → phone-UTC relation per connection (P1.8, class `TimeMapper` in `:core-dsp`).
+Header `connection,phoneUtcMs,sensorNs,offsetMs,kind`. `sensorNs` is the sensor time of the last
+sample of an ECG frame, `offsetMs` = phone UTC − sensor UTC, so
+`utcMs = sensorNs / 1e6 + 946684800000 + offsetMs`. `connection` counts from 0 and increases at
+every (re)start of the streams (the sensor clock may differ after one). `kind`: `start` (first
+frame of a connection), `periodic` (every 60 s), `jump` (offset changed by more than 1 s; also
+logged as `CLOCK_JUMP` in the connection log). The offset is the smallest one seen in the last
+60 s, so it carries the BLE latency of the least delayed frame (tens of ms).
 
 ## Getting data to the PC
 
