@@ -11,6 +11,8 @@ import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarSensorSetting
 import com.polar.sdk.api.model.PolarSensorSetting.SettingType
+import com.punkunpun.polarisecg.log.ConnectionLog
+import com.punkunpun.polarisecg.log.LogType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -51,7 +54,7 @@ private const val CONNECT_TIMEOUT_MS = 30_000L
  * streams are retried with back-off (see [ReconnectBackoff]). It must be created once and shared
  * (see PolarisApp).
  */
-class PolarConnection(private val api: PolarBleApi) {
+class PolarConnection(private val api: PolarBleApi, private val log: ConnectionLog) {
 
     // All stream collection runs in this scope. SupervisorJob: one failing stream (say ACC) does
     // not cancel the others. Dispatchers.Default: not the UI thread.
@@ -83,11 +86,11 @@ class PolarConnection(private val api: PolarBleApi) {
 
     private val callback = object : PolarBleApiCallback() {
         override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
-            if (polarDeviceInfo.deviceId == deviceId) _state.value = ConnectionState.Connecting
+            if (polarDeviceInfo.deviceId == deviceId) setState(ConnectionState.Connecting)
         }
 
         override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
-            if (polarDeviceInfo.deviceId == deviceId) _state.value = ConnectionState.Connected
+            if (polarDeviceInfo.deviceId == deviceId) setState(ConnectionState.Connected)
         }
 
         // Called by the SDK when it says a feature can now be used. Streaming must wait for this.
@@ -138,13 +141,14 @@ class PolarConnection(private val api: PolarBleApi) {
         wantConnected = false
         replaceRecoveryJob(null)
         val id = deviceId ?: return
+        log.log(LogType.STOPPED)
         stopStreams()
         try {
             api.disconnectFromDevice(id)
         } catch (e: Exception) {
             Log.w(TAG, "disconnectFromDevice failed", e)
         }
-        _state.value = ConnectionState.Disconnected()
+        _state.value = ConnectionState.Disconnected() // STOPPED was logged above
         deviceId = null
     }
 
@@ -157,7 +161,7 @@ class PolarConnection(private val api: PolarBleApi) {
     private fun onDisconnected(info: PolarDeviceInfo, reason: String?) {
         if (info.deviceId != deviceId) return
         stopStreams()
-        _state.value = ConnectionState.Disconnected(reason)
+        setState(ConnectionState.Disconnected(reason), reason)
         // Unless the user asked for this, the strap went out of range / lost contact: get it back.
         if (wantConnected) startReconnectLoop(firstDelayMs = backoff.next())
     }
@@ -174,7 +178,7 @@ class PolarConnection(private val api: PolarBleApi) {
                 while (isActive && wantConnected) {
                     if (wait > 0) delay(wait)
                     val id = deviceId ?: return@launch
-                    _state.value = ConnectionState.Connecting
+                    setState(ConnectionState.Connecting, if (firstDelayMs == 0L && wait == 0L) "connect" else "retry")
                     try {
                         api.connectToDevice(id)
                     } catch (e: Exception) {
@@ -203,11 +207,24 @@ class PolarConnection(private val api: PolarBleApi) {
             if (_state.value != ConnectionState.Streaming) return
             recoveryJob = scope.launch {
                 stopStreams()
-                _state.value = ConnectionState.Connected
+                setState(ConnectionState.Connected)
                 delay(backoff.next())
                 deviceId?.let { if (wantConnected) startStreams(it) }
             }
         }
+    }
+
+    /** Publishes the new state and logs it, unless it is identical to the current one. */
+    private fun setState(new: ConnectionState, detail: String? = null) {
+        val old = _state.getAndUpdate { new }
+        if (old == new) return
+        val type = when (new) {
+            is ConnectionState.Disconnected -> LogType.DISCONNECTED
+            ConnectionState.Connecting -> LogType.CONNECTING
+            ConnectionState.Connected -> LogType.CONNECTED
+            ConnectionState.Streaming -> LogType.STREAMING
+        }
+        log.log(type, detail)
     }
 
     /** Cancels the current recovery job (if any) and remembers the new one. */
@@ -282,7 +299,7 @@ class PolarConnection(private val api: PolarBleApi) {
                 }
             },
         )
-        _state.value = ConnectionState.Streaming
+        setState(ConnectionState.Streaming)
     }
 
     /**
@@ -296,6 +313,7 @@ class PolarConnection(private val api: PolarBleApi) {
             throw e // normal shutdown; must be rethrown so the coroutine really cancels
         } catch (e: Exception) {
             Log.w(TAG, "$name stream failed", e)
+            log.log(LogType.STREAM_ERROR, "$name: ${e.message ?: e.javaClass.simpleName}")
             onStreamFailed()
         }
     }
