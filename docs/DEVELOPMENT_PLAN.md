@@ -224,7 +224,7 @@ data, and logs every gap. Everything else depends on this.
   (`EcgFrame(sensorTimeNs, phoneTimeMs, samplesUv: IntArray)`, etc.).
 - [x] **P1.4 [AI]** `AcquisitionService`: foreground service (`connectedDevice` type) with a
   persistent notification showing status (connected / reconnecting / HR). Start/stop from UI.
-- [ ] **P1.5 [AI]** Reconnect logic: on disconnect, retry with back-off (e.g. 2 s → 5 s → 15 s → 30 s
+- [x] **P1.5 [AI]** Reconnect logic: on disconnect, retry with back-off (e.g. 2 s → 5 s → 15 s → 30 s
   cap), restart streams after reconnect, keep retrying indefinitely while the session is active.
 - [ ] **P1.6 [AI]** `ConnectionLog`: write every connect / disconnect / stream error / app start with
   timestamps; compute gaps. Diagnostics screen listing them.

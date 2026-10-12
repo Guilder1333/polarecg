@@ -17,13 +17,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "PolarConnection"
 
@@ -36,12 +40,16 @@ private const val ACC_RATE_HZ = 50
 private const val ACC_RESOLUTION_BITS = 16
 private const val ACC_RANGE_G = 8
 
+/** How long one connect attempt may take before we give up on it and retry. */
+private const val CONNECT_TIMEOUT_MS = 30_000L
+
 /**
  * Wraps the Polar BLE SDK: connect to one H10, start ECG + ACC + HR streams, and republish them
  * as typed Kotlin Flows ([ecg], [acc], [hr]) plus a [state].
  *
- * Reconnect-with-back-off is deliberately NOT here; that is task P1.5. This class only reports
- * what happened. It must be created once and shared (see PolarisApp).
+ * Once [connect] is called it keeps the link up until [disconnect]: dropped links and failed
+ * streams are retried with back-off (see [ReconnectBackoff]). It must be created once and shared
+ * (see PolarisApp).
  */
 class PolarConnection(private val api: PolarBleApi) {
 
@@ -64,6 +72,14 @@ class PolarConnection(private val api: PolarBleApi) {
 
     @Volatile private var deviceId: String? = null
     private var streamJobs: List<Job> = emptyList()
+
+    // True from connect() until disconnect(): "the session is active, keep trying forever".
+    @Volatile private var wantConnected = false
+    private val backoff = ReconnectBackoff()
+
+    // The one running recovery action: either the reconnect loop or a stream restart. At most one
+    // at a time, so replacing it always cancels the old one (see replaceRecoveryJob).
+    private var recoveryJob: Job? = null
 
     private val callback = object : PolarBleApiCallback() {
         override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
@@ -105,15 +121,22 @@ class PolarConnection(private val api: PolarBleApi) {
         api.setApiCallback(callback)
     }
 
-    /** Start connecting to the strap with this ID (e.g. "A1B2C3D4"). Returns immediately. */
+    /**
+     * Start connecting to the strap with this ID (e.g. "A1B2C3D4"). Returns immediately.
+     * From now on we keep the link up: if it drops or never comes up, we retry with back-off
+     * until [disconnect] is called.
+     */
     fun connect(deviceId: String) {
         this.deviceId = deviceId
-        _state.value = ConnectionState.Connecting
-        api.connectToDevice(deviceId)
+        wantConnected = true
+        backoff.reset()
+        startReconnectLoop(firstDelayMs = 0)
     }
 
-    /** Stop streams and drop the link. */
+    /** Stop streams and drop the link. Also ends the automatic reconnecting. */
     fun disconnect() {
+        wantConnected = false
+        replaceRecoveryJob(null)
         val id = deviceId ?: return
         stopStreams()
         try {
@@ -135,6 +158,63 @@ class PolarConnection(private val api: PolarBleApi) {
         if (info.deviceId != deviceId) return
         stopStreams()
         _state.value = ConnectionState.Disconnected(reason)
+        // Unless the user asked for this, the strap went out of range / lost contact: get it back.
+        if (wantConnected) startReconnectLoop(firstDelayMs = backoff.next())
+    }
+
+    /**
+     * Calls connectToDevice, waits up to [CONNECT_TIMEOUT_MS] for the link to come up, and if it
+     * does not, waits (back-off) and tries again. Ends when connected or when [wantConnected] is
+     * false. Streams are started by the SDK callback (bleSdkFeatureReady), not here.
+     */
+    private fun startReconnectLoop(firstDelayMs: Long) {
+        replaceRecoveryJob(
+            scope.launch {
+                var wait = firstDelayMs
+                while (isActive && wantConnected) {
+                    if (wait > 0) delay(wait)
+                    val id = deviceId ?: return@launch
+                    _state.value = ConnectionState.Connecting
+                    try {
+                        api.connectToDevice(id)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "connectToDevice failed", e)
+                    }
+                    // `first { }` suspends until the state flow emits a matching value.
+                    val up = withTimeoutOrNull(CONNECT_TIMEOUT_MS) {
+                        _state.first { it is ConnectionState.Connected || it is ConnectionState.Streaming }
+                    }
+                    if (up != null) return@launch
+                    Log.w(TAG, "connect attempt timed out, retrying")
+                    wait = backoff.next()
+                }
+            },
+        )
+    }
+
+    /**
+     * One of the streams died while the link is still up (e.g. the SDK rejected a stream).
+     * Restart all three after a back-off delay. If the link itself is gone, the disconnect
+     * callback handles it instead, so we only act while Streaming.
+     */
+    private fun onStreamFailed() {
+        synchronized(this) {
+            if (!wantConnected || recoveryJob?.isActive == true) return
+            if (_state.value != ConnectionState.Streaming) return
+            recoveryJob = scope.launch {
+                stopStreams()
+                _state.value = ConnectionState.Connected
+                delay(backoff.next())
+                deviceId?.let { if (wantConnected) startStreams(it) }
+            }
+        }
+    }
+
+    /** Cancels the current recovery job (if any) and remembers the new one. */
+    @Synchronized
+    private fun replaceRecoveryJob(new: Job?) {
+        recoveryJob?.cancel()
+        recoveryJob = new
     }
 
     @Synchronized
@@ -155,6 +235,7 @@ class PolarConnection(private val api: PolarBleApi) {
         streamJobs = listOf(
             launchStream("ECG") {
                 api.startEcgStreaming(id, ecgSettings).collect { data ->
+                    backoff.reset() // data is really flowing: the next failure starts from 2 s again
                     val phoneMs = System.currentTimeMillis()
                     val samples = data.samples.filterIsInstance<EcgSample>()
                     if (samples.isNotEmpty()) {
@@ -206,7 +287,7 @@ class PolarConnection(private val api: PolarBleApi) {
 
     /**
      * Runs one stream collector. If it throws (strap out of range, stream rejected...) we log it
-     * and let the others keep going. P1.6 will turn these into ConnectionLog entries.
+     * and ask for the streams to be restarted. P1.6 will turn these into ConnectionLog entries.
      */
     private fun launchStream(name: String, block: suspend () -> Unit): Job = scope.launch {
         try {
@@ -215,6 +296,7 @@ class PolarConnection(private val api: PolarBleApi) {
             throw e // normal shutdown; must be rethrown so the coroutine really cancels
         } catch (e: Exception) {
             Log.w(TAG, "$name stream failed", e)
+            onStreamFailed()
         }
     }
 
