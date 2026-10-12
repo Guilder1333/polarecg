@@ -17,22 +17,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.punkunpun.polarisecg.PolarisApp
 import com.punkunpun.polarisecg.R
 import com.punkunpun.polarisecg.polar.ConnectionState
+import com.punkunpun.polarisecg.service.AcquisitionService
 
 /**
  * Temporary developer panel to check P1.3 on a real strap: connect, and watch frame counters tick.
- * It goes away once the foreground service (P1.4) and the Live screen (P1.10) exist.
- * Note: the connection lives only while the app is open; background operation is P1.4.
+ * It goes away once the Live screen (P1.10) exists. Start/Stop control [AcquisitionService].
  */
 @Composable
 fun ConnectionTestPanel(app: PolarisApp, deviceId: String?) {
     val connection = app.polarConnection
     // collectAsState turns a StateFlow into Compose state: the UI redraws on every new value.
     val state by connection.state.collectAsState()
+    val running by AcquisitionService.running.collectAsState()
+    val context = LocalContext.current
 
     var ecgFrames by remember { mutableIntStateOf(0) }
     var accFrames by remember { mutableIntStateOf(0) }
@@ -55,12 +58,13 @@ fun ConnectionTestPanel(app: PolarisApp, deviceId: String?) {
         Text(stateText)
         Text(stringResource(R.string.conn_stats, heartRate, ecgFrames, accFrames))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (state is ConnectionState.Disconnected) {
-                Button(onClick = { deviceId?.let(connection::connect) }, enabled = deviceId != null) {
+            // The service owns connect/disconnect now, so it keeps running with the screen off.
+            if (!running) {
+                Button(onClick = { AcquisitionService.start(context) }, enabled = deviceId != null) {
                     Text(stringResource(R.string.conn_connect))
                 }
             } else {
-                Button(onClick = connection::disconnect) {
+                Button(onClick = { AcquisitionService.stop(context) }) {
                     Text(stringResource(R.string.conn_disconnect))
                 }
             }

@@ -23,9 +23,18 @@
     <string name="pair_use">Use</string>
     <string name="pair_in_use">In use</string>
 
-    <string name="conn_title">Connection test</string>
-    <string name="conn_connect">Connect</string>
-    <string name="conn_disconnect">Disconnect</string>
+    <string name="notif_channel">Recording status</string>
+    <string name="notif_starting">Starting…</string>
+    <string name="notif_disconnected">Disconnected, waiting for the strap</string>
+    <string name="notif_connecting">Connecting to H10…</string>
+    <string name="notif_connected">Connected, starting streams…</string>
+    <string name="notif_streaming">Recording</string>
+    <string name="notif_streaming_hr">Recording · %1$d bpm</string>
+    <string name="notif_stop">Stop</string>
+
+    <string name="conn_title">Recording</string>
+    <string name="conn_connect">Start recording</string>
+    <string name="conn_disconnect">Stop recording</string>
     <string name="conn_state_disconnected">Disconnected</string>
     <string name="conn_state_connecting">Connecting…</string>
     <string name="conn_state_connected">Connected, starting streams…</string>
