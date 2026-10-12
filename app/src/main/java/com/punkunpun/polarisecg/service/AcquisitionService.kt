@@ -16,6 +16,7 @@ import com.punkunpun.polarisecg.MainActivity
 import com.punkunpun.polarisecg.PolarisApp
 import com.punkunpun.polarisecg.R
 import com.punkunpun.polarisecg.polar.ConnectionState
+import com.punkunpun.polarisecg.recorder.RawRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -46,6 +47,7 @@ class AcquisitionService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var notificationJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var recorder: RawRecorder? = null
 
     // A service has no constructor access to `application`, so this is read lazily.
     private val app get() = application as PolarisApp
@@ -78,6 +80,9 @@ class AcquisitionService : Service() {
         if (app.polarConnection.state.value is ConnectionState.Disconnected) {
             app.polarConnection.connect(deviceId)
         }
+        if (recorder == null && app.deviceStore.rawRecording) {
+            recorder = RawRecorder(app.sessionsDir, app.polarConnection, deviceId, appVersion()).also { it.start() }
+        }
         watchStatusForNotification()
 
         // START_STICKY: if Android kills the process, restart the service (intent will be null).
@@ -90,9 +95,14 @@ class AcquisitionService : Service() {
         notificationJob?.cancel()
         scope.cancel()
         app.polarConnection.disconnect()
+        recorder?.stop()
+        recorder = null
         wakeLock?.let { if (it.isHeld) it.release() }
         super.onDestroy()
     }
+
+    private fun appVersion(): String =
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown"
 
     /** Re-draws the notification whenever the connection state or heart rate changes. */
     private fun watchStatusForNotification() {

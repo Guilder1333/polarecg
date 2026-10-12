@@ -14,7 +14,13 @@ class DeviceStore(context: Context) {
         get() = prefs.getString(KEY_DEVICE_ID, null)
         set(value) = prefs.edit { putString(KEY_DEVICE_ID, value) }
 
+    /** Developer toggle: write all raw ECG/ACC/RR to disk (task P1.7). On by default while developing. */
+    var rawRecording: Boolean
+        get() = prefs.getBoolean(KEY_RAW_RECORDING, true)
+        set(value) = prefs.edit { putBoolean(KEY_RAW_RECORDING, value) }
+
     private companion object {
         const val KEY_DEVICE_ID = "device_id"
+        const val KEY_RAW_RECORDING = "raw_recording"
     }
 }

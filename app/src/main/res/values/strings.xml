@@ -50,4 +50,8 @@
     <string name="diag_events_title">Events (newest first)</string>
     <string name="diag_gap_ongoing">%1$s → ongoing (%2$s) · %3$s</string>
     <string name="diag_gap_line">%1$s → %2$s (%3$s) · %4$s</string>
+
+    <string name="raw_toggle">Record raw data (developer)</string>
+    <string name="raw_export">Export last session</string>
+    <string name="raw_export_none">No recorded session yet.</string>
 </resources>

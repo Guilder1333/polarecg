@@ -35,13 +35,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val TAG = "PolarConnection"
 
 /** ECG: the H10 only supports 130 Hz / 14 bit. */
-private const val ECG_RATE_HZ = 130
-private const val ECG_RESOLUTION_BITS = 14
+internal const val ECG_RATE_HZ = 130
+internal const val ECG_RESOLUTION_BITS = 14
 
 /** ACC: 50 Hz, 16 bit, +-8 g is plenty for detecting body movement. */
-private const val ACC_RATE_HZ = 50
-private const val ACC_RESOLUTION_BITS = 16
-private const val ACC_RANGE_G = 8
+internal const val ACC_RATE_HZ = 50
+internal const val ACC_RESOLUTION_BITS = 16
+internal const val ACC_RANGE_G = 8
 
 /** How long one connect attempt may take before we give up on it and retry. */
 private const val CONNECT_TIMEOUT_MS = 30_000L

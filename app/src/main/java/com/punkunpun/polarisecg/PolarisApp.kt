@@ -18,6 +18,9 @@ class PolarisApp : Application() {
     /** Append-only history of connects, drops and errors; the Diagnostics screen reads it. */
     val connectionLog by lazy { ConnectionLog(File(filesDir, "connection_log.tsv")) }
 
+    /** Where raw recordings go: one sub-folder per session (see docs/RAW_FORMAT.md). */
+    val sessionsDir by lazy { File(filesDir, "sessions") }
+
     override fun onCreate() {
         super.onCreate()
         // Every process start is logged: after Android kills us overnight this is how we see it.
