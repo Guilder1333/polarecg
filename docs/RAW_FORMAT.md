@@ -1,4 +1,4 @@
-# Raw recording format (version 1)
+# Raw recording format (version 1, folder layout 2)
 
 Written by the phone (`RawRecorder` in `:app`), read by `:core-dsp`
 (`readRawFile` in `dsp/raw/RawFormat.kt`; the byte layout below must match that file).
@@ -7,19 +7,54 @@ Never commit recordings: copy exported sessions into `data/sessions/` (git-ignor
 ## Folder layout
 
 ```
-sessions/<startUtc>/            e.g. 20261012T221530Z   (UTC, yyyyMMdd'T'HHmmss'Z')
-    session.json
-    ecg_<hourUtc>.bin           e.g. ecg_20261012T22Z.bin   (one file per UTC clock hour)
-    acc_<hourUtc>.bin
-    hr_<hourUtc>.bin
-    timemap.csv
+sessions/<startUtc>/                   e.g. 20261012T221530Z   (UTC, yyyyMMdd'T'HHmmss'Z')
+    session.json                       session metadata (always this name; the folder carries the time)
+    timemap.csv                        sensor clock -> UTC, appended for the whole session
+    ecg.bin  acc.bin  hr.bin           CURRENT files, being written right now (no timestamp)
+    ecg_20261012T221530Z.bin           finished files: <prefix>_<first record time, to the second>.bin
+    ecg_20261012T231504Z.bin
+    acc_20261012T221530Z.bin
+    hr_20261012T221530Z_empty.bin      finished file that had a header but no record (kept on purpose)
+    ecg_20261012T231504Z_1.bin         same name taken already: counter added
 ```
 
-- One session = one run of the acquisition service. Reconnects continue in the same files;
-  a gap shows up as a jump in `phoneTimeMs` between records.
-- The hour in a file name is the UTC hour of the **phone time** of its records.
+## Files and rotation ("rotating logs")
+
+- The file being written has **no timestamp**: `ecg.bin`, `acc.bin`, `hr.bin`.
+- A current file is **renamed** to `<prefix>_<stamp>.bin` when it is finished:
+  1. at every **UTC hour change** (by the phone time of the frame being written),
+  2. on a **proper stop**,
+  3. on **recovery** after the app was killed (next start; see Sessions).
+- `<stamp>` is the `phoneTimeMs` of the file's **first record**, UTC, to the second
+  (`yyyyMMdd'T'HHmmss'Z'`). It is recoverable at any time from the file content, because every
+  record starts with `phoneTimeMs`.
+- Files are never deleted by the app, and a rename never overwrites. If the target name exists,
+  a counter is appended (`_1`, `_2`, ...) and the rename is retried.
+- A file with a valid header but no complete record is renamed with the marker `_empty`; a file that is
+  not readable at all (too short, wrong magic) with `_invalid`. The stamp is then the file's
+  last-modified time. They are kept so that "something went wrong here" stays visible.
+- A stream that produced no frame in an hour creates no file for that hour.
 - Records are flushed one by one, so a killed app loses at most the record being written.
   A truncated last record must be ignored by readers (ours does).
+- To read a session in time order: sort the `.bin` files of one prefix by name (the stamp sorts
+  chronologically; a `_n` counter and markers only matter for identical stamps).
+- Code: `dsp/raw/RawSegments.kt` (naming, recovery), `recorder/SessionFolders.kt` (sessions).
+
+## Sessions
+
+- **One session = one folder that holds all of its data**, including data written after the app
+  or service was killed and restarted.
+- `session.json` without `endUtc` (null) means: *not stopped properly*, i.e. running, or killed
+  by Android, by the user (swipe / force stop), or by a crash.
+- **Next start after a kill resumes that session** (same folder, same `startUtc`): leftover current
+  files are renamed as above, and an entry is added to `interruptions` in `session.json`. This is
+  also what the automatic restart of the service does. A session is resumed only if it is the
+  newest folder, was written with this layout (`layout` = 2) and has the same `deviceId`; any
+  other unfinished folder is closed as `recovered`.
+- **Stop recording** (button or notification action) writes `endUtc` and finishes the session. The
+  **next start is a completely new session** with a new folder.
+- Android stopping the service by itself is *not* a proper stop; only the user's stop is.
+- `timemap.csv` is not rotated (≈ 1 row per minute); its connection numbers continue across a resume.
 
 ## `.bin` files
 
@@ -59,10 +94,17 @@ Records follow back to back, with no separators and no length fields.
 
 ## `session.json`
 
-Written at start (`endUtc` = null) and rewritten when the session ends cleanly; if `endUtc` is
-null the app was killed. Fields: `formatVersion`, `startUtc`, `endUtc` (ISO-8601 UTC), `deviceId`,
-`firmware` (null for now), `appVersion`, `phone`, `ecg` (`rateHz`, `resolutionBits`, `unit`),
-`acc` (`rateHz`, `resolutionBits`, `rangeG`, `unit`).
+Written at session start with `endUtc` = null, rewritten (atomically: temp file + move, so never
+half-written) on every resume and on the proper stop. Fields: `formatVersion` (of the `.bin`
+format), `layout` (2 = this folder layout), `startUtc`, `endUtc` (ISO-8601 UTC; null = not
+stopped properly), `deviceId`, `firmware` (null for now), `appVersion`, `phone`,
+`ecg` (`rateHz`, `resolutionBits`, `unit`), `acc` (`rateHz`, `resolutionBits`, `rangeG`, `unit`),
+and:
+
+- `interruptions`: one entry per resume, `{ "lastDataUtc": <newest record found, or null>,
+  "resumedUtc": <when recording resumed> }`. The time between the two is data that does not exist.
+- `recovered`: `true` only when the session was closed by recovery instead of a stop; then
+  `endUtc` is the time of the last data found (or of the newest file), not a real stop time.
 
 ## `timemap.csv`
 

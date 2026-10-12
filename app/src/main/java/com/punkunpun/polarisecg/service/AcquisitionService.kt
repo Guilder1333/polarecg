@@ -48,6 +48,7 @@ class AcquisitionService : Service() {
     private var notificationJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var recorder: RawRecorder? = null
+    private var userStopped = false
 
     // A service has no constructor access to `application`, so this is read lazily.
     private val app get() = application as PolarisApp
@@ -56,6 +57,8 @@ class AcquisitionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            // The only path that marks the session as properly ended (see onDestroy).
+            userStopped = true
             stopSelf()
             return START_NOT_STICKY
         }
@@ -95,7 +98,9 @@ class AcquisitionService : Service() {
         notificationJob?.cancel()
         scope.cancel()
         app.polarConnection.disconnect()
-        recorder?.stop()
+        // onDestroy also runs when Android itself shuts the service down. Only an explicit stop by
+        // the user ends the session; otherwise it stays open and the restart resumes it.
+        recorder?.stop(sessionEnded = userStopped)
         recorder = null
         wakeLock?.let { if (it.isHeld) it.release() }
         super.onDestroy()
@@ -183,7 +188,9 @@ class AcquisitionService : Service() {
         }
 
         fun stop(context: Context) {
-            context.stopService(Intent(context, AcquisitionService::class.java))
+            // Not stopService(): that cannot be told apart from the system stopping the service,
+            // and only a user stop may end the recording session.
+            context.startService(Intent(context, AcquisitionService::class.java).setAction(ACTION_STOP))
         }
     }
 }

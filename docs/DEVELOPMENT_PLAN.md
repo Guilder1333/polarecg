@@ -232,6 +232,9 @@ data, and logs every gap. Everything else depends on this.
   `data/sessions/<startUtc>/` with hourly-rotated binary files for ECG, ACC, RR + `session.json`
   (device ID, firmware, settings). Document the binary format in `docs/RAW_FORMAT.md`.
   Add an "export session" action (share as zip) to get files onto the PC.
+  **Amended after P1.8 (rotating-log layout, see §8 "Raw files" for the decisions):** current files
+  are `ecg.bin`/`acc.bin`/`hr.bin`; finished ones are renamed `<prefix>_<firstRecordUtc to the second>.bin`;
+  a killed session is resumed in the same folder; only an explicit stop ends it.
 - [x] **P1.8 [AI]** Time mapping: for each connection record (sensor time, phone UTC) pairs; convert
   sample times to UTC. Detect and log large jumps.
 - [ ] **P1.9 [YOU]** Battery tests: one full night + one full day streaming. Note phone battery %
@@ -425,8 +428,32 @@ else                                                     → N
 
 ### Raw files (development; optional later)
 
-`data/sessions/<startUtc>/` — hourly rotated binary files (exact layout in `docs/RAW_FORMAT.md`,
+`data/sessions/<startUtc>/` — rotating-log layout (exact layout in `docs/RAW_FORMAT.md`,
 task P1.7). Per frame: phone UTC ms, sensor timestamp, sample count, samples. ≈ 30–50 MB/day.
+
+**Decisions (made with the owner while building P1.8; keep unless there is a reason to change):**
+
+1. **Rotating logs.** The file being written has no timestamp (`ecg.bin`, `acc.bin`, `hr.bin`,
+   `session.json`, `timemap.csv`). Finished files are renamed `<prefix>_<yyyyMMdd'T'HHmmss'Z'>.bin`
+   by the phone time of their **first record**, to the second. Rotation: every UTC hour, on stop,
+   on recovery. The timestamp can always be re-derived from the file content, so a kill loses
+   nothing about naming.
+2. **Never delete, never overwrite.** If a target name is taken, append a counter (`_1`, `_2`)
+   and retry. Files with only a header are kept and marked `_empty`; unreadable ones `_invalid`
+   (time from last-modified), so that "this happened" stays visible.
+3. **One session = one folder with all its data, across kills.** `session.json` has `endUtc` null
+   until a proper stop. Restart after a kill (automatic or manual start) **resumes** the same
+   session: leftovers are archived, an `interruptions` entry is added.
+4. **Only the user's Stop ends a session** (button or notification action) and writes `endUtc`.
+   The next Start is then a brand-new session. Android destroying the service is *not* a stop.
+5. **`session.json` keeps its name** (one per folder; the folder name carries the start time) and is
+   written atomically (temp file + move). Sessions closed by recovery get `"recovered": true`.
+6. **Export = the whole newest session folder**, so a night with kills still comes out as one zip.
+7. `timemap.csv` is not rotated (≈ 1 row/min); its connection numbers continue across a resume.
+
+Not decided / open: resume has no age limit (a session killed days ago is still resumed by the
+next start); the gap between `lastDataUtc` and `resumedUtc` is only in `session.json`, not yet in
+the Diagnostics screen.
 
 ### Database (Room / SQLite)
 

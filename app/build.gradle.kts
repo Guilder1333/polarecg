@@ -47,6 +47,8 @@ dependencies {
     implementation(libs.polar.ble.sdk)
     implementation(project(":core-dsp"))
     testImplementation(libs.junit)
+    // Real org.json for unit tests: the android.jar one is only a stub that throws on the PC.
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
