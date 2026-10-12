@@ -23,12 +23,35 @@
     <string name="pair_use">Use</string>
     <string name="pair_in_use">In use</string>
 
-    <string name="conn_title">Connection test</string>
-    <string name="conn_connect">Connect</string>
-    <string name="conn_disconnect">Disconnect</string>
+    <string name="notif_channel">Recording status</string>
+    <string name="notif_starting">Starting…</string>
+    <string name="notif_disconnected">Disconnected, waiting for the strap</string>
+    <string name="notif_connecting">Connecting to H10…</string>
+    <string name="notif_connected">Connected, starting streams…</string>
+    <string name="notif_streaming">Recording</string>
+    <string name="notif_streaming_hr">Recording · %1$d bpm</string>
+    <string name="notif_stop">Stop</string>
+
+    <string name="conn_title">Recording</string>
+    <string name="conn_connect">Start recording</string>
+    <string name="conn_disconnect">Stop recording</string>
     <string name="conn_state_disconnected">Disconnected</string>
     <string name="conn_state_connecting">Connecting…</string>
     <string name="conn_state_connected">Connected, starting streams…</string>
     <string name="conn_state_streaming">Streaming</string>
     <string name="conn_stats">HR %1$s bpm · ECG frames %2$d · ACC frames %3$d</string>
+
+    <string name="diag_open">Diagnostics</string>
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_back">Back</string>
+    <string name="diag_gaps_summary">%1$d gaps · %2$s without data</string>
+    <string name="diag_no_gaps">No data gaps recorded.</string>
+    <string name="diag_gaps_title">Gaps</string>
+    <string name="diag_events_title">Events (newest first)</string>
+    <string name="diag_gap_ongoing">%1$s → ongoing (%2$s) · %3$s</string>
+    <string name="diag_gap_line">%1$s → %2$s (%3$s) · %4$s</string>
+
+    <string name="raw_toggle">Record raw data (developer)</string>
+    <string name="raw_export">Export last session</string>
+    <string name="raw_export_none">No recorded session yet.</string>
 </resources>

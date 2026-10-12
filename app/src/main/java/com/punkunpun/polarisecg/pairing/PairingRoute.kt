@@ -18,7 +18,7 @@ private const val SCAN_DURATION_MS = 20_000L
  * Needs BLUETOOTH_SCAN permission to have been granted before it is shown.
  */
 @Composable
-fun PairingRoute(app: PolarisApp, modifier: Modifier = Modifier) {
+fun PairingRoute(app: PolarisApp, onOpenDiagnostics: () -> Unit, modifier: Modifier = Modifier) {
     var devices by remember { mutableStateOf(emptyList<FoundDevice>()) }
     var scanRequested by remember { mutableStateOf(true) } // start scanning on first show
     var scanning by remember { mutableStateOf(false) }
@@ -55,6 +55,7 @@ fun PairingRoute(app: PolarisApp, modifier: Modifier = Modifier) {
             app.deviceStore.deviceId = it.deviceId
             selectedId = it.deviceId
         },
+        onOpenDiagnostics = onOpenDiagnostics,
         connectionPanel = { ConnectionTestPanel(app, selectedId) },
         modifier = modifier,
     )

@@ -222,13 +222,13 @@ data, and logs every gap. Everything else depends on this.
 - [x] **P1.3 [AI]** `PolarConnection` wrapper around the SDK: connect, start ECG (130 Hz),
   ACC (e.g. 50 Hz, ±8 g), HR/RR. Expose Kotlin `Flow`s of typed frames
   (`EcgFrame(sensorTimeNs, phoneTimeMs, samplesUv: IntArray)`, etc.).
-- [ ] **P1.4 [AI]** `AcquisitionService`: foreground service (`connectedDevice` type) with a
+- [x] **P1.4 [AI]** `AcquisitionService`: foreground service (`connectedDevice` type) with a
   persistent notification showing status (connected / reconnecting / HR). Start/stop from UI.
-- [ ] **P1.5 [AI]** Reconnect logic: on disconnect, retry with back-off (e.g. 2 s → 5 s → 15 s → 30 s
+- [x] **P1.5 [AI]** Reconnect logic: on disconnect, retry with back-off (e.g. 2 s → 5 s → 15 s → 30 s
   cap), restart streams after reconnect, keep retrying indefinitely while the session is active.
-- [ ] **P1.6 [AI]** `ConnectionLog`: write every connect / disconnect / stream error / app start with
+- [x] **P1.6 [AI]** `ConnectionLog`: write every connect / disconnect / stream error / app start with
   timestamps; compute gaps. Diagnostics screen listing them.
-- [ ] **P1.7 [AI]** `RawRecorder` (dev toggle, default ON during development): per session folder
+- [x] **P1.7 [AI]** `RawRecorder` (dev toggle, default ON during development): per session folder
   `data/sessions/<startUtc>/` with hourly-rotated binary files for ECG, ACC, RR + `session.json`
   (device ID, firmware, settings). Document the binary format in `docs/RAW_FORMAT.md`.
   Add an "export session" action (share as zip) to get files onto the PC.

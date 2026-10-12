@@ -56,7 +56,7 @@ sealed interface ConnectionState {
     /** Not connected. [reason] is why, if we know (null before the first connect or on user request). */
     data class Disconnected(val reason: String? = null) : ConnectionState
 
-    /** Connecting; the SDK retries by itself until we call disconnect (see P1.5 for our own policy). */
+    /** Connecting (first time or a retry); PolarConnection retries with back-off until disconnect(). */
     data object Connecting : ConnectionState
 
     /** BLE link is up, streams are being started. */
