@@ -236,7 +236,7 @@ data, and logs every gap. Everything else depends on this.
   sample times to UTC. Detect and log large jumps.
 - [ ] **P1.9 [YOU]** Battery tests: one full night + one full day streaming. Note phone battery %
   used and estimate strap battery drain (Polar Flow shows strap battery level).
-- [ ] **P1.10 [YOU+AI]** Live screen (Compose): scrolling ECG plot (last ~5 s), current HR, connection
+- [x] **P1.10 [YOU+AI]** Live screen (Compose): scrolling ECG plot (last ~5 s), current HR, connection
   status, gap count. *Good first Compose task for you with AI help.*
 - [ ] **P1.11 [YOU]** **Soak test: 5+ nights.** Moisten electrodes before bed. Each morning, check
   the diagnostics screen and export.

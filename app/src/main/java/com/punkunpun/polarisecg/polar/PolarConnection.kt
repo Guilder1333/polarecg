@@ -7,12 +7,14 @@ import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleDisconnectInfo
 import com.polar.sdk.api.model.EcgSample
 import com.polar.androidcommunications.api.ble.model.DisInfo
+import com.polar.androidcommunications.api.ble.model.gatt.client.pmd.PmdMeasurementType
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarSensorSetting
 import com.polar.sdk.api.model.PolarSensorSetting.SettingType
 import com.punkunpun.polarisecg.log.ConnectionLog
 import com.punkunpun.polarisecg.log.LogType
+import com.punkunpun.polarisecg.log.SESSION_START_DETAIL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +48,9 @@ internal const val ACC_RANGE_G = 8
 /** How long one connect attempt may take before we give up on it and retry. */
 private const val CONNECT_TIMEOUT_MS = 30_000L
 
+/** Pause after asking the strap to stop old measurements, before starting new ones. */
+private const val STALE_CLEAR_SETTLE_MS = 500L
+
 /**
  * Wraps the Polar BLE SDK: connect to one H10, start ECG + ACC + HR streams, and republish them
  * as typed Kotlin Flows ([ecg], [acc], [hr]) plus a [state].
@@ -72,6 +77,15 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
     val ecg: SharedFlow<EcgFrame> = _ecg.asSharedFlow()
     val acc: SharedFlow<AccFrame> = _acc.asSharedFlow()
     val hr: SharedFlow<HrSample> = _hr.asSharedFlow()
+
+    // Counters for the current session. They live here (not in a screen) so they survive
+    // navigating between screens; connect() resets them.
+    private val _ecgFrames = MutableStateFlow(0)
+    private val _accFrames = MutableStateFlow(0)
+    private val _lastHr = MutableStateFlow<Int?>(null)
+    val ecgFrames: StateFlow<Int> = _ecgFrames.asStateFlow()
+    val accFrames: StateFlow<Int> = _accFrames.asStateFlow()
+    val lastHr: StateFlow<Int?> = _lastHr.asStateFlow()
 
     @Volatile private var deviceId: String? = null
     private var streamJobs: List<Job> = emptyList()
@@ -132,6 +146,9 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
     fun connect(deviceId: String) {
         this.deviceId = deviceId
         wantConnected = true
+        _ecgFrames.value = 0
+        _accFrames.value = 0
+        _lastHr.value = null
         backoff.reset()
         startReconnectLoop(firstDelayMs = 0)
     }
@@ -178,7 +195,11 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
                 while (isActive && wantConnected) {
                     if (wait > 0) delay(wait)
                     val id = deviceId ?: return@launch
-                    setState(ConnectionState.Connecting, if (firstDelayMs == 0L && wait == 0L) "connect" else "retry")
+                    // The link may have come up by itself while we were waiting (the SDK also
+                    // connects on its own). Calling connectToDevice again would tear it down.
+                    val current = _state.value
+                    if (current is ConnectionState.Connected || current is ConnectionState.Streaming) return@launch
+                    setState(ConnectionState.Connecting, if (firstDelayMs == 0L && wait == 0L) SESSION_START_DETAIL else "retry")
                     try {
                         api.connectToDevice(id)
                     } catch (e: Exception) {
@@ -249,7 +270,11 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
             ),
         )
 
-        streamJobs = listOf(
+        // One parent job for the whole start-up: it first clears leftovers on the strap, then starts
+        // the three streams as its children. Cancelling it (stopStreams) cancels them all, and
+        // `isActive` on it tells us "streams are running or starting".
+        streamJobs = listOf(scope.launch {
+            clearStaleMeasurements(id)
             launchStream("ECG") {
                 api.startEcgStreaming(id, ecgSettings).collect { data ->
                     backoff.reset() // data is really flowing: the next failure starts from 2 s again
@@ -263,9 +288,10 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
                                 samplesUv = IntArray(samples.size) { samples[it].voltage },
                             ),
                         )
+                        _ecgFrames.value++
                     }
                 }
-            },
+            }
             launchStream("ACC") {
                 api.startAccStreaming(id, accSettings).collect { data ->
                     val phoneMs = System.currentTimeMillis()
@@ -280,9 +306,10 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
                                 zMg = IntArray(s.size) { s[it].z },
                             ),
                         )
+                        _accFrames.value++
                     }
                 }
-            },
+            }
             launchStream("HR") {
                 api.startHrStreaming(id).collect { data ->
                     val phoneMs = System.currentTimeMillis()
@@ -295,18 +322,35 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
                                 contactDetected = if (s.contactStatusSupported) s.contactStatus else null,
                             ),
                         )
+                        _lastHr.value = s.hr
                     }
                 }
-            },
-        )
-        setState(ConnectionState.Streaming)
+            }
+            setState(ConnectionState.Streaming)
+        })
+    }
+
+    /**
+     * The H10 keeps a PMD measurement running if the app died or disconnected without stopping it,
+     * and then answers our start request with ERROR_ALREADY_IN_STATE (seen in the logs). Stopping
+     * ECG and ACC first gives a clean start. Errors are expected when nothing is running.
+     */
+    private suspend fun clearStaleMeasurements(id: String) {
+        for (type in listOf(PmdMeasurementType.ECG, PmdMeasurementType.ACC)) {
+            try {
+                api.stopStreaming(id, type)
+            } catch (e: Exception) {
+                Log.d(TAG, "stopStreaming($type): ${e.message}")
+            }
+        }
+        delay(STALE_CLEAR_SETTLE_MS) // give the strap time to process the stop commands
     }
 
     /**
      * Runs one stream collector. If it throws (strap out of range, stream rejected...) we log it
      * and ask for the streams to be restarted. P1.6 will turn these into ConnectionLog entries.
      */
-    private fun launchStream(name: String, block: suspend () -> Unit): Job = scope.launch {
+    private fun CoroutineScope.launchStream(name: String, block: suspend () -> Unit): Job = launch {
         try {
             block()
         } catch (e: CancellationException) {

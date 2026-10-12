@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -31,6 +32,7 @@ fun PairingScreen(
     onRescan: () -> Unit,
     onSelect: (FoundDevice) -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenLive: () -> Unit,
     connectionPanel: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -51,14 +53,21 @@ fun PairingScreen(
         if (selectedDeviceId != null) connectionPanel()
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onRescan, enabled = !scanning) {
-                Text(stringResource(R.string.pair_scan))
+            OutlinedButton(onClick = onOpenLive) {
+                Text(stringResource(R.string.live_open))
             }
             OutlinedButton(onClick = onOpenDiagnostics) {
                 Text(stringResource(R.string.diag_open))
             }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onRescan, enabled = !scanning) {
+                Text(stringResource(R.string.pair_scan))
+            }
             if (scanning) {
-                CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+                // Fixed size: without it the spinner grabs whatever width is left and spins off-centre.
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
                 Text(stringResource(R.string.pair_scanning))
             }
         }

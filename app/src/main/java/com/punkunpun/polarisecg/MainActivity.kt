@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.punkunpun.polarisecg.diagnostics.DiagnosticsScreen
+import com.punkunpun.polarisecg.live.LiveScreen
 import com.punkunpun.polarisecg.pairing.PairingRoute
 import com.punkunpun.polarisecg.permissions.AppPermissions
 import com.punkunpun.polarisecg.permissions.PermissionsScreen
@@ -64,11 +65,18 @@ class MainActivity : ComponentActivity() {
                 // rememberSaveable survives screen rotation, plain remember does not.
                 var permissionsAcknowledged by rememberSaveable { mutableStateOf(false) }
                 var showDiagnostics by rememberSaveable { mutableStateOf(false) }
+                var showLive by rememberSaveable { mutableStateOf(false) }
                 val allGranted = bluetoothGranted && notificationsGranted && batteryGranted
                 val showPairing = bluetoothGranted && (allGranted || permissionsAcknowledged)
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    if (showPairing && showDiagnostics) {
+                    if (showPairing && showLive) {
+                        LiveScreen(
+                            app = application as PolarisApp,
+                            onBack = { showLive = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (showPairing && showDiagnostics) {
                         DiagnosticsScreen(
                             log = (application as PolarisApp).connectionLog,
                             onBack = { showDiagnostics = false },
@@ -78,6 +86,7 @@ class MainActivity : ComponentActivity() {
                         PairingRoute(
                             app = application as PolarisApp,
                             onOpenDiagnostics = { showDiagnostics = true },
+                            onOpenLive = { showLive = true },
                             modifier = Modifier.padding(innerPadding),
                         )
                     } else PermissionsScreen(

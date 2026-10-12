@@ -5,6 +5,7 @@ import com.punkunpun.polarisecg.log.Gap
 import com.punkunpun.polarisecg.log.LogEvent
 import com.punkunpun.polarisecg.log.LogType
 import com.punkunpun.polarisecg.log.computeGaps
+import com.punkunpun.polarisecg.log.eventsOfLatestSession
 import com.punkunpun.polarisecg.log.parseLogLine
 import com.punkunpun.polarisecg.log.toLine
 import java.io.File
@@ -65,6 +66,24 @@ class ConnectionLogTest {
     fun connectingBeforeFirstDataIsNotAGap() {
         val gaps = computeGaps(listOf(e(0, LogType.CONNECTING), e(5, LogType.DISCONNECTED), e(9, LogType.STREAMING)))
         assertEquals(emptyList<Gap>(), gaps)
+    }
+
+    @Test
+    fun latestSessionStartsAtLastConnect() {
+        val events = listOf(
+            e(0, LogType.CONNECTING, "connect"), e(1, LogType.STREAMING), e(5, LogType.DISCONNECTED),
+            e(9, LogType.STOPPED),
+            e(20, LogType.CONNECTING, "connect"), e(21, LogType.CONNECTING, "retry"), e(22, LogType.STREAMING),
+        )
+        val session = eventsOfLatestSession(events)
+        assertEquals(3, session.size)
+        assertEquals(0, computeGaps(session).size) // the old gap belongs to the previous session
+    }
+
+    @Test
+    fun noSessionStartReturnsEverything() {
+        val events = listOf(e(1, LogType.STREAMING), e(2, LogType.DISCONNECTED))
+        assertEquals(events, eventsOfLatestSession(events))
     }
 
     @Test

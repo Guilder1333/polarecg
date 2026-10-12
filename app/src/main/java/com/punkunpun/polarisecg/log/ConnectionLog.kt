@@ -102,6 +102,19 @@ fun computeGaps(events: List<LogEvent>): List<Gap> {
     return gaps
 }
 
+/** Detail text of the CONNECTING event that PolarConnection.connect() logs: the start of a session. */
+const val SESSION_START_DETAIL = "connect"
+
+/**
+ * The events of the most recent session (from its first CONNECTING on). The log file holds the
+ * whole history; screens that talk about "now" should not count gaps from earlier days.
+ * If no session start is found (old log), everything is returned.
+ */
+fun eventsOfLatestSession(events: List<LogEvent>): List<LogEvent> {
+    val start = events.indexOfLast { it.type == LogType.CONNECTING && it.detail == SESSION_START_DETAIL }
+    return if (start < 0) events else events.subList(start, events.size)
+}
+
 fun LogEvent.toLine(): String =
     "$timeMs\t$type\t${(detail ?: "").replace('\t', ' ').replace('\n', ' ')}"
 

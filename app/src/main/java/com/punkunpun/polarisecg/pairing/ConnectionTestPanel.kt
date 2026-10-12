@@ -47,13 +47,10 @@ fun ConnectionTestPanel(app: PolarisApp, deviceId: String?) {
     val running by AcquisitionService.running.collectAsState()
     val context = LocalContext.current
 
-    var ecgFrames by remember { mutableIntStateOf(0) }
-    var accFrames by remember { mutableIntStateOf(0) }
-    var heartRate by remember { mutableStateOf("–") }
-
-    LaunchedEffect(connection) { connection.ecg.collect { ecgFrames++ } }
-    LaunchedEffect(connection) { connection.acc.collect { accFrames++ } }
-    LaunchedEffect(connection) { connection.hr.collect { heartRate = it.heartRateBpm.toString() } }
+    // The counters live in PolarConnection, so they keep counting while this panel is off screen.
+    val ecgFrames by connection.ecgFrames.collectAsState()
+    val accFrames by connection.accFrames.collectAsState()
+    val heartRate = connection.lastHr.collectAsState().value?.toString() ?: "–"
 
     val stateText = when (val s = state) {
         is ConnectionState.Disconnected ->
