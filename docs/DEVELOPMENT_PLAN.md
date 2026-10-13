@@ -237,7 +237,7 @@ data, and logs every gap. Everything else depends on this.
   a killed session is resumed in the same folder; only an explicit stop ends it.
 - [x] **P1.8 [AI]** Time mapping: for each connection record (sensor time, phone UTC) pairs; convert
   sample times to UTC. Detect and log large jumps.
-- [ ] **P1.9 [YOU]** Battery tests: one full night + one full day streaming. Note phone battery %
+- [x] **P1.9 [YOU]** Battery tests: one full night + one full day streaming. Note phone battery %
   used and estimate strap battery drain (Polar Flow shows strap battery level).
 - [x] **P1.10 [YOU+AI]** Live screen (Compose): scrolling ECG plot (last ~5 s), current HR, connection
   status, gap count. *Good first Compose task for you with AI help.*
