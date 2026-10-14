@@ -1,0 +1,6 @@
+# Python tools for PolarisECG (see README.md). Lower bounds only: any newer release should work.
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.8
+pandas>=2.1
+wfdb>=4.1      # reads MIT-BIH / INCART / NSTDB from PhysioNet (P2.3)
