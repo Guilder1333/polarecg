@@ -4,9 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -17,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -35,7 +38,9 @@ import com.punkunpun.polarisecg.polar.ECG_RATE_HZ
 import kotlinx.coroutines.delay
 
 private const val WINDOW_SECONDS = 5
-private const val REDRAW_MS = 50L // ~20 fps is smooth enough and cheap
+private val FPS_OPTIONS = listOf(1, 5, 20, 60)
+private const val DEFAULT_FPS = 20
+private const val MAX_SLIDE_MS = 1_500L // stop sliding if no data arrives (disconnect)
 private const val MIN_SPAN_UV = 1_000f // never zoom into pure noise
 
 /** Scrolling ECG (last 5 s), current HR, connection status and gap count. */
@@ -55,16 +60,27 @@ fun LiveScreen(app: PolarisApp, onBack: () -> Unit, modifier: Modifier = Modifie
     var heartRate by remember { mutableStateOf<Int?>(null) }
     var contact by remember { mutableStateOf<Boolean?>(null) }
 
-    LaunchedEffect(connection) { connection.ecg.collect { ring.add(it.samplesUv) } }
+    // Redraw rate chosen by the user. rememberSaveable keeps it across rotation.
+    var fps by rememberSaveable { mutableIntStateOf(DEFAULT_FPS) }
+    // Plain one-element array (not state): when the last ECG frame arrived, in System.nanoTime().
+    val lastFrameNs = remember { LongArray(1) }
+
+    LaunchedEffect(connection) {
+        connection.ecg.collect {
+            ring.add(it.samplesUv)
+            lastFrameNs[0] = System.nanoTime()
+        }
+    }
     LaunchedEffect(connection) {
         connection.hr.collect {
             heartRate = it.heartRateBpm
             contact = it.contactDetected
         }
     }
-    LaunchedEffect(Unit) {
+    // Restarts whenever `fps` changes (the key), so the new rate applies immediately.
+    LaunchedEffect(fps) {
         while (true) {
-            delay(REDRAW_MS)
+            delay(1000L / fps)
             frame++
         }
     }
@@ -96,9 +112,25 @@ fun LiveScreen(app: PolarisApp, onBack: () -> Unit, modifier: Modifier = Modifie
             ),
         )
 
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (option in FPS_OPTIONS) {
+                // The selected rate is a filled button, the others are outlined.
+                if (option == fps) {
+                    Button(onClick = { fps = option }) { Text("$option FPS") }
+                } else {
+                    OutlinedButton(onClick = { fps = option }) { Text("$option FPS") }
+                }
+            }
+        }
+
         Canvas(modifier = Modifier.fillMaxWidth().height(220.dp)) {
             frame // read the state so this block is re-run on every tick
             val samples = ring.snapshot()
+            // The strap delivers ECG in bursts (about one per second). Between bursts the trace
+            // is slid left by the time elapsed since the last one, so it scrolls smoothly; the
+            // next burst fills exactly the gap that was left on the right.
+            val elapsedMs = ((System.nanoTime() - lastFrameNs[0]) / 1_000_000L).coerceIn(0L, MAX_SLIDE_MS)
+            val shiftPx = size.width * elapsedMs / (WINDOW_SECONDS * 1000f)
             // Light 1 s vertical grid lines, so the scroll speed is readable.
             for (s in 0..WINDOW_SECONDS) {
                 val x = size.width * s / WINDOW_SECONDS
@@ -119,7 +151,7 @@ fun LiveScreen(app: PolarisApp, onBack: () -> Unit, modifier: Modifier = Modifie
             val path = Path()
             val firstIndex = capacity - samples.size
             for (i in samples.indices) {
-                val x = size.width * (firstIndex + i) / (capacity - 1)
+                val x = size.width * (firstIndex + i) / (capacity - 1) - shiftPx
                 val y = size.height / 2 - (samples[i] - mid) / span * size.height
                 if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
