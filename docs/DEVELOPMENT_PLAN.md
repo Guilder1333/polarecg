@@ -249,7 +249,8 @@ data, and logs every gap. Everything else depends on this.
 
 ### Phase 2 — PC analysis toolchain (≈ 3–5 days)
 
-- [ ] **P2.1 [AI]** Raw file reader in `:core-dsp` (or `:tools:cli`) + Python reader in `analysis/`.
+- [x] **P2.1 [AI]** Raw file reader in `:core-dsp` (or `:tools:cli`) + Python reader in `analysis/`.
+  (`dsp/raw/RawSession.kt`: `readStream`; `analysis/polaris_raw.py`: `read_session`.)
 - [ ] **P2.2 [AI]** `analysis/` setup: `requirements.txt` (`numpy`, `scipy`, `matplotlib`, `pandas`,
   `wfdb`), README with step-by-step setup on Windows.
 - [ ] **P2.3 [AI]** Script to download **MIT-BIH Arrhythmia DB**, **INCART** and **MIT-BIH Noise

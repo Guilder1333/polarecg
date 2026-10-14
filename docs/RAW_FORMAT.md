@@ -1,7 +1,8 @@
 # Raw recording format (version 1, folder layout 2)
 
 Written by the phone (`RawRecorder` in `:app`), read by `:core-dsp`
-(`readRawFile` in `dsp/raw/RawFormat.kt`; the byte layout below must match that file).
+(`readRawFile` in `dsp/raw/RawFormat.kt`, whole sessions via `readStream` in `dsp/raw/RawSession.kt`;
+the byte layout below must match those files) and by the Python reader `analysis/polaris_raw.py`.
 Never commit recordings: copy exported sessions into `data/sessions/` (git-ignored).
 
 ## Folder layout
