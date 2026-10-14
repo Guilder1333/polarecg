@@ -22,6 +22,7 @@ HEADER_SIZE = 8
 STREAM_IDS = {"ecg": 1, "acc": 2, "hr": 3}
 ECG_RATE_HZ = 130
 ACC_RATE_HZ = 50
+SENSOR_EPOCH_UNIX_MS = 946_684_800_000  # sensor clock counts ns from 2000-01-01 UTC
 
 
 @dataclass
@@ -165,6 +166,25 @@ def read_hr(folder) -> tuple[Hr, list]:
         rr,
         np.repeat(phone, counts),
     ), bad
+
+
+def write_ecg_file(path, samples_uv, start_phone_ms: int, frame_len: int = 70) -> int:
+    """Writes ``samples_uv`` (130 Hz, microvolts) as one ECG raw file; returns the frame count.
+
+    Used for converted reference databases. Frames of ``frame_len`` samples get phone and sensor
+    times derived from the sample index, as if the stream had arrived without any gap.
+    """
+    samples = np.asarray(samples_uv).astype("<i4")
+    parts = [MAGIC + struct.pack("<HH", VERSION, STREAM_IDS["ecg"])]
+    frames = 0
+    for start in range(0, len(samples), frame_len):
+        chunk = samples[start:start + frame_len]
+        phone_ms = start_phone_ms + round(start * 1000 / ECG_RATE_HZ)
+        sensor_ns = (phone_ms - SENSOR_EPOCH_UNIX_MS) * 1_000_000
+        parts.append(struct.pack("<qqH", phone_ms, sensor_ns, len(chunk)) + chunk.tobytes())
+        frames += 1
+    Path(path).write_bytes(b"".join(parts))
+    return frames
 
 
 def read_session(folder) -> Session:

@@ -253,9 +253,10 @@ data, and logs every gap. Everything else depends on this.
   (`dsp/raw/RawSession.kt`: `readStream`; `analysis/polaris_raw.py`: `read_session`.)
 - [x] **P2.2 [AI]** `analysis/` setup: `requirements.txt` (`numpy`, `scipy`, `matplotlib`, `pandas`,
   `wfdb`), README with step-by-step setup on Windows.
-- [ ] **P2.3 [AI]** Script to download **MIT-BIH Arrhythmia DB**, **INCART** and **MIT-BIH Noise
+- [x] **P2.3 [AI]** Script to download **MIT-BIH Arrhythmia DB**, **INCART** and **MIT-BIH Noise
   Stress Test DB** from PhysioNet, resample to 130 Hz, convert to our raw format + reference
-  annotation CSV.
+  annotation CSV. (`analysis/fetch_physionet.py` → `data/reference/<db>/<record>/`; one lead per
+  record: MLII / II.)
 - [ ] **P2.4 [AI]** CLI command `analyze <recording>` → `beats.csv`, `windows.csv`, `events.csv`.
 - [ ] **P2.5 [AI]** Python viewer: plot ECG with detected beats colored by class, quality shaded,
   zoomable; jump to a timestamp or event.

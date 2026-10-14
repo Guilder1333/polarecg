@@ -9,6 +9,8 @@ Contents now:
 |---|---|
 | `polaris_raw.py` | Reader for raw recordings (`read_session(folder)`), see `docs/RAW_FORMAT.md` |
 | `test_polaris_raw.py` | Tests of the reader |
+| `fetch_physionet.py` | Downloads MIT-BIH / INCART / NSTDB and converts them (see below) |
+| `test_fetch_physionet.py` | Offline tests of the conversion |
 | `requirements.txt` | Python packages |
 
 ## Setup on Windows (once)
@@ -52,7 +54,38 @@ starts with `(.venv)`.
 python -m unittest discover -s analysis
 ```
 
-Expected: `Ran 3 tests ... OK`.
+Expected: all tests `OK`.
+
+## Reference databases (PhysioNet)
+
+```powershell
+python analysis\fetch_physionet.py --db mitdb --limit 3      # quick try, 3 records
+python analysis\fetch_physionet.py                           # everything (needs internet)
+python analysis\fetch_physionet.py --db mitdb --records 100 119
+```
+
+Databases: `mitdb` (MIT-BIH Arrhythmia, 48 records, 360 Hz), `incartdb` (INCART, 75 records, 257 Hz,
+12 leads; this is the big one, expect a long download) and `nstdb` (MIT-BIH Noise Stress Test).
+
+Per record the script writes `data/reference/<db>/<record>/`:
+
+- `ecg_20200101T000000Z.bin`: **one lead** (MLII for MIT-BIH/NSTDB, II for INCART), low-pass
+  filtered and resampled to **130 Hz**, in our raw format. The start time is a fixed fake
+  (2020-01-01); the real dates are unknown. It can be read with `read_session` or the Kotlin
+  `readStream` like a phone recording.
+- `annotations.csv`: `sample` (index on the 130 Hz grid), `time_ms` (from record start), `symbol`
+  (original PhysioNet symbol), `beat` (1 = a beat, 0 = rhythm/noise/comment marker), `aami`
+  (N, S, V, F or Q for beats), `aux` (e.g. `(AFIB`).
+- `reference.json`: source, lead, original rate.
+
+The **original downloads** (all leads, original sampling rate: `.hea`, `.dat`, `.atr`) are kept in
+`data/physionet/<db>/`, so you can reprocess (another lead, another resampler) without downloading
+again; delete the converted record folder and run the script again, it reuses the local files.
+This costs roughly 50 MB for MIT-BIH, ~800 MB for INCART and ~20 MB for NSTDB.
+
+Records that already exist are skipped and nothing is ever overwritten; delete a record folder
+yourself to convert it again. Records 102, 104, 107 and 217 of MIT-BIH are paced; the AAMI standard
+leaves them out of evaluation, so the scorer (P2.6) should be able to exclude them.
 
 ## Reading a recording
 
