@@ -1,6 +1,9 @@
 package com.punkunpun.polarisecg.log
 
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -118,6 +121,18 @@ fun eventsOfLatestSession(events: List<LogEvent>): List<LogEvent> {
 fun LogEvent.toLine(): String =
     "$timeMs\t$type\t${(detail ?: "").replace('\t', ' ').replace('\n', ' ')}"
 
+/** All human-readable times are Japan Standard Time (UTC+9, no daylight saving). */
+val JST: ZoneId = ZoneId.of("Asia/Tokyo")
+
+private val JST_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(JST)
+
+fun formatJst(timeMs: Long): String = JST_FORMAT.format(Instant.ofEpochMilli(timeMs))
+
+/** `2026-10-14 21:05:33 JST<TAB>timeMs<TAB>TYPE<TAB>detail` - readable first, epoch ms kept exact. */
+fun LogEvent.toSessionLine(): String = "${formatJst(timeMs)} JST\t${toLine()}"
+
+private fun parseSessionLine(line: String): LogEvent? = parseLogLine(line.substringAfter('\t', ""))
+
 fun parseLogLine(line: String): LogEvent? {
     val parts = line.split('\t', limit = 3)
     if (parts.size < 2) return null
@@ -135,11 +150,45 @@ class ConnectionLog(private val file: File, private val maxEvents: Int = 2000) {
     private val _events = MutableStateFlow(load())
     val events: StateFlow<List<LogEvent>> = _events.asStateFlow()
 
+    // Copy of the events for the running session, in the session folder (see attachSession).
+    private var sessionFile: File? = null
+
+    /**
+     * Starts mirroring events into [file] (`connection.log` in the session folder), so the log
+     * can be matched to that session. Events logged before the recorder started (CONNECTING,
+     * APP_START after a kill) are copied in first: for a new file the latest session's events,
+     * for an existing file (resume) everything newer than its last line.
+     */
+    @Synchronized
+    fun attachSession(file: File) {
+        sessionFile = file
+        try {
+            val lastMs = if (file.exists()) {
+                file.readLines().mapNotNull(::parseSessionLine).maxOfOrNull { it.timeMs } ?: 0L
+            } else {
+                -1L
+            }
+            val missed = if (lastMs < 0) eventsOfLatestSession(_events.value) else _events.value.filter { it.timeMs > lastMs }
+            if (missed.isNotEmpty()) file.appendText(missed.joinToString("") { it.toSessionLine() + "\n" })
+        } catch (_: Exception) {
+            // Session log is a convenience copy; never fail the recording because of it.
+        }
+    }
+
+    @Synchronized
+    fun detachSession() {
+        sessionFile = null
+    }
+
     @Synchronized
     fun log(type: LogType, detail: String? = null, timeMs: Long = System.currentTimeMillis()) {
         val event = LogEvent(timeMs, type, detail)
         val updated = (_events.value + event).takeLast(maxEvents)
         _events.value = updated
+        try {
+            sessionFile?.appendText(event.toSessionLine() + "\n")
+        } catch (_: Exception) {
+        }
         try {
             if (file.length() > MAX_FILE_BYTES) {
                 // Keep the file bounded: rewrite it with just the events we hold in memory.

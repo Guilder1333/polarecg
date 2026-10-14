@@ -396,6 +396,9 @@ For beat *i* with intervals `RRpre = t[i] - t[i-1]`, `RRpost = t[i+1] - t[i]`:
 
 ### 7.6 Classification rules (v1)
 
+Background, known algorithms (Lipponen–Tarvainen, Tsipouras, OSEA, de Chazal) and why timing alone
+is not enough: `docs/PVC_DETECTION_NOTES.md`.
+
 ```
 if beat SQI low                                         → Q
 else if shape abnormal (corr < ~0.80 or wide QRS or polarity flip)

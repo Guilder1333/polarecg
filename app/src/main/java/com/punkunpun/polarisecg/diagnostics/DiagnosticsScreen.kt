@@ -21,6 +21,8 @@ import com.punkunpun.polarisecg.log.ConnectionLog
 import com.punkunpun.polarisecg.log.computeGaps
 import java.text.DateFormat
 import java.util.Date
+import java.util.TimeZone
+import com.punkunpun.polarisecg.log.JST
 
 /** Lists data gaps (with total time lost) and the raw connection events, newest first. */
 @Composable
@@ -30,8 +32,9 @@ fun DiagnosticsScreen(log: ConnectionLog, onBack: () -> Unit, modifier: Modifier
     // remember(events): recompute only when the list changes, not on every redraw.
     val gaps = remember(events) { computeGaps(events).asReversed() }
     val now = System.currentTimeMillis()
-    val dateTime = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM) }
-    val timeOnly = remember { DateFormat.getTimeInstance(DateFormat.MEDIUM) }
+    // Always JST, whatever the phone's time zone is, so it matches connection.log in the session folders.
+    val dateTime = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).apply { timeZone = TimeZone.getTimeZone(JST.id) } }
+    val timeOnly = remember { DateFormat.getTimeInstance(DateFormat.MEDIUM).apply { timeZone = TimeZone.getTimeZone(JST.id) } }
 
     Column(modifier = modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.diag_title), style = MaterialTheme.typography.headlineMedium)

@@ -10,6 +10,7 @@ Never commit recordings: copy exported sessions into `data/sessions/` (git-ignor
 sessions/<startUtc>/                   e.g. 20261012T221530Z   (UTC, yyyyMMdd'T'HHmmss'Z')
     session.json                       session metadata (always this name; the folder carries the time)
     timemap.csv                        sensor clock -> UTC, appended for the whole session
+    connection.log                     connection events of this session (JST + epoch ms), appended
     ecg.bin  acc.bin  hr.bin           CURRENT files, being written right now (no timestamp)
     ecg_20261012T221530Z.bin           finished files: <prefix>_<first record time, to the second>.bin
     ecg_20261012T231504Z.bin
@@ -54,6 +55,9 @@ sessions/<startUtc>/                   e.g. 20261012T221530Z   (UTC, yyyyMMdd'T'
 - **Stop recording** (button or notification action) writes `endUtc` and finishes the session. The
   **next start is a completely new session** with a new folder.
 - Android stopping the service by itself is *not* a proper stop; only the user's stop is.
+- `connection.log`: one line per event, tab-separated: `yyyy-MM-dd HH:mm:ss JST`, epoch ms, type,
+  detail. Human-readable times in the app and in `session.json` (`startJst`, `endJst`,
+  `interruptions[].resumedJst`) are JST; machine fields and folder/file names stay UTC.
 - `timemap.csv` is not rotated (≈ 1 row per minute); its connection numbers continue across a resume.
 
 ## `.bin` files

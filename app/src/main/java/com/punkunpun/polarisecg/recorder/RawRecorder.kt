@@ -9,6 +9,7 @@ import com.punkunpun.polarisecg.dsp.raw.archiveSegment
 import com.punkunpun.polarisecg.dsp.time.TimeMapper
 import com.punkunpun.polarisecg.log.ConnectionLog
 import com.punkunpun.polarisecg.log.LogType
+import com.punkunpun.polarisecg.log.formatJst
 import com.punkunpun.polarisecg.polar.ACC_RANGE_G
 import com.punkunpun.polarisecg.polar.ACC_RATE_HZ
 import com.punkunpun.polarisecg.polar.ACC_RESOLUTION_BITS
@@ -29,6 +30,9 @@ import org.json.JSONObject
 private const val TAG = "RawRecorder"
 private const val MS_PER_HOUR = 3_600_000L
 private const val TIME_MAP_EVERY_MS = 60_000L
+
+/** Copy of the connection events of this session, with JST times; lives in the session folder. */
+internal const val CONNECTION_LOG_FILE = "connection.log"
 
 /**
  * Records everything [connection] produces into a session folder (layout: docs/RAW_FORMAT.md).
@@ -66,6 +70,8 @@ class RawRecorder(
         session = SessionFolders.open(sessionsDir, deviceId, System.currentTimeMillis(), ::newSessionMeta)
         val dir = session.dir
         Log.i(TAG, "${if (session.resumed) "Resumed" else "Started"} session ${dir.name}")
+
+        log.attachSession(File(dir, CONNECTION_LOG_FILE))
 
         ecgFile = HourlyFile(dir, "ecg", RawStream.ECG)
         accFile = HourlyFile(dir, "acc", RawStream.ACC)
@@ -110,6 +116,7 @@ class RawRecorder(
      */
     fun stop(sessionEnded: Boolean) {
         scope.cancel()
+        log.detachSession()
         ecgFile.close()
         accFile.close()
         hrFile.close()
@@ -166,6 +173,7 @@ class RawRecorder(
     private fun newSessionMeta(startMs: Long): JSONObject = JSONObject()
         .put("formatVersion", 1)
         .put("startUtc", SessionFolders.iso(startMs))
+        .put("startJst", formatJst(startMs))
         .put("endUtc", JSONObject.NULL)
         .put("deviceId", deviceId)
         .put("firmware", JSONObject.NULL) // TODO: fill from the SDK's device-info callback

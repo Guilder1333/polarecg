@@ -9,6 +9,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import com.punkunpun.polarisecg.log.formatJst
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -66,7 +67,8 @@ object SessionFolders {
             interruptions.put(
                 JSONObject()
                     .put("lastDataUtc", recovery.lastDataMs?.let { iso(it) } ?: JSONObject.NULL)
-                    .put("resumedUtc", iso(nowMs)),
+                    .put("resumedUtc", iso(nowMs))
+                    .put("resumedJst", formatJst(nowMs)),
             )
             writeMeta(dir, meta)
             return OpenedSession(dir, parseStart(meta, dir, nowMs), true, meta, lastTimeMapConnection(dir) + 1)
@@ -83,7 +85,7 @@ object SessionFolders {
 
     /** The user pressed stop: record the end time. The session is finished and will not be resumed. */
     fun end(session: OpenedSession, endMs: Long) {
-        session.meta.put("endUtc", iso(endMs))
+        session.meta.put("endUtc", iso(endMs)).put("endJst", formatJst(endMs))
         writeMeta(session.dir, session.meta)
     }
 
@@ -98,7 +100,7 @@ object SessionFolders {
             ?: dir.listFiles()?.maxOfOrNull { it.lastModified() }?.takeIf { it > 0 }
             ?: nowMs
         val m = meta ?: JSONObject().put("formatVersion", 1).put("startUtc", iso(folderStartMs(dir) ?: endMs))
-        m.put("endUtc", iso(endMs)).put("recovered", true)
+        m.put("endUtc", iso(endMs)).put("endJst", formatJst(endMs)).put("recovered", true)
         writeMeta(dir, m)
     }
 
