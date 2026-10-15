@@ -257,7 +257,9 @@ data, and logs every gap. Everything else depends on this.
   Stress Test DB** from PhysioNet, resample to 130 Hz, convert to our raw format + reference
   annotation CSV. (`analysis/fetch_physionet.py` → `data/reference/<db>/<record>/`; one lead per
   record: MLII / II.)
-- [ ] **P2.4 [AI]** CLI command `analyze <recording>` → `beats.csv`, `windows.csv`, `events.csv`.
+- [x] **P2.4 [AI]** CLI command `analyze <recording>` → `beats.csv`, `windows.csv`, `events.csv`.
+  (Format: `docs/ANALYSIS_FORMAT.md`. Beats are from a placeholder detector until P3.2; classes
+  `U`, events only `GAP` until P4.)
 - [ ] **P2.5 [AI]** Python viewer: plot ECG with detected beats colored by class, quality shaded,
   zoomable; jump to a timestamp or event.
 - [ ] **P2.6 [AI]** Python scorer: compare detections to reference annotations (beat matching within

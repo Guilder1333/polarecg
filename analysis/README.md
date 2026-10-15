@@ -83,9 +83,9 @@ The **original downloads** (all leads, original sampling rate: `.hea`, `.dat`, `
 again; delete the converted record folder and run the script again, it reuses the local files.
 This costs roughly 50 MB for MIT-BIH, ~800 MB for INCART and ~20 MB for NSTDB.
 
-Records that already exist are skipped and nothing is ever overwritten; delete a record folder
-yourself to convert it again. Records 102, 104, 107 and 217 of MIT-BIH are paced; the AAMI standard
-leaves them out of evaluation, so the scorer (P2.6) should be able to exclude them.
+Converted records that are up to date are skipped; ones made by an older version of the converter
+are redone automatically from the local originals (no download). Downloaded originals are never
+overwritten. Delete a record folder to force a conversion.
 
 ## Reading a recording
 

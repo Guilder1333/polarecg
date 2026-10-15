@@ -1,8 +1,77 @@
 package com.punkunpun.polarisecg.cli
 
-import com.punkunpun.polarisecg.dsp.ECG_SAMPLE_RATE_HZ
+import com.punkunpun.polarisecg.dsp.raw.RawRecord
+import com.punkunpun.polarisecg.dsp.raw.readStream
+import java.io.File
+import kotlin.system.exitProcess
 
-fun main() {
-    // Placeholder: proves the CLI is wired to :core-dsp. Real commands come in task P2.4.
-    println("PolarisECG CLI (ECG sample rate: $ECG_SAMPLE_RATE_HZ Hz)")
+private const val USAGE = """PolarisECG CLI
+
+  analyze <recording-folder> [--out <dir>]
+
+    <recording-folder>  a session folder (data/sessions/<start>) or a converted reference
+                        record (data/reference/<db>/<record>): any folder with ecg*.bin files
+    --out <dir>         where to write beats.csv, windows.csv, events.csv
+                        (default: data/analysis/<parent>-<folder>)
+"""
+
+fun main(args: Array<String>) {
+    when (args.firstOrNull()) {
+        "analyze" -> exitProcess(analyzeCommand(args.drop(1)))
+        null, "-h", "--help", "help" -> print(USAGE)
+        else -> {
+            System.err.println("Unknown command '${args.first()}'.\n")
+            System.err.print(USAGE)
+            exitProcess(2)
+        }
+    }
+}
+
+private fun analyzeCommand(args: List<String>): Int {
+    var folder: File? = null
+    var out: File? = null
+    var i = 0
+    while (i < args.size) {
+        when (val a = args[i]) {
+            "--out" -> out = args.getOrNull(++i)?.let(::File) ?: return usageError("--out needs a folder")
+            else -> {
+                if (a.startsWith("--") || folder != null) return usageError("Unexpected argument '$a'")
+                folder = File(a)
+            }
+        }
+        i++
+    }
+    if (folder == null) return usageError("Missing <recording-folder>")
+    if (!folder.isDirectory) return usageError("Not a folder: $folder")
+
+    val outDir = out ?: File("data/analysis").resolve(
+        listOfNotNull(folder.absoluteFile.parentFile?.name, folder.absoluteFile.name).joinToString("-"),
+    )
+
+    val data = readStream(folder, "ecg")
+    for (f in data.unreadable) System.err.println("Skipped unreadable file: ${f.name}")
+    val frames = data.records.filterIsInstance<RawRecord.Ecg>()
+    if (frames.isEmpty()) {
+        System.err.println("No ECG records found in $folder")
+        return 1
+    }
+
+    val result = runAnalysis(frames)
+    outDir.mkdirs()
+    writeCsvs(result, outDir)
+
+    val hours = result.segments.sumOf { it.durationMs } / 3_600_000.0
+    println(
+        "%.2f h of ECG in %d segment(s), %d beats, %d windows, %d events -> %s".format(
+            hours, result.segments.size, result.beats.size, result.windows.size, result.events.size, outDir,
+        ),
+    )
+    println("Note: beats come from the placeholder detector (replaced in P3.2); all classes are U.")
+    return 0
+}
+
+private fun usageError(message: String): Int {
+    System.err.println("$message\n")
+    System.err.print(USAGE)
+    return 2
 }

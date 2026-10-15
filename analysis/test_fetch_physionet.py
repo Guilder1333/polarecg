@@ -52,8 +52,10 @@ class ConversionTest(unittest.TestCase):
         self.assertEqual(bad, [])
         self.assertEqual(list(ecg.samples_uv), list(samples))
         self.assertEqual(len(ecg.frame_phone_ms), 4)
-        self.assertEqual(ecg.frame_phone_ms[0], fp.START_PHONE_MS)
-        self.assertEqual(ecg.frame_phone_ms[1], fp.START_PHONE_MS + round(70 * 1000 / 130))
+        # phone time = time of the last sample of the frame; sensor time = first sample
+        self.assertEqual(ecg.frame_phone_ms[0], fp.START_PHONE_MS + round(69 * 1000 / 130))
+        self.assertEqual(ecg.frame_sensor_ns[0], (fp.START_PHONE_MS - pr.SENSOR_EPOCH_UNIX_MS) * 1_000_000)
+        self.assertEqual(ecg.frame_phone_ms[1], fp.START_PHONE_MS + round(139 * 1000 / 130))
 
 
 if __name__ == "__main__":

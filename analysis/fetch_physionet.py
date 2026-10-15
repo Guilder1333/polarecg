@@ -11,8 +11,9 @@ For every record this writes ``data/reference/<db>/<record>/``:
     reference.json             where it came from (db, record, lead, original rate)
 
 The original PhysioNet files (all leads, original rate) are kept in ``data/physionet/<db>/``, so
-the conversion can be redone without downloading again. Files that exist are never overwritten, and
-converted records are skipped. ``data/`` is git-ignored.
+the conversion can be redone without downloading again. Downloaded files are never overwritten. Converted
+records are skipped, unless they were made by an older converter version (then they are redone
+from the local originals). ``data/`` is git-ignored.
 Data come from https://physionet.org (ODC-By / Open Data Commons licences; cite the databases).
 """
 from __future__ import annotations
@@ -33,6 +34,9 @@ from polaris_raw import ECG_RATE_HZ, write_ecg_file  # noqa: E402
 # Fake start time of every converted record (their real dates are unknown or anonymised).
 START_PHONE_MS = 1_577_836_800_000  # 2020-01-01T00:00:00Z
 START_NAME = "20200101T000000Z"
+# Bump when the converted output changes; older record folders are then converted again.
+#   2: frame phone time = time of the frame's last sample (was: first sample)
+CONVERTER_VERSION = 2
 
 # db -> (PhysioNet name, annotation extension, lead names to prefer, in order)
 DATABASES = {
@@ -95,8 +99,15 @@ def convert_record(db_key: str, record: str, out_root: Path, raw_root: Path) -> 
 
     pn_name, ext, preferred = DATABASES[db_key]
     out_dir = out_root / db_key / record
-    if (out_dir / "reference.json").exists():
-        return "skipped (exists)"
+    done = out_dir / "reference.json"
+    if done.exists():
+        try:
+            current = json.loads(done.read_text(encoding="utf-8")).get("converterVersion") == CONVERTER_VERSION
+        except (OSError, ValueError):
+            current = False
+        if current:
+            return "skipped (exists)"
+        # Written by an older converter: redo it from the original files (derived data only).
 
     # Keep the original files (all leads, original rate) so we can reprocess without downloading.
     # overwrite=False: files already there are left alone.
@@ -124,6 +135,7 @@ def convert_record(db_key: str, record: str, out_root: Path, raw_root: Path) -> 
         "db": pn_name, "record": record, "lead": header.sig_name[lead], "originalRateHz": fs,
         "rateHz": ECG_RATE_HZ, "samples": int(len(uv)), "unit": "uV",
         "startUtc": "2020-01-01T00:00:00Z", "annotations": len(rows),
+        "converterVersion": CONVERTER_VERSION,
     }, indent=2), encoding="utf-8")
     return f"ok ({len(uv) / ECG_RATE_HZ / 60:.1f} min, lead {header.sig_name[lead]}, {len(rows)} annotations)"
 

@@ -171,16 +171,19 @@ def read_hr(folder) -> tuple[Hr, list]:
 def write_ecg_file(path, samples_uv, start_phone_ms: int, frame_len: int = 70) -> int:
     """Writes ``samples_uv`` (130 Hz, microvolts) as one ECG raw file; returns the frame count.
 
-    Used for converted reference databases. Frames of ``frame_len`` samples get phone and sensor
-    times derived from the sample index, as if the stream had arrived without any gap.
+    Used for converted reference databases. Frames of ``frame_len`` samples get sensor times from
+    the sample index (no gaps). The phone time of a frame is the time of its LAST sample, like a
+    phone that receives a frame the moment it is complete, so the time mapping of
+    ``TimeMapper`` (core-dsp) recovers ``start_phone_ms`` for sample 0 exactly.
     """
     samples = np.asarray(samples_uv).astype("<i4")
     parts = [MAGIC + struct.pack("<HH", VERSION, STREAM_IDS["ecg"])]
     frames = 0
     for start in range(0, len(samples), frame_len):
         chunk = samples[start:start + frame_len]
-        phone_ms = start_phone_ms + round(start * 1000 / ECG_RATE_HZ)
-        sensor_ns = (phone_ms - SENSOR_EPOCH_UNIX_MS) * 1_000_000
+        first_ms = start_phone_ms + round(start * 1000 / ECG_RATE_HZ)
+        phone_ms = start_phone_ms + round((start + len(chunk) - 1) * 1000 / ECG_RATE_HZ)
+        sensor_ns = (first_ms - SENSOR_EPOCH_UNIX_MS) * 1_000_000
         parts.append(struct.pack("<qqH", phone_ms, sensor_ns, len(chunk)) + chunk.tobytes())
         frames += 1
     Path(path).write_bytes(b"".join(parts))

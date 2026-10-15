@@ -24,3 +24,9 @@ dependencies {
 application {
     mainClass = "com.punkunpun.polarisecg.cli.MainKt"
 }
+
+// `./gradlew :tools:cli:run` starts in tools/cli by default; relative data/ paths must mean the
+// repository's data/ folder.
+tasks.named<JavaExec>("run") {
+    workingDir = rootProject.projectDir
+}
