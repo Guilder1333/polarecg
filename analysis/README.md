@@ -11,6 +11,9 @@ Contents now:
 | `test_polaris_raw.py` | Tests of the reader |
 | `fetch_physionet.py` | Downloads MIT-BIH / INCART / NSTDB and converts them (see below) |
 | `test_fetch_physionet.py` | Offline tests of the conversion |
+| `view_ecg.py` | Interactive ECG viewer for a recording + its `analyze` output (see below) |
+| `polaris_segments.py` | Gap-free segments with UTC time; mirrors the Kotlin `EcgSegments`/`TimeMapper` |
+| `test_view_ecg.py` | Offline tests of the viewer's data side |
 | `requirements.txt` | Python packages |
 
 ## Setup on Windows (once)
@@ -102,3 +105,21 @@ print(s.unreadable)             # files that could not be read, if any
 ```
 
 ECG is in microvolts at 130 Hz; `frame_phone_ms` / `frame_sensor_ns` give the time of every frame.
+
+## Viewing a recording
+
+First run the analysis (`docs/ANALYSIS_FORMAT.md`), then:
+
+```powershell
+python analysisiew_ecg.py dataeference\mitdb@
+python analysisiew_ecg.py data\sessions61012T221530Z --at 03:12:40 --width 20
+python analysisiew_ecg.py data\sessions61012T221530Z --event GAP
+python analysisiew_ecg.py dataeference\mitdb@ --save beats.png     # PNG, no window
+```
+
+The analysis folder is found the same way the CLI names it (`data/analysis/<parent>-<folder>`);
+use `--analysis <folder>` if you wrote it elsewhere. Beats are colored by class (`U` blue until
+P4); grey bands = no signal, orange = samples missing in a 10 s window, red = poor quality
+(from P3.4). Keys: arrows pan, PageUp/PageDown full window, `+`/`-` zoom, `n`/`p` next/previous
+beat, `e`/`E` next/previous event, Home/End. The "Go to" box takes `HH:MM:SS` (UTC), an ISO time,
+or `+90` / `+1:30` seconds from the start. The toolbar magnifier/hand zoom and pan freely.

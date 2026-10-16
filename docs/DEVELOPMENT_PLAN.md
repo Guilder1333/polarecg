@@ -260,13 +260,15 @@ data, and logs every gap. Everything else depends on this.
 - [x] **P2.4 [AI]** CLI command `analyze <recording>` → `beats.csv`, `windows.csv`, `events.csv`.
   (Format: `docs/ANALYSIS_FORMAT.md`. Beats are from a placeholder detector until P3.2; classes
   `U`, events only `GAP` until P4.)
-- [ ] **P2.5 [AI]** Python viewer: plot ECG with detected beats colored by class, quality shaded,
+- [x] **P2.5 [AI]** Python viewer: plot ECG with detected beats colored by class, quality shaded,
   zoomable; jump to a timestamp or event.
+  (`analysis/view_ecg.py`; segment/time logic mirrored in `analysis/polaris_segments.py`. Shades
+  gaps and low-coverage windows now, and the `quality` column once P3.4 adds it.)
 - [ ] **P2.6 [AI]** Python scorer: compare detections to reference annotations (beat matching within
   ±150 ms), output sensitivity / positive predictivity per class (AAMI-style, §9).
-- [ ] **P2.7 [YOU]** Find out what your **existing analysis tool** can export (beat list? event list
+- [x] **P2.7 [YOU]** Find out what your **existing analysis tool** can export (beat list? event list
   with timestamps? PDF only?). If it exports beats/events, AI writes an importer so it becomes
-  reference annotations for your own recordings. **This is the most valuable ground truth we can get.**
+  reference annotations for your own recordings. Nothing, doesn't have any export functions, can view only in app.
 
 ### Phase 3 — Beat detection & signal quality (≈ 1–2 weeks)
 
