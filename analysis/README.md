@@ -143,3 +143,17 @@ sensitivity (Se) and positive predictivity (+P) per record and pooled. Once beat
 `--exclude-paced` leaves out MIT-BIH 102, 104, 107, 217 (AAMI EC57). `--split DS1` / `DS2` selects
 the de Chazal tuning / test records: tune on DS1, report on DS2. Records without `beats.csv` are
 listed, not scored.
+
+## Comparing with the strap's RR intervals
+
+Needs a session folder and its `analyze` output:
+
+```powershell
+python analysis/compare_rr.py data/sessions/20261026T110150Z
+python analysis/compare_rr.py data/sessions/20261026T110150Z --plot rr.png --worst 15 --csv rr_pairs.csv
+```
+
+The H10 sends RR intervals without per-beat timestamps, so the script first pairs them with ours
+(in order, using the arrival time as a guide; beats one side missed stay unpaired), then reports
+`ours - strap` in ms: for all pairs, for pairs where both our beats are good, by motion and by
+heart rate. `--worst` lists the biggest disagreements with their time for `view_ecg.py --at`.

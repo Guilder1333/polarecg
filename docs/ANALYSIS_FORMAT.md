@@ -19,8 +19,9 @@ ISO-8601 UTC (for reading).
 
 The ECG frames are cut into gap-free *segments*: a new one starts when a frame does not follow
 the previous one on the sensor clock (tolerance 25 ms). Detectors never run across a gap.
-Time inside a segment follows the sensor clock; the segment start is mapped to phone UTC with
-`TimeMapper`. Code: `dsp/analysis/EcgSegments.kt`.
+Time inside a segment follows the sensor clock, frame by frame (the H10 samples at ~130.27 Hz, not
+130 Hz, so counting samples would drift by seconds per hour); the segment start is mapped to phone UTC
+with `TimeMapper`. Code: `dsp/analysis/EcgSegments.kt`.
 
 ## `beats.csv`
 

@@ -51,6 +51,12 @@ private const val CONNECT_TIMEOUT_MS = 30_000L
 /** Pause after asking the strap to stop old measurements, before starting new ones. */
 private const val STALE_CLEAR_SETTLE_MS = 500L
 
+/** The strap pushes its battery level when it connects and when it changes; we also re-read it this often. */
+private const val BATTERY_REFRESH_MS = 30 * 60 * 1000L
+
+/** Wait this long after the streams start before the first read: the battery service needs a moment. */
+private const val BATTERY_FIRST_READ_DELAY_MS = 3_000L
+
 /**
  * Wraps the Polar BLE SDK: connect to one H10, start ECG + ACC + HR streams, and republish them
  * as typed Kotlin Flows ([ecg], [acc], [hr]) plus a [state].
@@ -87,6 +93,11 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
     val accFrames: StateFlow<Int> = _accFrames.asStateFlow()
     val lastHr: StateFlow<Int?> = _lastHr.asStateFlow()
 
+    // Strap battery in percent, null until the strap has told us. Deliberately NOT reset by
+    // connect() or a disconnect: the last known value is more useful than "unknown".
+    private val _batteryPercent = MutableStateFlow<Int?>(null)
+    val batteryPercent: StateFlow<Int?> = _batteryPercent.asStateFlow()
+
     @Volatile private var deviceId: String? = null
     private var streamJobs: List<Job> = emptyList()
 
@@ -116,6 +127,11 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
 
         override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
             onDisconnected(polarDeviceInfo, null)
+        }
+
+        // The strap's battery service pushes the level once after connecting and again when it changes.
+        override fun batteryLevelReceived(identifier: String, level: Int) {
+            if (identifier == deviceId) publishBattery(level)
         }
 
         // Required by the SDK interface in 8.4.0 but not needed for an H10.
@@ -248,6 +264,20 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
         log.log(type, detail)
     }
 
+    /** The SDK reports an unknown level as a negative number (or 0 before the first read). */
+    private fun publishBattery(level: Int) {
+        if (level in 1..100) _batteryPercent.value = level
+    }
+
+    /** Re-reads the level the SDK holds for the strap (the last one the strap sent). */
+    private fun readBattery(id: String) {
+        try {
+            publishBattery(api.getBatteryLevel(id))
+        } catch (e: Exception) {
+            Log.w(TAG, "getBatteryLevel failed", e)
+        }
+    }
+
     /** Cancels the current recovery job (if any) and remembers the new one. */
     @Synchronized
     private fun replaceRecoveryJob(new: Job?) {
@@ -324,6 +354,15 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
                         )
                         _lastHr.value = s.hr
                     }
+                }
+            }
+            // Child of this start-up job, so stopStreams() cancels it with the streams. Not a
+            // launchStream(): a battery problem must never restart the ECG streams.
+            launch {
+                delay(BATTERY_FIRST_READ_DELAY_MS)
+                while (isActive) {
+                    readBattery(id)
+                    delay(BATTERY_REFRESH_MS)
                 }
             }
             setState(ConnectionState.Streaming)

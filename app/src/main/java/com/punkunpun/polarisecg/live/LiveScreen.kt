@@ -49,6 +49,7 @@ fun LiveScreen(app: PolarisApp, onBack: () -> Unit, modifier: Modifier = Modifie
     BackHandler(onBack = onBack)
     val connection = app.polarConnection
     val state by connection.state.collectAsState()
+    val battery by connection.batteryPercent.collectAsState()
     val events by app.connectionLog.events.collectAsState()
     // Only this session: the log file also holds every earlier run.
     val gaps = remember(events) { computeGaps(eventsOfLatestSession(events)) }
@@ -103,6 +104,7 @@ fun LiveScreen(app: PolarisApp, onBack: () -> Unit, modifier: Modifier = Modifie
             style = MaterialTheme.typography.displayMedium,
         )
         Text(stateText)
+        Text(battery?.let { stringResource(R.string.live_battery, it) } ?: stringResource(R.string.live_battery_none))
         if (contact == false) Text(stringResource(R.string.live_no_contact), color = MaterialTheme.colorScheme.error)
         Text(
             stringResource(

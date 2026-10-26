@@ -64,7 +64,7 @@ The H10 exposes three useful streams over Bluetooth Low Energy (BLE). We use **a
 
 What this means in practice:
 
-- **130 Hz is a low sampling rate.** One sample every 7.7 ms. Fine for finding beats and judging
+- **130 Hz is a low sampling rate** (the strap's timestamps show 130.27 Hz in practice; time always follows its clock, see P3.6). One sample every 7.7 ms. Fine for finding beats and judging
   their shape, but R-peak timing from ECG alone is coarse. We refine peaks with interpolation
   (§7.2), and use H10's own RR intervals where precise timing matters.
 - **The H10 cannot store ECG internally.** If the phone is out of range or the app dies, that data
@@ -246,6 +246,19 @@ data, and logs every gap. Everything else depends on this.
   **Done when:** < 1 % data loss per night on average, no night with the service dead for > 10 min.
 - [x] **P1.12 [YOU]** If nights fail: check Nothing OS settings (Battery → app → *Unrestricted*,
   disable adaptive battery for the app), report symptoms to AI for fixes.
+- [x] **P1.13 [AI]** Strap battery level in the app (asked for after P3.6): `PolarConnection.batteryPercent`
+  (the SDK's pushed level on connect and on change, plus a re-read 3 s after the streams start and every
+  30 min), shown on the live screen and in the notification. Last known value is kept over disconnects.
+  **Done when:** you see a plausible percentage on the phone after starting a session (confirmed on a
+  strap).
+- [ ] **P1.14 [YOU+AI]** Floating live ECG (Picture-in-Picture): when you swipe up to Home while the live
+  screen is open, the app shrinks to a small window that stays on top of other apps and shows the scrolling
+  ECG and the heart rate. Needs `supportsPictureInPicture` on `MainActivity`, `setAutoEnterEnabled` with a
+  wide aspect ratio, and a compact variant of the live screen without buttons. No extra permission. The window
+  exists only while the Activity is alive; recording is not affected either way (the foreground service owns it).
+  **Done when:** swiping home during a session leaves a movable ECG window; it shows live data and costs no
+  gaps. A free-floating overlay (`SYSTEM_ALERT_WINDOW`) was considered and rejected for now: special permission,
+  more restrictions.
 
 ### Phase 2 — PC analysis toolchain (≈ 3–5 days)
 
@@ -302,8 +315,15 @@ Details in §7.1–7.4.
     the strap's RR counts still agree, so motion only discards extreme cases (1.4 % of the day's beats).
 - [ ] **P3.5 [YOU+AI]** Evaluate on MIT-BIH @130 Hz: target **Se ≥ 99.5 %, +P ≥ 99.5 %** on clean
   records. You run the scorer; AI tunes.
-- [ ] **P3.6 [YOU+AI]** Evaluate on your own nights: compare our RR intervals with H10's RR stream
+- [x] **P3.6 [YOU+AI]** Evaluate on your own nights: compare our RR intervals with H10's RR stream
   (should agree within a few ms on clean beats). Look at plots of disagreements together with AI.
+  (`analysis/compare_rr.py`, tests in `test_compare_rr.py`.) Result on one night (6.6 h) and one day (3 h):
+  99-99.8 % of intervals pair up; on good pairs median |difference| 0 ms, p99 2 ms, 99.6-99.9 % within 5 ms,
+  also in strong motion. **Found on the way:** the H10 samples at ~130.27 Hz, not 130 (from its own
+  timestamps, identical in both sessions); with sample times at 130 Hz our time axis drifted 13 s in 2 h and
+  every RR was 1-2 ms long. Segment time now follows the sensor clock (`EcgSegment`, `polaris_segments.py`).
+  Largest remaining disagreements (25-77 ms, a few per hour) are around single beats, probably premature
+  beats whose R peak the strap places differently: look at them in P4.
 - [ ] **P3.7 [AI]** Noise robustness on MIT-BIH NSTDB: confirm low-quality segments are flagged
   rather than producing fake beats.
 

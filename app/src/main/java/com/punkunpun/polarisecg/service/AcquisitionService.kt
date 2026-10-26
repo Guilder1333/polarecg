@@ -109,7 +109,7 @@ class AcquisitionService : Service() {
     private fun appVersion(): String =
         packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown"
 
-    /** Re-draws the notification whenever the connection state or heart rate changes. */
+    /** Re-draws the notification whenever the connection state, heart rate or strap battery changes. */
     private fun watchStatusForNotification() {
         notificationJob?.cancel()
         val connection = app.polarConnection
@@ -117,7 +117,7 @@ class AcquisitionService : Service() {
         val hr = MutableStateFlow<Int?>(null)
         notificationJob = scope.launch {
             launch { connection.hr.collect { hr.value = it.heartRateBpm } }
-            combine(connection.state, hr) { state, bpm -> statusText(state, bpm) }
+            combine(connection.state, hr, connection.batteryPercent) { state, bpm, battery -> statusText(state, bpm, battery) }
                 .collect { text ->
                     getSystemService(NotificationManager::class.java)
                         .notify(NOTIFICATION_ID, buildNotification(text))
@@ -125,12 +125,16 @@ class AcquisitionService : Service() {
         }
     }
 
-    private fun statusText(state: ConnectionState, bpm: Int?): String = when (state) {
+    private fun statusText(state: ConnectionState, bpm: Int?, battery: Int?): String = when (state) {
         is ConnectionState.Disconnected -> getString(R.string.notif_disconnected)
         ConnectionState.Connecting -> getString(R.string.notif_connecting)
         ConnectionState.Connected -> getString(R.string.notif_connected)
-        ConnectionState.Streaming ->
-            if (bpm != null) getString(R.string.notif_streaming_hr, bpm) else getString(R.string.notif_streaming)
+        ConnectionState.Streaming -> when {
+            bpm != null && battery != null -> getString(R.string.notif_streaming_hr_battery, bpm, battery)
+            bpm != null -> getString(R.string.notif_streaming_hr, bpm)
+            battery != null -> getString(R.string.notif_streaming_battery, battery)
+            else -> getString(R.string.notif_streaming)
+        }
     }
 
     private fun buildNotification(text: String): Notification {

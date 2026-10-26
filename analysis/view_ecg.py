@@ -150,8 +150,8 @@ def window_content(data: ViewData, lo_ms: float, hi_ms: float):
     for seg in data.segments:
         if seg.end_utc_ms < lo_ms or seg.start_utc_ms > hi_ms:
             continue
-        i0 = max(0, int((lo_ms - seg.start_utc_ms) * ECG_RATE_HZ / 1000))
-        i1 = min(len(seg.samples_uv), int((hi_ms - seg.start_utc_ms) * ECG_RATE_HZ / 1000) + 2)
+        i0 = max(0, seg.index_at(lo_ms) - 1)
+        i1 = min(len(seg.samples_uv), seg.index_at(hi_ms) + 2)
         if i1 > i0:
             pieces.append((seg.times_ms(i0, i1) / 1000, seg.samples_uv[i0:i1]))
     b = data.beats
@@ -161,7 +161,7 @@ def window_content(data: ViewData, lo_ms: float, hi_ms: float):
     for k, t in enumerate(beat_t):          # y = the sample nearest to the R peak
         for seg in data.segments:
             if seg.start_utc_ms <= t <= seg.end_utc_ms:
-                idx = min(len(seg.samples_uv) - 1, round((t - seg.start_utc_ms) * ECG_RATE_HZ / 1000))
+                idx = seg.index_at(t)
                 beat_y[k] = seg.samples_uv[idx]
                 break
     shades = [s for s in data.shades if s.end_ms > lo_ms and s.start_ms < hi_ms]
