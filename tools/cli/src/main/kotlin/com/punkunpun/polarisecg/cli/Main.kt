@@ -56,7 +56,10 @@ private fun analyzeCommand(args: List<String>): Int {
         return 1
     }
 
-    val result = runAnalysis(frames)
+    val acc = readStream(folder, "acc").records.filterIsInstance<RawRecord.Acc>()
+    if (acc.isEmpty()) System.err.println("No ACC records found: motion is not used for the quality")
+
+    val result = runAnalysis(frames, acc)
     outDir.mkdirs()
     writeCsvs(result, outDir)
 

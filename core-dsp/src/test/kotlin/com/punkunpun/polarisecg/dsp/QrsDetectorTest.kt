@@ -148,6 +148,35 @@ class QrsDetectorTest {
         assertEquals(0, extra)
     }
 
+    /** Adds a 30 mV spike burst (strap being adjusted: 40 times a normal beat) of about 0.3 s at [atS]. */
+    private fun withArtifact(x: IntArray, atS: Double): IntArray {
+        val y = x.copyOf()
+        val start = (atS * fs).toInt()
+        for (k in 0 until 40) if (start + k < y.size) y[start + k] += (30_000 * (if (k % 2 == 0) 1 else -1) * (1.0 - k / 40.0)).toInt()
+        return y
+    }
+
+    @Test
+    fun recoversAfterAHugeArtifact() {
+        val e = ecg(regular(90.0), 90.0)
+        val found = detect(withArtifact(e.samples, 30.0))
+        // the artifact itself may give a false beat; but within 10 s every real beat is found again
+        val after = e.rPositions.filter { it > 40 * fs }
+        val (missed, extra) = compare(found.filter { it > 40 * fs }, after)
+        assertEquals(0, missed)
+        assertEquals(0, extra)
+    }
+
+    @Test
+    fun recoversWhenTheArtifactComesInTheLearningPhase() {
+        val e = ecg(regular(90.0), 90.0)
+        val found = detect(withArtifact(e.samples, 1.2))
+        val after = e.rPositions.filter { it > 20 * fs }
+        val (missed, extra) = compare(found.filter { it > 20 * fs }, after)
+        assertEquals(0, missed)
+        assertEquals(0, extra)
+    }
+
     @Test
     fun flatSignalGivesNoBeats() {
         assertTrue(detect(IntArray(130 * 30) { 12345 }).isEmpty())

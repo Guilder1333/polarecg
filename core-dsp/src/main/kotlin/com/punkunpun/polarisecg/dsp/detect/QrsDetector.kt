@@ -5,6 +5,7 @@ import com.punkunpun.polarisecg.dsp.filter.EcgFilterConfig
 import com.punkunpun.polarisecg.dsp.filter.EcgFilters
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -36,6 +37,19 @@ data class QrsConfig(
     val polarityDecay: Double = 0.97,
     /** The opposite-polarity extreme wins only if it is this many times bigger. */
     val polarityOverride: Double = 2.0,
+    /**
+     * One candidate counts at most this many times the current beat level when the level (SPKI) is
+     * updated, so a huge artifact (a strap being adjusted: 30 mV against a 1 mV beat) cannot lift
+     * the threshold out of reach of the real beats.
+     */
+    val maxBeatGrowth: Double = 4.0,
+    /**
+     * No beat for this long (and for 2.5 average RR): the beat level is probably wrong, e.g. left
+     * too high by an artifact. Every further candidate then halves it ([stallDecay]) until
+     * beats are found again.
+     */
+    val stallSeconds: Double = 3.0,
+    val stallDecay: Double = 0.5,
 )
 
 /**
@@ -89,6 +103,7 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
     private val missed = ArrayList<Candidate>() // noise-like candidates since the last beat
 
     // last beat
+    private var initIndex = 0 // where learning ended: the "last beat" until there is a real one
     private var lastBeat = -1 // index of its integral peak
     private var lastBeatSlope = 0.0
     private var lastR = -1.0 // reported R position
@@ -125,7 +140,7 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
         count = 0; sqSum = 0.0
         initialized = false; spki = 0.0; npki = 0.0; learnMax = 0.0; learnSum = 0.0
         pending.clear(); missed.clear()
-        lastBeat = -1; lastBeatSlope = 0.0; lastR = -1.0; rrs.clear(); polarity = 0.0
+        initIndex = 0; lastBeat = -1; lastBeatSlope = 0.0; lastR = -1.0; rrs.clear(); polarity = 0.0
     }
 
     // ---- signal chain -------------------------------------------------------------------
@@ -172,12 +187,19 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
         spki = 0.25 * learnMax
         npki = 0.5 * learnSum / count
         initialized = true
+        initIndex = count
         val replay = ArrayList(pending)
         pending.clear()
         for (c in replay) decide(c)
     }
 
     private fun decide(c: Candidate) {
+        // Stalled: far too long without a beat although the signal moves. The beat level is
+        // probably too high (an artifact raised it): let it fall towards the noise level.
+        val sinceProgress = c.index - (if (lastBeat >= 0) lastBeat else initIndex)
+        if (sinceProgress > max(config.stallSeconds * fs, 2.5 * averageRr())) {
+            spki = max(spki * config.stallDecay, npki)
+        }
         if (lastBeat >= 0 && c.index - lastBeat > config.searchBackFactor * averageRr()) searchBack(c.index)
         if (lastBeat >= 0 && c.index - lastBeat < refractory) return // still the same QRS
 
@@ -188,7 +210,7 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
             isBeat = false // early and gentle: a T wave
         }
         if (isBeat) {
-            spki = 0.125 * c.value + 0.875 * spki
+            spki = 0.125 * min(c.value, config.maxBeatGrowth * spki) + 0.875 * spki
             accept(c)
         } else {
             npki = 0.125 * c.value + 0.875 * npki
@@ -204,7 +226,7 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
         val best = missed
             .filter { it.index - lastBeat >= refractory && currentIndex - it.index >= refractory && it.value > low }
             .maxByOrNull { it.value } ?: return
-        spki = 0.25 * best.value + 0.75 * spki
+        spki = 0.25 * min(best.value, config.maxBeatGrowth * spki) + 0.75 * spki
         accept(best)
     }
 

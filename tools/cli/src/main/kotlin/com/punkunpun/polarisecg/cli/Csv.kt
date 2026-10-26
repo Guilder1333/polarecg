@@ -12,7 +12,8 @@ import java.util.Locale
  * (for code) and ISO-8601 UTC (for eyes). Column meaning is documented in docs/ANALYSIS_FORMAT.md.
  */
 
-fun runAnalysis(frames: List<RawRecord.Ecg>): AnalysisResult = analyzeEcg(frames)
+fun runAnalysis(frames: List<RawRecord.Ecg>, accFrames: List<RawRecord.Acc> = emptyList()): AnalysisResult =
+    analyzeEcg(frames, accFrames)
 
 private fun iso(ms: Long) = Instant.ofEpochMilli(ms).toString()
 private fun num(v: Double?, digits: Int) = if (v == null) "" else String.format(Locale.ROOT, "%.${digits}f", v)
@@ -22,18 +23,31 @@ private fun field(s: String) = if (s.any { it == ',' || it == '"' || it == '\n' 
 
 fun writeCsvs(result: AnalysisResult, dir: File) {
     File(dir, "beats.csv").bufferedWriter().use { w ->
-        w.write("utcMs,utc,segment,rrMs,class\n")
+        w.write("utcMs,utc,segment,rrMs,class,sqi,good,amplitudeUv,slopeRatio,hfRatio,agreed,motionMg\n")
         for (b in result.beats) {
-            w.write("${b.utcMs},${iso(b.utcMs)},${b.segment},${b.rrMs ?: ""},${b.cls}\n")
+            val q = b.quality
+            w.write(
+                "${b.utcMs},${iso(b.utcMs)},${b.segment},${b.rrMs ?: ""},${b.cls}," +
+                    "${num(q.sqi, 3)},${if (b.good) 1 else 0},${num(q.amplitudeUv, 0)}," +
+                    "${num(q.slopeRatio.takeIf { it.isFinite() }, 3)},${num(q.hfRatio.takeIf { it.isFinite() }, 3)}," +
+                    "${if (q.agreed) 1 else 0},${num(q.motionMg, 1)}\n",
+            )
         }
     }
     File(dir, "windows.csv").bufferedWriter().use { w ->
-        w.write("startUtcMs,startUtc,durationMs,samples,coverage,beats,meanHrBpm\n")
+        w.write("startUtcMs,startUtc,durationMs,samples,coverage,beats,meanHrBpm,motionMg,goodBeats,quality\n")
         for (x in result.windows) {
             w.write(
                 "${x.startUtcMs},${iso(x.startUtcMs)},${x.durationMs},${x.samples}," +
-                    "${num(x.coverage, 3)},${x.beats},${num(x.meanHrBpm, 1)}\n",
+                    "${num(x.coverage, 3)},${x.beats},${num(x.meanHrBpm, 1)}," +
+                    "${num(x.motionMg, 1)},${x.goodBeats},${num(x.quality, 3)}\n",
             )
+        }
+    }
+    if (result.motion.isNotEmpty()) {
+        File(dir, "motion.csv").bufferedWriter().use { w ->
+            w.write("startUtcMs,startUtc,motionMg,samples\n")
+            for (m in result.motion) w.write("${m.startUtcMs},${iso(m.startUtcMs)},${num(m.motionMg, 1)},${m.samples}\n")
         }
     }
     File(dir, "events.csv").bufferedWriter().use { w ->

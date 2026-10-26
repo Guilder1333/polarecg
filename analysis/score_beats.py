@@ -51,15 +51,23 @@ def load_reference(record_dir: Path) -> tuple[np.ndarray, list[str]]:
     return np.array(times, dtype=float), classes
 
 
-def load_detections(analysis_dir: Path) -> tuple[np.ndarray, list[str]]:
-    """Beat times (epoch ms, sorted) and classes from the CLI's ``beats.csv``."""
-    times, classes = [], []
+def load_detections(analysis_dir: Path) -> tuple[np.ndarray, list[str], list[bool] | None]:
+    """Beat times (epoch ms, sorted), classes and "good quality" flags from the CLI's ``beats.csv``.
+
+    The flags are None if the file has no ``good`` column (written before P3.4).
+    """
+    times, classes, good = [], [], []
     with open(analysis_dir / "beats.csv", newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        has_good = "good" in (reader.fieldnames or [])
+        for row in reader:
             times.append(float(row["utcMs"]))
             classes.append(row["class"])
+            if has_good:
+                good.append(row["good"] == "1")
     order = np.argsort(times, kind="stable")
-    return np.array(times, dtype=float)[order], [classes[i] for i in order]
+    return (np.array(times, dtype=float)[order], [classes[i] for i in order],
+            [good[i] for i in order] if has_good else None)
 
 
 def match_beats(ref: np.ndarray, det: np.ndarray, tol_ms: float) -> list[tuple[int, int]]:
@@ -84,20 +92,31 @@ def match_beats(ref: np.ndarray, det: np.ndarray, tol_ms: float) -> list[tuple[i
     return pairs
 
 
-def score_record(ref_t, ref_c, det_t, det_c, tol_ms=150.0, skip_start_s=0.0) -> dict:
-    """Counts for one record: ``tp, fp, fn`` and ``confusion[(ref class, our class)]``."""
+def score_record(ref_t, ref_c, det_t, det_c, tol_ms=150.0, skip_start_s=0.0, det_good=None) -> dict:
+    """Counts for one record: ``tp, fp, fn`` and ``confusion[(ref class, our class)]``.
+
+    With ``det_good`` (one flag per detection) it also counts how many true and false detections
+    were flagged as poor quality: ``tp_bad``, ``fp_bad``, and ``judged`` = detections with a flag.
+    """
     if skip_start_s > 0:  # ignore the first seconds on both sides
         cut = START_MS + skip_start_s * 1000
         keep_r, keep_d = ref_t >= cut, det_t >= cut
         ref_t, ref_c = ref_t[keep_r], [c for c, k in zip(ref_c, keep_r) if k]
         det_t, det_c = det_t[keep_d], [c for c, k in zip(det_c, keep_d) if k]
+        if det_good is not None:
+            det_good = [g for g, k in zip(det_good, keep_d) if k]
     pairs = match_beats(ref_t, det_t, tol_ms)
     confusion = Counter((ref_c[i], det_c[j]) for i, j in pairs)
     matched_det = {j for _, j in pairs}
     # Detections without a reference beat, by our class (for +P per class).
     false_pos = Counter(det_c[j] for j in range(len(det_c)) if j not in matched_det)
+    tp_bad = fp_bad = 0
+    if det_good is not None:
+        tp_bad = sum(1 for j in matched_det if not det_good[j])
+        fp_bad = sum(1 for j in range(len(det_good)) if j not in matched_det and not det_good[j])
     return {
         "tp": len(pairs), "fp": len(det_t) - len(pairs), "fn": len(ref_t) - len(pairs),
+        "tp_bad": tp_bad, "fp_bad": fp_bad, "judged": len(det_t) if det_good is not None else 0,
         "confusion": confusion, "false_pos_by_class": false_pos,
         "ref_by_class": Counter(ref_c), "ref_beats": len(ref_t), "det_beats": len(det_t),
     }
@@ -129,6 +148,13 @@ def class_stats(r: dict) -> dict[str, dict]:
 
 def pct(x: float | None) -> str:
     return "  n/a" if x is None else f"{100 * x:5.1f}"
+
+
+def bad_cols(r: dict) -> str:
+    """Share of true / false detections flagged as poor quality (blank without quality flags)."""
+    if not r["judged"]:
+        return f"{'':>16}"
+    return f"{pct(ratio(r['tp_bad'], r['tp'])):>8}{pct(ratio(r['fp_bad'], r['fp'])):>8}"
 
 
 def find_records(paths: list[Path], exclude_paced: bool, split: str | None) -> list[Path]:
@@ -164,19 +190,20 @@ def main(argv=None) -> int:
         return 1
 
     total, rows, missing = None, [], []
-    print(f"{'record':<14}{'ref':>7}{'det':>7}{'TP':>7}{'FP':>6}{'FN':>6}{'Se%':>7}{'+P%':>7}")
+    print(f"{'record':<14}{'ref':>7}{'det':>7}{'TP':>7}{'FP':>6}{'FN':>6}{'Se%':>7}{'+P%':>7}"
+          f"{'TPbad%':>8}{'FPbad%':>8}")
     for rec in records:
         analysis = args.analysis_root / f"{rec.parent.name}-{rec.name}"
         if not (analysis / "beats.csv").exists():
             missing.append(rec.name)
             continue
         ref_t, ref_c = load_reference(rec)
-        det_t, det_c = load_detections(analysis)
-        r = score_record(ref_t, ref_c, det_t, det_c, args.tolerance, args.skip_start)
+        det_t, det_c, det_good = load_detections(analysis)
+        r = score_record(ref_t, ref_c, det_t, det_c, args.tolerance, args.skip_start, det_good)
         total = r if total is None else merge(total, r)
         se, ppv = ratio(r["tp"], r["tp"] + r["fn"]), ratio(r["tp"], r["tp"] + r["fp"])
         print(f"{rec.parent.name + '/' + rec.name:<14}{r['ref_beats']:>7}{r['det_beats']:>7}"
-              f"{r['tp']:>7}{r['fp']:>6}{r['fn']:>6}{pct(se):>7}{pct(ppv):>7}")
+              f"{r['tp']:>7}{r['fp']:>6}{r['fn']:>6}{pct(se):>7}{pct(ppv):>7}{bad_cols(r)}")
         rows.append({"db": rec.parent.name, "record": rec.name, "ref": r["ref_beats"], "det": r["det_beats"],
                      "tp": r["tp"], "fp": r["fp"], "fn": r["fn"], "se": se, "ppv": ppv})
 
@@ -187,7 +214,9 @@ def main(argv=None) -> int:
 
     se, ppv = ratio(total["tp"], total["tp"] + total["fn"]), ratio(total["tp"], total["tp"] + total["fp"])
     print(f"{'TOTAL':<14}{total['ref_beats']:>7}{total['det_beats']:>7}{total['tp']:>7}"
-          f"{total['fp']:>6}{total['fn']:>6}{pct(se):>7}{pct(ppv):>7}")
+          f"{total['fp']:>6}{total['fn']:>6}{pct(se):>7}{pct(ppv):>7}{bad_cols(total)}")
+    if total["judged"]:
+        print("TPbad% = true detections flagged poor quality (lost), FPbad% = false detections flagged poor quality (caught)")
 
     judged = {c: s for c, s in class_stats(total).items()}
     if any(dc != "U" for (_, dc) in total["confusion"]) or any(c != "U" for c in total["false_pos_by_class"]):

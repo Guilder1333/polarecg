@@ -53,6 +53,26 @@ class MatchTest(unittest.TestCase):
         self.assertEqual((r["tp"], r["fp"], r["fn"]), (1, 0, 0))
 
 
+class QualityTest(unittest.TestCase):
+    def test_bad_flags_are_counted_for_true_and_false_detections(self):
+        # detections: hit (good), hit (bad), extra (good), extra (bad)
+        r = sb.score_record(np.array([1000.0, 2000.0]), ["N", "N"],
+                            np.array([1000.0, 2000.0, 3000.0, 4000.0]), ["U"] * 4,
+                            det_good=[True, False, True, False])
+        self.assertEqual((r["tp"], r["fp"]), (2, 2))
+        self.assertEqual((r["tp_bad"], r["fp_bad"], r["judged"]), (1, 1, 4))
+
+    def test_without_flags_nothing_is_judged(self):
+        r = score([1000], [1000])
+        self.assertEqual((r["tp_bad"], r["fp_bad"], r["judged"]), (0, 0, 0))
+
+    def test_skip_start_keeps_flags_aligned(self):
+        t = sb.START_MS
+        r = sb.score_record(np.array([t + 20000.0]), ["N"], np.array([t + 1000.0, t + 20000.0]), ["U", "U"],
+                            150, skip_start_s=10, det_good=[False, True])
+        self.assertEqual((r["tp"], r["tp_bad"], r["judged"]), (1, 0, 1))
+
+
 class ClassTest(unittest.TestCase):
     def test_per_class_se_and_ppv(self):
         # ref: N V V S ; ours: N V N (the 2nd V is called N) and an extra V in the noise

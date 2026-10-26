@@ -283,11 +283,23 @@ Details in §7.1–7.4.
 - [x] **P3.2 [AI]** Streaming QRS detector (Pan-Tompkins style) with adaptive thresholds, refractory
   period, search-back for missed beats, automatic polarity handling.
   (`dsp/detect/QrsDetector.kt` + `QrsConfig`; tests in `QrsDetectorTest.kt`. First untuned run on
-  MIT-BIH, 44 non-paced records, 5 s skipped: Se 99.5 %, +P 99.3 %. Weak spots: 108, 207, 105, 203.)
+  MIT-BIH, 44 non-paced records, 5 s skipped: Se 99.5 %, +P 99.3 %. Weak spots: 108, 207, 105, 203.
+  Fixed after the first real night (P3.4): 20-40 mV artifacts (strap being adjusted) inflated the beat level
+  so that the detector found no beat for up to 1.5 h; now one candidate counts at most 4x the level and the
+  level halves per candidate after 3 s without a beat. 11 300 -> 25 850 beats on that night, MIT-BIH unchanged.)
 - [x] **P3.3 [AI]** R-peak refinement (parabolic interpolation) → sub-sample timing.
   (`detect/PeakRefine.kt`; `QrsDetector` now reports fractional sample positions. Synthetic test: mean
   timing error 0.12 ms vs 2.04 ms for whole samples. Real data will be worse, check in P3.6.)
-- [ ] **P3.4 [AI]** Signal Quality Index per beat and per 10 s window (§7.4), using ACC.
+- [x] **P3.4 [AI]** Signal Quality Index per beat and per 10 s window (§7.4), using ACC.
+  - [x] Step 1, ECG only (`dsp/quality/`: `EcgBeatStream`, `SlopeBeatDetector`; tests in
+    `EcgBeatStreamTest.kt`): amplitude, slope noise, >40 Hz noise, second-detector agreement. Columns
+    `sqi`, `good`, ... in `beats.csv` and `goodBeats`, `quality` in `windows.csv`. Calibrated on
+    MIT-BIH + NSTDB: 2.6 % of true beats flagged on MIT-BIH, 89 % of its false beats; on NSTDB 11 % /
+    57 %. Scorer shows this (`TPbad%`, `FPbad%`). Template correlation waits for P4.2.
+  - [x] Step 2, motion (`dsp/motion/Motion.kt`; `BeatQuality.withMotion`; tests in `MotionTest.kt`): ACC RMS
+    deviation per UTC second, `motion.csv`, `motionMg` columns, a motion score (1 at <= 100 mG, 0 at >= 600 mG)
+    in the beat score. Calibrated on one night and one day: in strong motion the ECG stays mostly clean and
+    the strap's RR counts still agree, so motion only discards extreme cases (1.4 % of the day's beats).
 - [ ] **P3.5 [YOU+AI]** Evaluate on MIT-BIH @130 Hz: target **Se ≥ 99.5 %, +P ≥ 99.5 %** on clean
   records. You run the scorer; AI tunes.
 - [ ] **P3.6 [YOU+AI]** Evaluate on your own nights: compare our RR intervals with H10's RR stream
