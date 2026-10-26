@@ -123,3 +123,23 @@ P4); grey bands = no signal, orange = samples missing in a 10 s window, red = po
 (from P3.4). Keys: arrows pan, PageUp/PageDown full window, `+`/`-` zoom, `n`/`p` next/previous
 beat, `e`/`E` next/previous event, Home/End. The "Go to" box takes `HH:MM:SS` (UTC), an ISO time,
 or `+90` / `+1:30` seconds from the start. The toolbar magnifier/hand zoom and pan freely.
+
+## Scoring detections
+
+Run the analysis for each record (`docs/ANALYSIS_FORMAT.md`), then compare with the reference
+annotations of the converted PhysioNet records:
+
+```powershell
+python analysis/score_beats.py data/reference/mitdb/100
+python analysis/score_beats.py data/reference/mitdb --exclude-paced --split DS2
+python analysis/score_beats.py data/reference/mitdb --csv data/analysis/scores.csv
+```
+
+A detection matches a reference beat within ±150 ms (`--tolerance`), each beat used once; a
+double detection is one hit plus one false positive. Output: reference / detected beats, TP, FP, FN,
+sensitivity (Se) and positive predictivity (+P) per record and pooled. Once beats carry classes
+(P4) it also prints Se / +P per class (N, S, V, F, Q) and the confusion matrix.
+
+`--exclude-paced` leaves out MIT-BIH 102, 104, 107, 217 (AAMI EC57). `--split DS1` / `DS2` selects
+the de Chazal tuning / test records: tune on DS1, report on DS2. Records without `beats.csv` are
+listed, not scored.

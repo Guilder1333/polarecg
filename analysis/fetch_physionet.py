@@ -22,6 +22,9 @@ import argparse
 import csv
 import json
 import sys
+import time
+import urllib.error
+import urllib.request
 from fractions import Fraction
 from pathlib import Path
 
@@ -37,6 +40,8 @@ START_NAME = "20200101T000000Z"
 # Bump when the converted output changes; older record folders are then converted again.
 #   2: frame phone time = time of the frame's last sample (was: first sample)
 CONVERTER_VERSION = 2
+
+PHYSIONET_FILES = "https://physionet.org/files"
 
 # db -> (PhysioNet name, annotation extension, lead names to prefer, in order)
 DATABASES = {
@@ -94,6 +99,57 @@ def convert_annotations(samples, symbols, aux, fs: float, n_out: int) -> list[di
     return rows
 
 
+def download_file(url: str, dest: Path, attempts: int = 200, timeout_s: float = 30.0) -> None:
+    """Download ``url`` to ``dest``, resuming after failures, retrying with back-off.
+
+    Data goes to ``<dest>.part`` and is renamed only when complete, so a half file is never taken
+    for a finished one. After a dropped connection the next attempt continues where the .part
+    file ends (HTTP ``Range`` request) instead of starting again. An existing ``dest`` is kept.
+    """
+    if dest.exists():
+        return
+    part = dest.with_name(dest.name + ".part")
+    for attempt in range(1, attempts + 1):
+        have = part.stat().st_size if part.exists() else 0
+        req = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                if have and resp.status != 206:  # server ignored Range: start from scratch
+                    have = 0
+                total = have + int(resp.headers.get("Content-Length", 0))
+                with open(part, "ab" if have else "wb") as f:
+                    while chunk := resp.read(64 * 1024):  # ':=' assigns and tests in one go
+                        f.write(chunk)
+            if total and part.stat().st_size < total:
+                raise OSError("connection closed early")
+            part.replace(dest)
+            return
+        except urllib.error.HTTPError as e:
+            if e.code == 416 and part.exists():  # range past the end: the file is complete
+                part.replace(dest)
+                return
+            if e.code == 404:
+                raise
+            err = e
+        except (OSError, urllib.error.URLError) as e:  # timeouts and resets are OSErrors
+            err = e
+        wait = min(5 * attempt, 120)
+        print(f"  {dest.name}: {type(err).__name__}: {err}; retry {attempt}/{attempts} in {wait}s",
+              file=sys.stderr, flush=True)
+        time.sleep(wait)
+    raise OSError(f"giving up on {url}")
+
+
+def list_records(pn_name: str, attempts: int = 200) -> list[str]:
+    """Record names of a database (the ``RECORDS`` file), retrying while the network fails."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        dest = Path(tmp) / "RECORDS"
+        download_file(f"{PHYSIONET_FILES}/{pn_name}/1.0.0/RECORDS", dest, attempts)
+        return dest.read_text(encoding="utf-8").split()
+
+
 def convert_record(db_key: str, record: str, out_root: Path, raw_root: Path) -> str:
     import wfdb  # imported here so the pure helpers above work without the download stack
 
@@ -113,7 +169,8 @@ def convert_record(db_key: str, record: str, out_root: Path, raw_root: Path) -> 
     # overwrite=False: files already there are left alone.
     raw_dir = raw_root / db_key
     raw_dir.mkdir(parents=True, exist_ok=True)
-    wfdb.dl_database(pn_name, str(raw_dir), records=[record], overwrite=False)
+    for ext_ in ("hea", "dat", ext):
+        download_file(f"{PHYSIONET_FILES}/{pn_name}/1.0.0/{record}.{ext_}", raw_dir / f"{record}.{ext_}")
     local = str(raw_dir / record)
 
     header = wfdb.rdheader(local)
@@ -141,8 +198,6 @@ def convert_record(db_key: str, record: str, out_root: Path, raw_root: Path) -> 
 
 
 def main(argv=None) -> int:
-    import wfdb
-
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", choices=list(DATABASES), nargs="+", default=list(DATABASES))
     p.add_argument("--records", nargs="+", help="record names (only sensible with one --db)")
@@ -153,7 +208,7 @@ def main(argv=None) -> int:
 
     failures = 0
     for db_key in args.db:
-        records = args.records or wfdb.get_record_list(DATABASES[db_key][0])
+        records = args.records or list_records(DATABASES[db_key][0])
         if args.limit:
             records = records[: args.limit]
         for record in records:

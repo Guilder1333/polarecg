@@ -241,10 +241,10 @@ data, and logs every gap. Everything else depends on this.
   used and estimate strap battery drain (Polar Flow shows strap battery level).
 - [x] **P1.10 [YOU+AI]** Live screen (Compose): scrolling ECG plot (last ~5 s), current HR, connection
   status, gap count. *Good first Compose task for you with AI help.*
-- [ ] **P1.11 [YOU]** **Soak test: 5+ nights.** Moisten electrodes before bed. Each morning, check
+- [x] **P1.11 [YOU]** **Soak test: 5+ nights.** Moisten electrodes before bed. Each morning, check
   the diagnostics screen and export.
   **Done when:** < 1 % data loss per night on average, no night with the service dead for > 10 min.
-- [ ] **P1.12 [YOU]** If nights fail: check Nothing OS settings (Battery → app → *Unrestricted*,
+- [x] **P1.12 [YOU]** If nights fail: check Nothing OS settings (Battery → app → *Unrestricted*,
   disable adaptive battery for the app), report symptoms to AI for fixes.
 
 ### Phase 2 — PC analysis toolchain (≈ 3–5 days)
@@ -264,8 +264,9 @@ data, and logs every gap. Everything else depends on this.
   zoomable; jump to a timestamp or event.
   (`analysis/view_ecg.py`; segment/time logic mirrored in `analysis/polaris_segments.py`. Shades
   gaps and low-coverage windows now, and the `quality` column once P3.4 adds it.)
-- [ ] **P2.6 [AI]** Python scorer: compare detections to reference annotations (beat matching within
+- [x] **P2.6 [AI]** Python scorer: compare detections to reference annotations (beat matching within
   ±150 ms), output sensitivity / positive predictivity per class (AAMI-style, §9).
+  (`analysis/score_beats.py`, tests in `test_score_beats.py`; per-class scores need P4.)
 - [x] **P2.7 [YOU]** Find out what your **existing analysis tool** can export (beat list? event list
   with timestamps? PDF only?). If it exports beats/events, AI writes an importer so it becomes
   reference annotations for your own recordings. Nothing, doesn't have any export functions, can view only in app.
