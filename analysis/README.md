@@ -111,10 +111,10 @@ ECG is in microvolts at 130 Hz; `frame_phone_ms` / `frame_sensor_ns` give the ti
 First run the analysis (`docs/ANALYSIS_FORMAT.md`), then:
 
 ```powershell
-python analysisiew_ecg.py dataeference\mitdb@
-python analysisiew_ecg.py data\sessions61012T221530Z --at 03:12:40 --width 20
-python analysisiew_ecg.py data\sessions61012T221530Z --event GAP
-python analysisiew_ecg.py dataeference\mitdb@ --save beats.png     # PNG, no window
+python analysis/view_ecg.py data/reference/mitdb/100
+python analysis/view_ecg.py data/sessions/20261012T221530Z --at 03:12:40 --width 20
+python analysis/view_ecg.py data/sessions/20261012T221530Z --event GAP
+python analysis/view_ecg.py data/reference/mitdb/100 --save beats.png     # PNG, no window
 ```
 
 The analysis folder is found the same way the CLI names it (`data/analysis/<parent>-<folder>`);

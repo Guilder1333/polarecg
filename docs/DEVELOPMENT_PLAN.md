@@ -275,9 +275,11 @@ data, and logs every gap. Everything else depends on this.
 
 Details in §7.1–7.4.
 
-- [ ] **P3.1 [AI]** Streaming filters in `:core-dsp` (IIR biquads): baseline removal / band-pass for
+- [x] **P3.1 [AI]** Streaming filters in `:core-dsp` (IIR biquads): baseline removal / band-pass for
   display & morphology, separate narrower band-pass for QRS detection. Unit tests on synthetic sine
   inputs.
+  (`dsp/filter/`: `Biquad`, `FilterCascade`, `EcgFilters` + `EcgFilterConfig`; tests in
+  `FilterTest.kt`. Both chains report their group delay.)
 - [ ] **P3.2 [AI]** Streaming QRS detector (Pan-Tompkins style) with adaptive thresholds, refractory
   period, search-back for missed beats, automatic polarity handling.
 - [ ] **P3.3 [AI]** R-peak refinement (parabolic interpolation) → sub-sample timing.
