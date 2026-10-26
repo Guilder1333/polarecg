@@ -53,17 +53,17 @@ class QrsDetectorTest {
     private fun regular(seconds: Double, rr: Double = 0.8, first: Double = 1.0) =
         generateSequence(first) { it + rr }.takeWhile { it < seconds - 0.5 }.toList()
 
-    private fun detect(x: IntArray, frame: Int = 70): List<Int> {
+    private fun detect(x: IntArray, frame: Int = 70): List<Double> {
         val d = QrsDetector()
-        val found = ArrayList<Int>()
+        val found = ArrayList<Double>()
         for (chunk in x.toList().chunked(frame)) found += d.process(chunk.toIntArray()).toList()
         found += d.finish().toList()
         return found
     }
 
     /** Beats found far from every expected one count as false, expected ones with no match as missed. */
-    private fun compare(found: List<Int>, expected: List<Int>, tolerance: Int = 3): Pair<Int, Int> {
-        val from = (STABLE_FROM_S * fs).toInt() // the start-up phase is not judged
+    private fun compare(found: List<Double>, expected: List<Int>, tolerance: Int = 3): Pair<Int, Int> {
+        val from = STABLE_FROM_S * fs // the start-up phase is not judged
         val exp = expected.filter { it > from }
         val got = found.filter { it > from }
         val missed = exp.count { e -> got.none { abs(it - e) <= tolerance } }
@@ -175,5 +175,59 @@ class QrsDetectorTest {
         val e = ecg(regular(60.0, rr = 0.6), 60.0, noise = 40.0)
         val found = detect(e.samples)
         assertTrue(found.zipWithNext().all { (a, b) -> b > a })
+    }
+}
+
+class SubSampleTimingTest {
+    private val fs = 130.0
+
+    private fun gauss(t: Double, c: Double, s: Double) = exp(-(t - c) * (t - c) / (2 * s * s))
+
+    @Test
+    fun parabolaVertexIsExactForAParabola() {
+        // y = -(t - 0.3)^2 sampled at t = -1, 0, 1
+        fun y(t: Double) = -(t - 0.3) * (t - 0.3)
+        assertEquals(0.3, com.punkunpun.polarisecg.dsp.detect.parabolicPeakOffset(y(-1.0), y(0.0), y(1.0)), 1e-12)
+    }
+
+    @Test
+    fun parabolaOffsetIsClampedAndSafeOnFlatInput() {
+        val f = com.punkunpun.polarisecg.dsp.detect.parabolicPeakOffset(1.0, 1.0, 1.0)
+        assertEquals(0.0, f, 0.0)
+        // mid is not the highest: still within +-0.5
+        assertTrue(abs(com.punkunpun.polarisecg.dsp.detect.parabolicPeakOffset(5.0, 1.0, 2.0)) <= 0.5)
+    }
+
+    /** Beats at arbitrary fractional times: the refined position must be closer than the nearest sample. */
+    @Test
+    fun refinedPositionsBeatWholeSampleRounding() {
+        val rnd = Random(11)
+        val beatTimes = ArrayList<Double>()
+        var t = 1.0
+        while (t < 120) { beatTimes += t; t += 0.8 + rnd.nextDouble() * 0.1 } // fractional sample positions
+        val n = (125 * fs).toInt()
+        val x = IntArray(n) { j ->
+            val tj = j / fs
+            (20_000 + beatTimes.sumOf { 1000 * gauss(tj, it, 0.011) + 250 * gauss(tj, it + 0.25, 0.045) }).roundToInt()
+        }
+        val d = QrsDetector()
+        val found = (d.process(x) + d.finish()).filter { it > 3 * fs }
+        val truth = beatTimes.map { it * fs }.filter { it > 3 * fs }
+        var refinedErr = 0.0
+        var wholeErr = 0.0
+        var matched = 0
+        for (f in found) {
+            val near = truth.minByOrNull { abs(it - f) } ?: continue
+            if (abs(near - f) > 3) continue
+            refinedErr += abs(f - near)
+            wholeErr += abs(Math.round(f).toDouble() - near)
+            matched++
+        }
+        assertEquals(truth.size, matched)
+        val refinedMs = refinedErr / matched * 1000 / fs
+        val wholeMs = wholeErr / matched * 1000 / fs
+        println("mean timing error: refined %.2f ms, whole samples %.2f ms".format(refinedMs, wholeMs))
+        assertTrue(refinedMs < 1.5, "refined error $refinedMs ms")
+        assertTrue(refinedMs < wholeMs, "refined $refinedMs ms is not better than whole-sample $wholeMs ms")
     }
 }

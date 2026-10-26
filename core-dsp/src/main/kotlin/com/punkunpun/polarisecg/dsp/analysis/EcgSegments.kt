@@ -20,6 +20,9 @@ class EcgSegment(val index: Int, val startUtcMs: Long, val samplesUv: IntArray) 
     val endUtcMs: Long get() = startUtcMs + durationMs
 
     fun sampleUtcMs(i: Int): Long = startUtcMs + i * 1000L / ECG_SAMPLE_RATE_HZ
+
+    /** Same for a fractional sample position (a refined peak), rounded to whole milliseconds. */
+    fun sampleUtcMs(position: Double): Long = startUtcMs + Math.round(position * 1000.0 / ECG_SAMPLE_RATE_HZ)
 }
 
 /** Frame start times may deviate this much from "exactly after the previous frame" (ms). */

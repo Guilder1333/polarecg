@@ -284,7 +284,9 @@ Details in §7.1–7.4.
   period, search-back for missed beats, automatic polarity handling.
   (`dsp/detect/QrsDetector.kt` + `QrsConfig`; tests in `QrsDetectorTest.kt`. First untuned run on
   MIT-BIH, 44 non-paced records, 5 s skipped: Se 99.5 %, +P 99.3 %. Weak spots: 108, 207, 105, 203.)
-- [ ] **P3.3 [AI]** R-peak refinement (parabolic interpolation) → sub-sample timing.
+- [x] **P3.3 [AI]** R-peak refinement (parabolic interpolation) → sub-sample timing.
+  (`detect/PeakRefine.kt`; `QrsDetector` now reports fractional sample positions. Synthetic test: mean
+  timing error 0.12 ms vs 2.04 ms for whole samples. Real data will be worse, check in P3.6.)
 - [ ] **P3.4 [AI]** Signal Quality Index per beat and per 10 s window (§7.4), using ACC.
 - [ ] **P3.5 [YOU+AI]** Evaluate on MIT-BIH @130 Hz: target **Se ≥ 99.5 %, +P ≥ 99.5 %** on clean
   records. You run the scorer; AI tunes.

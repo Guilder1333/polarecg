@@ -49,7 +49,8 @@ data class QrsConfig(
  * noise bump): threshold = NPKI + 0.25 * (SPKI - NPKI). Extra rules: refractory period, a
  * T-wave check, and search-back for missed beats.
  *
- * Reported indices count samples since the first sample given to this instance, and point at the
+ * Reported positions count samples since the first sample given to this instance (fractional:
+ * the R peak is refined to sub-sample precision, P3.3), and point at the
  * R peak (largest deflection) in the *original* signal, not in the delayed filtered one, so no
  * delay correction is needed. A beat is reported about 60 ms after it happened (it takes that
  * long to see that the bump has peaked); at the very start nothing is reported for
@@ -90,31 +91,31 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
     // last beat
     private var lastBeat = -1 // index of its integral peak
     private var lastBeatSlope = 0.0
-    private var lastR = -1 // reported R index
+    private var lastR = -1.0 // reported R position
     private val rrs = ArrayDeque<Int>() // recent RR intervals, in samples
     private var polarity = 0.0 // > 0: R waves point up; < 0: down; learned from the beats
 
-    private val out = ArrayList<Int>()
+    private val out = ArrayList<Double>()
 
     private class Candidate(val index: Int, val value: Double)
 
     /** Feeds one frame (µV). Returns the R peak indices found, in ascending order. */
-    fun process(samples: IntArray): IntArray {
+    fun process(samples: IntArray): DoubleArray {
         out.clear()
         for (s in samples) {
             step(s.toDouble())
             checkPeak(count - 1 - halfWidth, count - 1)
             if (!initialized && count >= learnSamples) tryInitialize()
         }
-        return out.toIntArray()
+        return out.toDoubleArray()
     }
 
     /** Call at the end of a stretch: decides about the last, not yet confirmed bumps. */
-    fun finish(): IntArray {
+    fun finish(): DoubleArray {
         out.clear()
         for (k in (count - halfWidth).coerceAtLeast(0) until count) checkPeak(k, count - 1)
         if (!initialized) tryInitialize()
-        return out.toIntArray()
+        return out.toDoubleArray()
     }
 
     /** Forget everything, e.g. after a gap in the data. Indices start again at 0. */
@@ -124,7 +125,7 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
         count = 0; sqSum = 0.0
         initialized = false; spki = 0.0; npki = 0.0; learnMax = 0.0; learnSum = 0.0
         pending.clear(); missed.clear()
-        lastBeat = -1; lastBeatSlope = 0.0; lastR = -1; rrs.clear(); polarity = 0.0
+        lastBeat = -1; lastBeatSlope = 0.0; lastR = -1.0; rrs.clear(); polarity = 0.0
     }
 
     // ---- signal chain -------------------------------------------------------------------
@@ -243,16 +244,18 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
      * matter. The tallest deflection in the learned polarity wins, unless the opposite one is
      * much bigger (polarityOverride).
      */
-    private fun localizeR(k: Int): Int {
+    private fun localizeR(k: Int): Double {
         val from = (k - integrationLen - 6).coerceAtLeast(count - RING + 1).coerceAtLeast(0)
         val to = k
-        if (to - from < 4) return k
+        if (to - from < 4) return k.toDouble()
         val a = (rawBuf[from and MASK] + rawBuf[(from + 1) and MASK]) / 2
         val b = (rawBuf[to and MASK] + rawBuf[(to - 1) and MASK]) / 2
+        // signal minus the straight line between the window ends
+        fun deviation(j: Int) = rawBuf[j and MASK] - (a + (b - a) * (j - from) / (to - from))
         var up = from; var upDev = Double.NEGATIVE_INFINITY
         var down = from; var downDev = Double.NEGATIVE_INFINITY // downDev = size of the downward dip
         for (j in from..to) {
-            val dev = rawBuf[j and MASK] - (a + (b - a) * (j - from) / (to - from))
+            val dev = deviation(j)
             if (dev > upDev) { upDev = dev; up = j }
             if (-dev > downDev) { downDev = -dev; down = j }
         }
@@ -262,7 +265,14 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
             else -> upDev >= downDev
         }
         polarity = config.polarityDecay * polarity + if (pickUp) 1 else -1
-        return if (pickUp) up else down
+        val peak = if (pickUp) up else down
+        if (peak <= from || peak >= to) return peak.toDouble() // no neighbour on one side
+        // Sub-sample position (P3.3). For a downward peak the deviations are negated so the
+        // parabola still opens downwards.
+        val sign = if (pickUp) 1.0 else -1.0
+        return peak + parabolicPeakOffset(
+            sign * deviation(peak - 1), sign * deviation(peak), sign * deviation(peak + 1),
+        )
     }
 
     private companion object {

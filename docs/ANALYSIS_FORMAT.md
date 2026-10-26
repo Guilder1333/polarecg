@@ -11,7 +11,7 @@ UTF-8 CSV, `,` separated, `.` decimals, header row, times as epoch ms (`*Ms`, fo
 ISO-8601 UTC (for reading).
 
 > Beats come from the streaming Pan-Tompkins detector `detect/QrsDetector.kt` (P3.2); `utcMs` is
-> the R peak in the original signal (integer sample, sub-sample refinement arrives with P3.3).
+> the R peak in the original signal (refined to sub-sample precision with a parabola, rounded to whole ms).
 > Nothing is reported during the first 2 s of a segment (threshold learning). Classes are `U`
 > until P4.
 
