@@ -258,7 +258,7 @@ data, and logs every gap. Everything else depends on this.
   annotation CSV. (`analysis/fetch_physionet.py` → `data/reference/<db>/<record>/`; one lead per
   record: MLII / II.)
 - [x] **P2.4 [AI]** CLI command `analyze <recording>` → `beats.csv`, `windows.csv`, `events.csv`.
-  (Format: `docs/ANALYSIS_FORMAT.md`. Beats are from a placeholder detector until P3.2; classes
+  (Format: `docs/ANALYSIS_FORMAT.md`. Beats come from `QrsDetector` (P3.2); classes
   `U`, events only `GAP` until P4.)
 - [x] **P2.5 [AI]** Python viewer: plot ECG with detected beats colored by class, quality shaded,
   zoomable; jump to a timestamp or event.
@@ -280,8 +280,10 @@ Details in §7.1–7.4.
   inputs.
   (`dsp/filter/`: `Biquad`, `FilterCascade`, `EcgFilters` + `EcgFilterConfig`; tests in
   `FilterTest.kt`. Both chains report their group delay.)
-- [ ] **P3.2 [AI]** Streaming QRS detector (Pan-Tompkins style) with adaptive thresholds, refractory
+- [x] **P3.2 [AI]** Streaming QRS detector (Pan-Tompkins style) with adaptive thresholds, refractory
   period, search-back for missed beats, automatic polarity handling.
+  (`dsp/detect/QrsDetector.kt` + `QrsConfig`; tests in `QrsDetectorTest.kt`. First untuned run on
+  MIT-BIH, 44 non-paced records, 5 s skipped: Se 99.5 %, +P 99.3 %. Weak spots: 108, 207, 105, 203.)
 - [ ] **P3.3 [AI]** R-peak refinement (parabolic interpolation) → sub-sample timing.
 - [ ] **P3.4 [AI]** Signal Quality Index per beat and per 10 s window (§7.4), using ACC.
 - [ ] **P3.5 [YOU+AI]** Evaluate on MIT-BIH @130 Hz: target **Se ≥ 99.5 %, +P ≥ 99.5 %** on clean

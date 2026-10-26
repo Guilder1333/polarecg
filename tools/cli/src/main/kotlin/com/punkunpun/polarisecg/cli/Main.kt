@@ -66,7 +66,7 @@ private fun analyzeCommand(args: List<String>): Int {
             hours, result.segments.size, result.beats.size, result.windows.size, result.events.size, outDir,
         ),
     )
-    println("Note: beats come from the placeholder detector (replaced in P3.2); all classes are U.")
+    println("Note: all beat classes are U until the classifier exists (P4).")
     return 0
 }
 

@@ -1,12 +1,13 @@
 package com.punkunpun.polarisecg.dsp.analysis
 
 import com.punkunpun.polarisecg.dsp.ECG_SAMPLE_RATE_HZ
+import com.punkunpun.polarisecg.dsp.detect.QrsDetector
 import com.punkunpun.polarisecg.dsp.raw.RawRecord
 
 /*
  * Offline analysis of a recording: frames -> segments -> beats, 10 s windows and events.
  * This is what `:tools:cli analyze` writes to beats.csv, windows.csv and events.csv.
- * The beat detector is a placeholder until P3.2, classes come in P4, quality in P3.4.
+ * Beats come from the streaming QrsDetector (P3.2); classes come in P4, quality in P3.4.
  */
 
 /**
@@ -47,7 +48,10 @@ fun analyzeEcg(frames: List<RawRecord.Ecg>): AnalysisResult {
     val beats = ArrayList<Beat>()
     for (seg in segments) {
         var previous: Long? = null
-        for (idx in detectBeatsPlaceholder(seg.samplesUv, ECG_SAMPLE_RATE_HZ)) {
+        // One detector per gap-free segment: it never runs across a gap.
+        val detector = QrsDetector()
+        val indices = detector.process(seg.samplesUv) + detector.finish() // `+` joins two IntArrays
+        for (idx in indices) {
             val t = seg.sampleUtcMs(idx)
             beats += Beat(t, seg.index, previous?.let { t - it }, "U")
             previous = t

@@ -2,7 +2,6 @@ package com.punkunpun.polarisecg.dsp
 
 import com.punkunpun.polarisecg.dsp.analysis.analyzeEcg
 import com.punkunpun.polarisecg.dsp.analysis.buildSegments
-import com.punkunpun.polarisecg.dsp.analysis.detectBeatsPlaceholder
 import com.punkunpun.polarisecg.dsp.raw.RawRecord
 import com.punkunpun.polarisecg.dsp.time.POLAR_EPOCH_UNIX_MS
 import kotlin.math.abs
@@ -60,15 +59,6 @@ class AnalysisTest {
         assertEquals(1, result.events.size)
         assertEquals("GAP", result.events[0].type)
         assertTrue(abs(result.events[0].durationMs - 5000) <= 100, "gap ${result.events[0].durationMs}")
-    }
-
-    @Test
-    fun placeholderDetectorFindsOneBeatPerSpike() {
-        val beats = detectBeatsPlaceholder(spikes(20), 130)
-        assertEquals(20, beats.size)
-        for ((s, idx) in beats.withIndex()) {
-            assertTrue(abs(idx - (65 + 130 * s + 2)) <= 2, "beat $s at $idx")
-        }
     }
 
     @Test
