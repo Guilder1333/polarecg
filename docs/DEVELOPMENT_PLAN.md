@@ -251,11 +251,13 @@ data, and logs every gap. Everything else depends on this.
   30 min), shown on the live screen and in the notification. Last known value is kept over disconnects.
   **Done when:** you see a plausible percentage on the phone after starting a session (confirmed on a
   strap).
-- [ ] **P1.14 [YOU+AI]** Floating live ECG (Picture-in-Picture): when you swipe up to Home while the live
+- [x] **P1.14 [YOU+AI]** Floating live ECG (Picture-in-Picture): when you swipe up to Home while the live
   screen is open, the app shrinks to a small window that stays on top of other apps and shows the scrolling
   ECG and the heart rate. Needs `supportsPictureInPicture` on `MainActivity`, `setAutoEnterEnabled` with a
   wide aspect ratio, and a compact variant of the live screen without buttons. No extra permission. The window
   exists only while the Activity is alive; recording is not affected either way (the foreground service owns it).
+  Built (`MainActivity`: auto-enter only while the live screen is open, plus a "Floating window" button;
+  `LiveScreen(pip = true)`: trace, heart rate, strap battery); tried on the phone: works.
   **Done when:** swiping home during a session leaves a movable ECG window; it shows live data and costs no
   gaps. A free-floating overlay (`SYSTEM_ALERT_WINDOW`) was considered and rejected for now: special permission,
   more restrictions.
@@ -326,6 +328,12 @@ Details in §7.1–7.4.
   beats whose R peak the strap places differently: look at them in P4.
 - [ ] **P3.7 [AI]** Noise robustness on MIT-BIH NSTDB: confirm low-quality segments are flagged
   rather than producing fake beats.
+- [ ] **P3.8 [YOU+AI]** Make the reported R position stable (found in P3.6, written up in
+  `docs/RR_DISAGREEMENTS.md`): in a biphasic QRS (R about as big as S) the detector sometimes marks the S
+  trough instead of the R peak, 3-4 samples (25-30 ms) away, which puts a `+x, -x` error into two RR
+  intervals (0.06 % of beats by day, 0.4 % at night, more around premature beats). Options and the test
+  procedure are in the document. **Done when:** good pairs differing > 10 ms from the strap are rare
+  (target: < 0.05 % at night), MIT-BIH scores do not drop, and polarity changes are still followed.
 
 ### Phase 4 — Premature beat classification (≈ 2–3 weeks)
 

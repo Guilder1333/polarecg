@@ -1,6 +1,9 @@
 package com.punkunpun.polarisecg
 
+import android.app.PictureInPictureParams
+import android.content.res.Configuration
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -30,6 +33,24 @@ class MainActivity : ComponentActivity() {
     // screen re-check permissions after the user returns from a system dialog or settings page.
     // `by` delegates the property to the state object, so we read/write it like a plain Int.
     private var resumeCount by mutableIntStateOf(0)
+
+    // True while the app is the small floating window (Picture-in-Picture): the screen then shows
+    // only the live trace. Set by the system callback onPictureInPictureModeChanged below.
+    private var inPip by mutableStateOf(false)
+
+    /**
+     * Allowed to turn itself into a floating window when the user swipes up to Home. Only offered while
+     * the live screen is visible: elsewhere a floating window would show nothing useful.
+     */
+    private fun setPipAllowed(allowed: Boolean) {
+        setPictureInPictureParams(
+            PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .setAutoEnterEnabled(allowed)
+                .setSeamlessResizeEnabled(false) // the trace is redrawn, not scaled: no blurry cross-fade
+                .build(),
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,12 +90,24 @@ class MainActivity : ComponentActivity() {
                 val allGranted = bluetoothGranted && notificationsGranted && batteryGranted
                 val showPairing = bluetoothGranted && (allGranted || permissionsAcknowledged)
 
+                // The live screen is the only one that may float. Re-evaluated when it opens or closes.
+                val liveVisible = showPairing && showLive
+                LaunchedEffect(liveVisible) { setPipAllowed(liveVisible) }
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    if (showPairing && showLive) {
+                    if (liveVisible) {
                         LiveScreen(
                             app = application as PolarisApp,
                             onBack = { showLive = false },
-                            modifier = Modifier.padding(innerPadding),
+                            // The floating window is small: no system bars padding there.
+                            modifier = if (inPip) Modifier else Modifier.padding(innerPadding),
+                            pip = inPip,
+                            onEnterPip = {
+                                setPipAllowed(true)
+                                enterPictureInPictureMode(
+                                    PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build(),
+                                )
+                            },
                         )
                     } else if (showPairing && showDiagnostics) {
                         DiagnosticsScreen(
@@ -106,6 +139,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPip = isInPictureInPictureMode
     }
 
     override fun onResume() {
