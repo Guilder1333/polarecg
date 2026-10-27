@@ -41,13 +41,16 @@ class BeatInput(val timeMs: Double, val snippet: DoubleArray?, val good: Boolean
  * no neighbour, no reference RR yet, no template yet, no complete snippet.
  *
  * - [rrPreMs], [rrPostMs]: intervals before and after the beat (null at the start / end of a segment).
- * - [rrRefMs]: median of recent normal intervals; [prematurity] = rrPre / rrRef (below 1 = early).
+ * - [rrRefMs]: median of recent normal intervals; [rrSpread] = how irregular they are (median distance from
+ *   the reference, as a fraction of it: 0.02 = steady sinus rhythm, above ~0.1 = irregular, where "early" means
+ *   little); [prematurity] = rrPre / rrRef (below 1 = early).
  * - [compensation] = (rrPre + rrPost) / (2 rrRef): about 1 after a PVC (full compensatory pause),
  *   clearly below 1 for many PACs.
  * - [corr]: correlation of the beat (-250..+400 ms) with the normal template at the best slide;
  *   [shift] = that slide in samples, fractional: the beat's R feature lies that far after the marked position,
  *   so `timeMs + shift * 1000 / 130` is the beat time aligned to the template (P3.8).
- * - [qrsWidthMs]: coarse (+-8 ms at 130 Hz). [ampRatio], [areaRatio]: QRS height and area against
+ * - [qrsWidthMs]: coarse (+-8 ms at 130 Hz); [widthRatio] = against the template's width (a wearer with a bundle
+ *   branch block has wide normal beats, so the absolute width alone says little). [ampRatio], [areaRatio]: QRS height and area against
  *   the template. [polarityFlip]: the beat looks like the template upside down.
  * - [alignMs]: add it to [timeMs] to get the beat time on the same QRS feature as its neighbours; 0
  *   unless the beat was marked 2 or more samples away from where its neighbours are (P3.8). On a night
@@ -61,11 +64,13 @@ class BeatFeatures(
     val rrPreMs: Double?,
     val rrPostMs: Double?,
     val rrRefMs: Double?,
+    val rrSpread: Double?,
     val prematurity: Double?,
     val compensation: Double?,
     val corr: Double?,
     val shift: Double?,
     val qrsWidthMs: Double?,
+    val widthRatio: Double?,
     val ampRatio: Double?,
     val areaRatio: Double?,
     val polarityFlip: Boolean,
@@ -120,6 +125,7 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
         val rrPre = prev?.let { cur.timeMs - it.timeMs }
         val rrPost = next?.let { it.timeMs - cur.timeMs }
         val rrRef = if (recentRr.size >= config.rrMinHistory) median(recentRr) else null
+        val rrSpread = if (rrRef != null && rrRef > 0) median(recentRr.map { abs(it - rrRef) }) / rrRef else null
         val prematurity = if (rrPre != null && rrRef != null) rrPre / rrRef else null
         val compensation = if (rrPre != null && rrPost != null && rrRef != null) (rrPre + rrPost) / (2 * rrRef) else null
         val normalTimed = prematurity != null && prematurity in config.normalTimedLow..config.normalTimedHigh
@@ -129,14 +135,18 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
         var width: Double? = null
         var ampRatio: Double? = null
         var areaRatio: Double? = null
+        var widthRatio: Double? = null
         if (snippet != null) {
-            width = qrsWidthMs(snippet, BeatShape.CENTER, config.sampleRateHz)
+            val own = core(snippet, 0) // without baseline wander
+            width = qrsWidthMs(own, BeatShape.PRE, config.sampleRateHz)
             val t = template.current
             if (t != null) {
-                val (height, area) = qrsHeightAndArea(snippet, BeatShape.CENTER)
+                val (height, area) = qrsHeightAndArea(own, BeatShape.PRE)
                 val (tHeight, tArea) = qrsHeightAndArea(t, BeatShape.PRE)
                 if (tHeight > 0) ampRatio = height / tHeight
                 if (tArea > 0) areaRatio = area / tArea
+                val tWidth = qrsWidthMs(t, BeatShape.PRE, config.sampleRateHz)
+                if (tWidth > 0) widthRatio = width / tWidth
             }
         }
         val flip = match != null && match.inverted >= config.flipCorr && match.inverted > match.corr
@@ -155,8 +165,8 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
         updateReference(rrPre, cur.good, prev?.good == true, rrRef)
 
         return BeatFeatures(
-            cur.timeMs, cur.good, rrPre, rrPost, rrRef, prematurity, compensation,
-            match?.corr, match?.shift, width, ampRatio, areaRatio, flip, normalTimed, alignMs,
+            cur.timeMs, cur.good, rrPre, rrPost, rrRef, rrSpread, prematurity, compensation,
+            match?.corr, match?.shift, width, widthRatio, ampRatio, areaRatio, flip, normalTimed, alignMs,
         )
     }
 

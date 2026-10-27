@@ -397,8 +397,23 @@ Details in §7.5–7.6.
   trade-off. **Side result for P3.8:** the per-beat `shift` reveals beats marked on another point of the QRS;
   `alignMs` corrects those (shift >= 2 samples from the recent median). Night RR differences > 10 ms from the
   strap: 36 -> 12 of 25 227 good pairs (0.048 %, target < 0.05 %), spread 1.30 -> 0.92 ms; day unchanged.)
-- [ ] **P4.3 [AI]** Rule-based classifier → `N` (normal), `S` (premature, normal shape),
+- [x] **P4.3 [AI]** Rule-based classifier → `N` (normal), `S` (premature, normal shape),
   `V` (ventricular-looking), `Q` (unclassifiable / noisy). All thresholds in one config object.
+  (`dsp/classify/BeatClassifier.kt`, `ClassifierConfig`; tests in `BeatClassifierTest.kt`; rules in
+  docs/ANALYSIS_FORMAT.md. Thresholds chosen on MIT-BIH DS1, checked on DS2 (`score_beats.py --split`).
+  Result, matched beats, poor-quality beats count as Q (a miss): **V** DS1 Se 71 % / +P 80 %, DS2 74 % / 91 %
+  (80 % Se when beats called Q are left out); **S** DS1 39 % / 56 %, DS2 9 % / 23 %; **N** 94-96 % / 95-97 %
+  (the rest is mostly Q: 4 % of beats are poor quality or have no template yet). F (fusion) is not a class
+  we produce. S is the weak class: timing alone (no P wave at 130 Hz) and irregular rhythms; DS2 has record 232
+  (1380 S beats in a slow, pausing rhythm). Findings on the way, all in the features: (1) correlation was
+  hurt by half-sample misalignment of a 4-sample QRS: beats are now aligned at sub-sample precision (cubic
+  interpolation): V vs N AUC 0.94 -> 0.97; (2) absolute QRS width fails for a wearer with bundle branch block
+  (MIT-BIH 111): width relative to the template instead; (3) normal beats on steep baseline wander were
+  called V (own night: 1015 V, clustered around 20:30 and 22:40, prematurity ~1): a fitted parabola is
+  removed from beat and template before comparing: night 1015 -> 71 V; MIT-BIH V +P up; (4) S only in a
+  steady rhythm (`rrSpread`): S +P 28 -> 56 % on DS1. Own recordings: night 0.27 % V / 1.2 % S, day 0.05 % V /
+  1.8 % S, next night 0.03 % V / 2.7 % S: to be compared with the existing tool in P4.5. Known limit:
+  a ventricular beat that looks like the normal one is not found by shape.)
 - [ ] **P4.4 [AI]** Pattern detector: couplets, triplets, runs (≥ 3 V), bigeminy, trigeminy,
   pauses > 2 s, and per-hour burden (% of beats that are V or S).
 - [ ] **P4.5 [YOU+AI]** Evaluate on MIT-BIH + INCART (AAMI classes) and on your own data vs your

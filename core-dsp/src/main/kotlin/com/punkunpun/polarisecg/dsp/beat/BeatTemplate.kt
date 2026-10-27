@@ -71,7 +71,7 @@ class BeatTemplate(private val config: BeatTemplateConfig = BeatTemplateConfig()
             else -> Fit.NEITHER
         }
         if (fit == Fit.TEMPLATE && normalTimed) {
-            val c = core(snippet, m.shiftSamples)
+            val c = coreAt(snippet, m.shift)
             for (i in t.indices) t[i] += config.updateRate * (c[i] - t[i])
         }
         outcomes.addLast(fit)
@@ -114,7 +114,7 @@ class BeatTemplate(private val config: BeatTemplateConfig = BeatTemplateConfig()
         if (members.size < config.learnBeats / 2) return // too mixed; the oldest beat drops out, try again
         val mean = DoubleArray(BeatShape.CORE_LENGTH)
         for ((s, m) in members) {
-            val c = core(s, m.shiftSamples)
+            val c = coreAt(s, m.shift)
             for (i in mean.indices) mean[i] += c[i] / members.size
         }
         shape = mean
@@ -133,7 +133,7 @@ class BeatTemplate(private val config: BeatTemplateConfig = BeatTemplateConfig()
         fun add(snippet: DoubleArray, config: BeatTemplateConfig): Boolean {
             val m = bestMatch(snippet, mean(), config.maxShift)
             if (m.corr < config.relearnCorr) return false
-            val c = core(snippet, m.shiftSamples)
+            val c = coreAt(snippet, m.shift)
             for (i in sum.indices) sum[i] += c[i]
             count++
             return true

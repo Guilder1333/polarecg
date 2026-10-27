@@ -2,7 +2,6 @@ package com.punkunpun.polarisecg.dsp.beat
 
 import com.punkunpun.polarisecg.dsp.detect.parabolicPeakOffset
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
@@ -17,7 +16,7 @@ import kotlin.math.sqrt
 object BeatShape {
     const val PRE = 33
     const val POST = 52
-    const val MARGIN = 6
+    const val MARGIN = 8
     const val CORE_LENGTH = PRE + 1 + POST
     const val SNIPPET_LENGTH = CORE_LENGTH + 2 * MARGIN
     const val CENTER = MARGIN + PRE
@@ -25,7 +24,66 @@ object BeatShape {
 
 /** The [BeatShape.CORE_LENGTH] samples of [snippet] that line up with a template after sliding by [shift]. */
 internal fun core(snippet: DoubleArray, shift: Int): DoubleArray =
-    DoubleArray(BeatShape.CORE_LENGTH) { snippet[BeatShape.MARGIN + shift + it] }
+    detrend(DoubleArray(BeatShape.CORE_LENGTH) { snippet[BeatShape.MARGIN + shift + it] })
+
+/**
+ * The core of [snippet] slid by a *fractional* [shift] (samples), by cubic interpolation
+ * (Catmull-Rom: a smooth curve through four neighbouring samples). A QRS is only about four samples
+ * wide at 130 Hz, so a beat that is half a sample off looks quite different from the template when
+ * compared at whole samples; interpolating removes most of that difference.
+ */
+internal fun coreAt(snippet: DoubleArray, shift: Double): DoubleArray {
+    val last = snippet.size - 1
+    return detrend(DoubleArray(BeatShape.CORE_LENGTH) { k ->
+        val pos = BeatShape.MARGIN + shift + k
+        val i = Math.floor(pos).toInt()
+        val f = pos - i
+        val p0 = snippet[(i - 1).coerceIn(0, last)]
+        val p1 = snippet[i.coerceIn(0, last)]
+        val p2 = snippet[(i + 1).coerceIn(0, last)]
+        val p3 = snippet[(i + 2).coerceIn(0, last)]
+        0.5 * (2 * p1 + (p2 - p0) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f + (3 * p1 - p0 - 3 * p2 + p3) * f * f * f)
+    })
+}
+
+/**
+ * [x] minus its best-fitting parabola (least squares). Baseline wander (breathing, posture) adds a
+ * slope and a curve under the beat; without removing it a normal beat on a steep baseline looks
+ * like a different beat (P4.3: normal beats called V during wander at night). Mean and slope of
+ * the signal are removed from the template in the same way, so both are compared on equal terms.
+ */
+internal fun detrend(x: DoubleArray): DoubleArray {
+    val n = x.size
+    // Fit a + b*u + c*u^2 with u in -1..1: solve the 3x3 normal equations.
+    val m = Array(3) { DoubleArray(4) }
+    for (i in 0 until n) {
+        val u = 2.0 * i / (n - 1) - 1.0
+        val pw = doubleArrayOf(1.0, u, u * u)
+        for (r in 0..2) {
+            for (c in 0..2) m[r][c] += pw[r] * pw[c]
+            m[r][3] += pw[r] * x[i]
+        }
+    }
+    for (col in 0..2) { // Gaussian elimination
+        var pivot = col
+        for (r in col + 1..2) if (abs(m[r][col]) > abs(m[pivot][col])) pivot = r
+        val tmp = m[col]; m[col] = m[pivot]; m[pivot] = tmp
+        for (r in col + 1..2) {
+            val f = m[r][col] / m[col][col]
+            for (c in col..3) m[r][c] -= f * m[col][c]
+        }
+    }
+    val coef = DoubleArray(3)
+    for (r in 2 downTo 0) {
+        var v = m[r][3]
+        for (c in r + 1..2) v -= m[r][c] * coef[c]
+        coef[r] = v / m[r][r]
+    }
+    return DoubleArray(n) { i ->
+        val u = 2.0 * i / (n - 1) - 1.0
+        x[i] - (coef[0] + coef[1] * u + coef[2] * u * u)
+    }
+}
 
 /** Pearson correlation of two equally long signals (-1..1); 0 if one of them is flat. */
 internal fun pearson(a: DoubleArray, b: DoubleArray): Double {
@@ -51,8 +109,6 @@ internal fun pearson(a: DoubleArray, b: DoubleArray): Double {
  * correlation of the *upside-down* beat.
  */
 class ShapeMatch(val corr: Double, val shift: Double, val inverted: Double) {
-    /** [shift] rounded to whole samples, for cutting the snippet with [core]. */
-    val shiftSamples: Int get() = shift.roundToInt()
 }
 
 /**
@@ -65,7 +121,9 @@ internal fun bestMatch(snippet: DoubleArray, template: DoubleArray, maxShift: In
     val best = corr.indices.maxByOrNull { corr[it] }!! // !! = "cannot be null": the array is not empty
     var shift = (best - maxShift).toDouble()
     if (best > 0 && best < corr.lastIndex) shift += parabolicPeakOffset(corr[best - 1], corr[best], corr[best + 1])
-    return ShapeMatch(corr[best], shift, -corr.min())
+    // compare again with the beat slid by the fractional amount
+    val refined = if (shift == (best - maxShift).toDouble()) corr[best] else pearson(coreAt(snippet, shift), template)
+    return ShapeMatch(maxOf(refined, corr[best]), shift, -corr.min())
 }
 
 /** Half width (samples) of the window around R used for amplitude and area: +-92 ms. */

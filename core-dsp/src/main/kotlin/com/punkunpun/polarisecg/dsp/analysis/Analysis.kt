@@ -4,6 +4,8 @@ import com.punkunpun.polarisecg.dsp.ECG_SAMPLE_RATE_HZ
 import com.punkunpun.polarisecg.dsp.beat.BeatFeatureExtractor
 import com.punkunpun.polarisecg.dsp.beat.BeatFeatures
 import com.punkunpun.polarisecg.dsp.beat.BeatInput
+import com.punkunpun.polarisecg.dsp.classify.BeatClass
+import com.punkunpun.polarisecg.dsp.classify.BeatClassifier
 import com.punkunpun.polarisecg.dsp.motion.MotionBin
 import com.punkunpun.polarisecg.dsp.motion.MotionIndex
 import com.punkunpun.polarisecg.dsp.motion.buildMotionBins
@@ -15,11 +17,11 @@ import com.punkunpun.polarisecg.dsp.raw.RawRecord
 /*
  * Offline analysis of a recording: frames -> segments -> beats, 10 s windows and events.
  * This is what `:tools:cli analyze` writes to beats.csv, windows.csv and events.csv.
- * Beats come from the streaming QrsDetector (P3.2); classes come in P4, quality in P3.4.
+ * Beats come from the streaming QrsDetector (P3.2), quality from P3.4, features and the class (N/S/V/Q) from P4.
  */
 
 /**
- * One detected beat. [cls] is "U" (unclassified) until the classifier exists (P4).
+ * One detected beat. [cls] is N / S / V / Q (see [BeatClass]).
  * [rrMs] is the interval to the previous beat of the same segment, null for the first one.
  * [quality] says how far the beat can be trusted (P3.4).
  */
@@ -27,7 +29,7 @@ class Beat(
     val utcMs: Long,
     val segment: Int,
     val rrMs: Long?,
-    val cls: String,
+    var cls: String,
     val quality: BeatQuality,
     /** True if [BeatQuality.sqi] reaches the "good beat" threshold. */
     val good: Boolean,
@@ -82,6 +84,7 @@ fun analyzeEcg(frames: List<RawRecord.Ecg>, accFrames: List<RawRecord.Acc> = emp
     val beats = ArrayList<Beat>()
     // One extractor for the whole recording: its normal-beat template carries over gaps (P4.2).
     val extractor = BeatFeatureExtractor()
+    val classifier = BeatClassifier()
     for (seg in segments) {
         var previous: Long? = null
         // One stream per gap-free segment: detectors never run across a gap.
@@ -95,13 +98,16 @@ fun analyzeEcg(frames: List<RawRecord.Ecg>, accFrames: List<RawRecord.Acc> = emp
             val quality = b.quality.withMotion(motionIndex.around(t), qualityConfig)
             val good = quality.sqi >= qualityConfig.goodBeatSqi
             features += extractor.add(BeatInput(t.toDouble(), b.snippet, good))
-            beats += Beat(t, seg.index, previous?.let { t - it }, "U", quality, good)
+            beats += Beat(t, seg.index, previous?.let { t - it }, BeatClass.UNKNOWN, quality, good)
             previous = t
         }
         features += extractor.finish()
         // features come out in input order, one per beat: attach them to the beats of this segment
         val first = beats.size - scored.size
-        for ((i, f) in features.withIndex()) beats[first + i].features = f
+        for ((i, f) in features.withIndex()) {
+            beats[first + i].features = f
+            beats[first + i].cls = classifier.classify(f)
+        }
     }
 
     val events = ArrayList<Event>()

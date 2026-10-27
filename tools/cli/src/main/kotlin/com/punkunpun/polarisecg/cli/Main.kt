@@ -69,7 +69,6 @@ private fun analyzeCommand(args: List<String>): Int {
             hours, result.segments.size, result.beats.size, result.windows.size, result.events.size, outDir,
         ),
     )
-    println("Note: all beat classes are U until the classifier exists (P4).")
     return 0
 }
 
