@@ -429,6 +429,13 @@ Details in §7.5–7.6.
   of the first version (sinus speed-up, 4 runs + 10 triplets on the night) are gone.)
 - [ ] **P4.5 [YOU+AI]** Evaluate on MIT-BIH + INCART (AAMI classes) and on your own data vs your
   existing tool. Iterate thresholds.
+  (Step 1, 2026-10-27, INCART (not used for tuning; lead II, 33 records, resampled to 130 Hz): detection raw
+  Se 99.7 % / +P 98.9 %, good-quality Se(g) 99.7 % / +P(g) 99.9 %. Classes, matched beats, Q counts as a miss:
+  V Se 63 % / +P 81 %, S 52 % / 59 %, N 83 % / 99 %. The N figure is low because 16 % of the true beats are
+  flagged poor quality here (MIT-BIH: 3.5 %, own night: 1.5 %): the quality thresholds were calibrated on
+  MIT-BIH and NSTDB, not on this lead. The existing tool the owner uses has no export (only paid images or raw
+  ECG, same as ours), so a beat-by-beat comparison with it is not possible: own-data ground truth comes from
+  labelling our own beats (P4.6).)
 - [ ] **P4.6 [YOU]** Label a set of your own beats in the review UI (P5.7) — at least a few hundred
   V/S beats and their neighbors. This is gold for tuning and for Phase 7.
 
