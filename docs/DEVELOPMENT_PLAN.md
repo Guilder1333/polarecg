@@ -450,6 +450,15 @@ Details in §7.5–7.6.
   7 N, 5 Q (confident V: precision 39 % -> 76 %). Threshold chosen on that one night, so **to be checked on the second
   night** before the number is trusted. Not done yet: V patterns (couplets, runs) still count questionable Vs;
   the Q rule (28 of 50 sampled Q were normal: motion score and slope score veto clean beats) is the next item.
+  Step 2 (2026-10-28, from reviewing night 2): (a) V by `areaRatio` > 2 now also needs `corr` < 0.9 (7 same-shape beats
+  at one stretch, a stale template, were V; all N for the owner); (b) an early beat (prematurity < 0.85) with
+  `corr` < 0.72 is V, not S (on both nights, early beats on a flat baseline in the 0.45-0.72 zone: 33+ V, 13 S, 4 N
+  for the owner; before they were S); (c) `vDoubt` also covers a V that is on time (47 of 49 such were N for the owner).
+  Result on the two labelled nights (V among the owner's N/V labels): confident V 86 % / 89 %, questionable V 11 % / 22 %;
+  V Se 58 -> 100 % and 70 -> 80 %, S +P 86 -> 93 % and 93 -> 94 %. MIT-BIH/INCART (simulated from the stored features,
+  the Kotlin run was not repeated there): V Se +2.8 / +3.2 / +2.4 points, V +P -1.5 / -5.4 / +0.2. Remaining disagreement:
+  early, different-looking beats the owner calls S where we say V (5 and 12 items): V vs S for such beats is where the
+  owner is unsure too.
 
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 

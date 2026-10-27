@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,9 +25,26 @@ from label_data import current_labels, read_label_rows, read_queue  # noqa: E402
 CLASSES = ("N", "S", "V")
 
 
-def labelled_items(session_dir: Path) -> list[tuple]:
-    """(queue item, label) for every queue item that has a current label."""
+def current_classes(analysis: Path) -> dict[int, str]:
+    """utcMs -> class in the latest `analyze` output (beats.csv); empty if there is none."""
+    import csv
+    path = analysis / "beats.csv"
+    if not path.is_file():
+        return {}
+    with path.open(newline="", encoding="utf-8") as f:
+        return {int(r["utcMs"]): r["class"] for r in csv.DictReader(f)}
+
+
+def labelled_items(session_dir: Path, analysis: Path | None = None) -> list[tuple]:
+    """(queue item, label) for every queue item that has a current label.
+
+    With ``analysis`` (the `analyze` output folder of the session) the beat items carry the CURRENT class of
+    that output instead of the one frozen in queue.csv, so that a changed classifier can be evaluated on the
+    same labels. The sampling weights stay valid: they only describe how the items were drawn."""
     queue = read_queue(session_dir / "queue.csv")
+    if analysis is not None:
+        now = current_classes(analysis)
+        queue = [replace(q, our_class=now.get(q.utc_ms, q.our_class)) if q.kind == "BEAT" else q for q in queue]
     current = current_labels(read_label_rows(session_dir / "labels.csv"))
     return [(q, current[q.item]["label"]) for q in queue if q.item in current]
 
@@ -174,16 +192,20 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("sessions", nargs="+", type=Path, help="label folders data/labels/<session>")
     ap.add_argument("--plot", type=Path, help="also write a PNG: confusion table and time line (one per session: name-<session>)")
+    ap.add_argument("--frozen-classes", action="store_true",
+                    help="use the class stored in queue.csv (the classifier of the day the queue was built) "
+                         "instead of the current analyze output")
     args = ap.parse_args(argv)
     pooled: list[tuple] = []
     for s in args.sessions:
         if not (s / "queue.csv").is_file():
             print(f"skipping {s}: no queue.csv")
             continue
-        pairs = labelled_items(s)
+        analysis = Path("data/analysis") / f"sessions-{s.name}"        # where the CLI puts it
+        pairs = labelled_items(s, None if args.frozen_classes else analysis)
         pooled += pairs
         print(report(pairs, s.name))
-        split = v_doubt_split(pairs, Path("data/analysis") / f"sessions-{s.name}")   # where the CLI puts it
+        split = v_doubt_split(pairs, analysis)
         print("\n".join(split), end="\n\n" if split else "")
         print()
         if args.plot:

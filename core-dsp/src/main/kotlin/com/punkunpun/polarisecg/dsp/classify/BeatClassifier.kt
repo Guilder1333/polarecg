@@ -25,8 +25,15 @@ data class ClassifierConfig(
     /** Shape: a QRS this many times as wide as the template's, together with a correlation below [vWideCorr]. */
     val vWidthRatio: Double = 1.5,
     val vWideCorr: Double = 0.9,
-    /** Shape: QRS area this many times the template's (a big, broad deflection). */
+    /** Shape: QRS area this many times the template's (a big, broad deflection), together with a correlation below [vWideCorr]:
+     * the same shape only larger (a change of amplitude, a stale template) is not a different beat (P4.7). */
     val vAreaRatio: Double = 2.0,
+    /**
+     * Shape + timing: a beat that is early (below [sPrematurity]) and correlates less than this with the template looks
+     * different AND comes early: V, not S. On two labelled nights 36 of 50 such beats on a flat baseline were V for the
+     * owner, 13 S, 4 N (P4.7). On time, a correlation between [vCorr] and this is left alone (normal beat on drift, mostly).
+     */
+    val vGreyCorr: Double = 0.72,
     /** Timing: a beat with normal shape is premature (S) if its prematurity is below this... */
     val sPrematurity: Double = 0.85,
     /** ...and the rhythm is steady (see `BeatFeatures.rrSpread`): in an irregular rhythm "early" says little. */
@@ -47,6 +54,7 @@ data class ClassifierConfig(
  * ```
  * poor signal, or no template yet                          -> Q
  * shape abnormal (low correlation, wide, big, upside down) -> V   (early or not)
+ * early and clearly different (correlation < 0.72)         -> V   (P4.7)
  * early (prematurity < 0.85) in a steady rhythm             -> S
  * otherwise                                                -> N
  * ```
@@ -58,25 +66,29 @@ data class ClassifierConfig(
  */
 class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) {
     /**
-     * True for a beat that is class V only because of the drift-sensitive rules (low correlation, big area)
-     * while the baseline drifts: it may be a normal beat on a drifting baseline, so it is to be reviewed.
-     * Shapes that drift cannot cause (upside down, wide and dissimilar) are never questionable.
+     * True for a V that may be a normal beat, so it is to be reviewed: the baseline drifts around it, or it comes
+     * on time (prematurity at least [ClassifierConfig.sPrematurity]) and only the correlation/area rules call it V.
+     * On two labelled nights 47 of 49 such on-time V were normal beats for the owner. Shapes that drift cannot
+     * cause (upside down, wide and dissimilar) are never questionable.
      */
     fun vNeedsReview(f: BeatFeatures): Boolean {
         if (classify(f) != BeatClass.VENTRICULAR || f.polarityFlip) return false
         val corr = f.corr ?: return false
         val wide = f.widthRatio?.let { it >= config.vWidthRatio } == true
         if (wide && corr < config.vWideCorr) return false
-        return (f.driftRatio ?: 0.0) > config.vDoubtDrift
+        val onTime = f.prematurity?.let { it >= config.sPrematurity } == true
+        return (f.driftRatio ?: 0.0) > config.vDoubtDrift || onTime
     }
 
     fun classify(f: BeatFeatures): String {
         val corr = f.corr
         if (!f.good || corr == null) return BeatClass.UNCLASSIFIABLE
         val wide = f.widthRatio?.let { it >= config.vWidthRatio } == true // "?.let ... == true": false if null
-        val big = f.areaRatio?.let { it > config.vAreaRatio } == true
-        if (f.polarityFlip || corr < config.vCorr || (wide && corr < config.vWideCorr) || big) return BeatClass.VENTRICULAR
+        val big = f.areaRatio?.let { it > config.vAreaRatio } == true && corr < config.vWideCorr // same shape, only larger: not V
         val early = f.prematurity?.let { it < config.sPrematurity } == true
+        if (f.polarityFlip || corr < config.vCorr || (wide && corr < config.vWideCorr) || big || (early && corr < config.vGreyCorr)) {
+            return BeatClass.VENTRICULAR
+        }
         val steady = f.rrSpread?.let { it <= config.sMaxSpread } == true
         val abrupt = f.shortening?.let { it <= config.sShortening } == true
         return if (early && steady && abrupt) BeatClass.PREMATURE else BeatClass.NORMAL

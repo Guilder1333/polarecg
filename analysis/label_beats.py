@@ -168,7 +168,7 @@ class OwnSession:
         self.current = ld.current_labels(ld.read_label_rows(self.labels_path))
         self.review = review
         if review:                                          # disagreements and your ? items
-            pairs = eval_labels.review_items(eval_labels.labelled_items(folder))
+            pairs = eval_labels.review_items(eval_labels.labelled_items(folder, analysis))   # current classes
             self.queue = [q for q, _ in pairs]
             if not self.queue:
                 raise SystemExit("no disagreements or unsure (?) labels to review (yet)")

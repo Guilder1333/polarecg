@@ -38,16 +38,16 @@ class BeatClassifierTest {
     }
 
     @Test fun lowCorrelationOnADriftingBaselineIsAQuestionableV() {
-        val f = features(corr = 0.3, drift = 0.3)
+        val f = features(corr = 0.3, prematurity = 0.6, drift = 0.3)
         assertEquals(BeatClass.VENTRICULAR, cls(f)) // still a V...
         assertTrue(classifier.vNeedsReview(f)) // ...but to be looked at
-        assertTrue(classifier.vNeedsReview(features(areaRatio = 3.0, drift = 0.2)))
+        assertTrue(classifier.vNeedsReview(features(areaRatio = 3.0, corr = 0.8, drift = 0.2)))
     }
 
     @Test fun shapeThatDriftCannotCauseIsNeverQuestionable() {
-        assertFalse(classifier.vNeedsReview(features(corr = 0.3, drift = 0.0))) // flat baseline: a real V
-        assertFalse(classifier.vNeedsReview(features(corr = 0.3, drift = null))) // no measurement: not doubted
-        assertFalse(classifier.vNeedsReview(features(corr = 0.3, drift = 0.14))) // below the limit
+        assertFalse(classifier.vNeedsReview(features(corr = 0.3, prematurity = 0.6, drift = 0.0))) // early, flat baseline: a real V
+        assertFalse(classifier.vNeedsReview(features(corr = 0.3, prematurity = 0.6, drift = null))) // no measurement: not doubted
+        assertFalse(classifier.vNeedsReview(features(corr = 0.3, prematurity = 0.6, drift = 0.14))) // below the limit
         assertFalse(classifier.vNeedsReview(features(flip = true, corr = 0.3, drift = 0.5)))
         assertFalse(classifier.vNeedsReview(features(widthRatio = 1.8, corr = 0.8, drift = 0.5)))
         assertFalse(classifier.vNeedsReview(features(drift = 0.5))) // a normal beat is not a V at all
@@ -68,8 +68,22 @@ class BeatClassifierTest {
     }
 
     @Test fun bigAreaOrUpsideDownIsV() {
-        assertEquals(BeatClass.VENTRICULAR, cls(features(areaRatio = 2.5)))
+        assertEquals(BeatClass.VENTRICULAR, cls(features(areaRatio = 2.5, corr = 0.8)))
         assertEquals(BeatClass.VENTRICULAR, cls(features(flip = true)))
+    }
+
+    @Test fun sameShapeOnlyLargerIsNotV() = assertEquals(BeatClass.NORMAL, cls(features(areaRatio = 2.5, corr = 0.96)))
+
+    @Test fun earlyAndClearlyDifferentIsVButOnTimeIsLeftAlone() {
+        assertEquals(BeatClass.VENTRICULAR, cls(features(corr = 0.65, prematurity = 0.6, shortening = 0.6)))
+        assertEquals(BeatClass.NORMAL, cls(features(corr = 0.65, prematurity = 1.0)))
+        assertEquals(BeatClass.PREMATURE, cls(features(corr = 0.8, prematurity = 0.6, shortening = 0.6))) // different a little: still S
+    }
+
+    @Test fun anOnTimeVRestingOnShapeAloneIsQuestionable() {
+        assertTrue(classifier.vNeedsReview(features(corr = 0.3, prematurity = 1.0)))
+        assertFalse(classifier.vNeedsReview(features(corr = 0.3, prematurity = 0.6))) // early, flat baseline: confident
+        assertFalse(classifier.vNeedsReview(features(flip = true, prematurity = 1.0)))
     }
 
     @Test fun earlyNormalShapeInSteadyRhythmIsS() {
