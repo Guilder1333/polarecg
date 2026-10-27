@@ -402,7 +402,7 @@ Details in §7.5–7.6.
   (`dsp/classify/BeatClassifier.kt`, `ClassifierConfig`; tests in `BeatClassifierTest.kt`; rules in
   docs/ANALYSIS_FORMAT.md. Thresholds chosen on MIT-BIH DS1, checked on DS2 (`score_beats.py --split`).
   Result, matched beats, poor-quality beats count as Q (a miss): **V** DS1 Se 71 % / +P 80 %, DS2 74 % / 91 %
-  (80 % Se when beats called Q are left out); **S** DS1 39 % / 56 %, DS2 9 % / 23 %; **N** 94-96 % / 95-97 %
+  (80 % Se when beats called Q are left out); **S** DS1 36 % / 62 %, DS2 8 % / 26 %; **N** 94-96 % / 95-97 %
   (the rest is mostly Q: 4 % of beats are poor quality or have no template yet). F (fusion) is not a class
   we produce. S is the weak class: timing alone (no P wave at 130 Hz) and irregular rhythms; DS2 has record 232
   (1380 S beats in a slow, pausing rhythm). Findings on the way, all in the features: (1) correlation was
@@ -411,11 +411,22 @@ Details in §7.5–7.6.
   (MIT-BIH 111): width relative to the template instead; (3) normal beats on steep baseline wander were
   called V (own night: 1015 V, clustered around 20:30 and 22:40, prematurity ~1): a fitted parabola is
   removed from beat and template before comparing: night 1015 -> 71 V; MIT-BIH V +P up; (4) S only in a
-  steady rhythm (`rrSpread`): S +P 28 -> 56 % on DS1. Own recordings: night 0.27 % V / 1.2 % S, day 0.05 % V /
-  1.8 % S, next night 0.03 % V / 2.7 % S: to be compared with the existing tool in P4.5. Known limit:
+  steady rhythm (`rrSpread`) and only for an abrupt shortening (`shortening` <= 0.9, found in P4.4: a gradual
+  speed-up of the rate gave runs of "S"): S +P 28 -> 62 % on DS1. Own recordings: night 0.27 % V / 0.85 % S, day 0.05 % V /
+  1.6 % S, next night 0.03 % V / 2.1 % S: to be compared with the existing tool in P4.5. Known limit:
   a ventricular beat that looks like the normal one is not found by shape.)
-- [ ] **P4.4 [AI]** Pattern detector: couplets, triplets, runs (≥ 3 V), bigeminy, trigeminy,
+- [x] **P4.4 [AI]** Pattern detector: couplets, triplets, runs (≥ 3 V), bigeminy, trigeminy,
   pauses > 2 s, and per-hour burden (% of beats that are V or S).
+  (`dsp/pattern/Patterns.kt` (`detectPatterns`, `hourlyBurden`); tests in `PatternsTest.kt`; events in `events.csv`
+  and per-hour burden in the new `burden.csv`, see docs/ANALYSIS_FORMAT.md. Definitions: couplet = exactly 2 V
+  (or S) in a row, triplet 3, run 4 or more; bigeminy / trigeminy = at least 3 cycles with N in between; Q and gaps
+  end a pattern; pause = more than 2 s between two *good* beats of a segment. `analysis/eval_patterns.py` counts
+  the same V patterns in the MIT-BIH annotations and compares (event found = same type within 2 s):
+  couplet Se 51 % / +P 61 %, triplet 23 / 26, run 29 / 18 (24 reference runs only), bigeminy 65 / 77,
+  trigeminy 61 / 57. A pattern needs every one of its beats right, so these are about the beat Se (73 %) to the
+  power of the length; the S patterns are not evaluated (S too weak). Own recordings: the night has 1 V couplet
+  and 1 S couplet, no pauses, V burden below 1.1 % in every hour; after the `shortening` rule the false "S runs"
+  of the first version (sinus speed-up, 4 runs + 10 triplets on the night) are gone.)
 - [ ] **P4.5 [YOU+AI]** Evaluate on MIT-BIH + INCART (AAMI classes) and on your own data vs your
   existing tool. Iterate thresholds.
 - [ ] **P4.6 [YOU]** Label a set of your own beats in the review UI (P5.7) — at least a few hundred

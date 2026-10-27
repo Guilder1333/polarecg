@@ -14,13 +14,14 @@ class BeatClassifierTest {
         good: Boolean = true,
         corr: Double? = 0.98,
         prematurity: Double? = 1.0,
+        shortening: Double? = 1.0,
         rrSpread: Double? = 0.02,
         widthRatio: Double? = 1.0,
         areaRatio: Double? = 1.0,
         flip: Boolean = false,
     ) = BeatFeatures(
         timeMs = 0.0, good = good, rrPreMs = 800.0, rrPostMs = 800.0, rrRefMs = 800.0, rrSpread = rrSpread,
-        prematurity = prematurity, compensation = 1.0, corr = corr, shift = 0.0, qrsWidthMs = 60.0,
+        prematurity = prematurity, shortening = shortening, compensation = 1.0, corr = corr, shift = 0.0, qrsWidthMs = 60.0,
         widthRatio = widthRatio, ampRatio = 1.0, areaRatio = areaRatio, polarityFlip = flip, normalTimed = true,
     )
 
@@ -52,8 +53,15 @@ class BeatClassifierTest {
     }
 
     @Test fun earlyNormalShapeInSteadyRhythmIsS() {
-        assertEquals(BeatClass.PREMATURE, cls(features(prematurity = 0.7)))
+        assertEquals(BeatClass.PREMATURE, cls(features(prematurity = 0.7, shortening = 0.7)))
         assertEquals(BeatClass.NORMAL, cls(features(prematurity = 0.85)))
+    }
+
+    @Test fun aGradualSpeedUpIsNotPremature() {
+        // 5 beats in a row at 0.8 of the reference, but each only 0.96 of the one before: the rate changed
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 0.78, shortening = 0.96)))
+        assertEquals(BeatClass.PREMATURE, cls(features(prematurity = 0.78, shortening = 0.8)))
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 0.78, shortening = null)))
     }
 
     @Test fun earlyBeatInIrregularRhythmIsNotS() {

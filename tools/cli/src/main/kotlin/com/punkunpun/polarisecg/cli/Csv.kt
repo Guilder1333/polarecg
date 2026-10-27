@@ -24,15 +24,15 @@ private fun field(s: String) = if (s.any { it == ',' || it == '"' || it == '\n' 
 
 /** The P4.1 columns of one beat; all empty without features. */
 private fun featureColumns(f: BeatFeatures?): String {
-    if (f == null) return ",,,,,,,,,,,"
-    return "${num(f.rrRefMs, 0)},${num(f.rrSpread, 3)},${num(f.prematurity, 3)},${num(f.compensation, 3)},${num(f.corr, 3)}," +
+    if (f == null) return ",,,,,,,,,,,,"
+    return "${num(f.rrRefMs, 0)},${num(f.rrSpread, 3)},${num(f.prematurity, 3)},${num(f.shortening, 3)},${num(f.compensation, 3)},${num(f.corr, 3)}," +
         "${num(f.shift, 2)},${num(f.qrsWidthMs, 0)},${num(f.widthRatio, 2)},${num(f.ampRatio, 2)},${num(f.areaRatio, 2)},${if (f.polarityFlip) 1 else 0},${num(f.alignMs, 1)}"
 }
 
 fun writeCsvs(result: AnalysisResult, dir: File) {
     File(dir, "beats.csv").bufferedWriter().use { w ->
         w.write("utcMs,utc,segment,rrMs,class,sqi,good,amplitudeUv,slopeRatio,hfRatio,agreed,motionMg," +
-            "rrRefMs,rrSpread,prematurity,compensation,corr,shift,qrsWidthMs,widthRatio,ampRatio,areaRatio,flip,alignMs\n")
+            "rrRefMs,rrSpread,prematurity,shortening,compensation,corr,shift,qrsWidthMs,widthRatio,ampRatio,areaRatio,flip,alignMs\n")
         for (b in result.beats) {
             val q = b.quality
             w.write(
@@ -58,6 +58,12 @@ fun writeCsvs(result: AnalysisResult, dir: File) {
         File(dir, "motion.csv").bufferedWriter().use { w ->
             w.write("startUtcMs,startUtc,motionMg,samples\n")
             for (m in result.motion) w.write("${m.startUtcMs},${iso(m.startUtcMs)},${num(m.motionMg, 1)},${m.samples}\n")
+        }
+    }
+    File(dir, "burden.csv").bufferedWriter().use { w ->
+        w.write("startUtcMs,startUtc,n,s,v,q,vPercent,sPercent\n")
+        for (h in result.hourly) {
+            w.write("${h.startUtcMs},${iso(h.startUtcMs)},${h.n},${h.s},${h.v},${h.q},${num(h.vPercent, 2)},${num(h.sPercent, 2)}\n")
         }
     }
     File(dir, "events.csv").bufferedWriter().use { w ->

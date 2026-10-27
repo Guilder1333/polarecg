@@ -44,6 +44,8 @@ class BeatInput(val timeMs: Double, val snippet: DoubleArray?, val good: Boolean
  * - [rrRefMs]: median of recent normal intervals; [rrSpread] = how irregular they are (median distance from
  *   the reference, as a fraction of it: 0.02 = steady sinus rhythm, above ~0.1 = irregular, where "early" means
  *   little); [prematurity] = rrPre / rrRef (below 1 = early).
+ * - [shortening] = rrPre / the interval before it: a premature beat is short against the beat before it
+ *   (0.6-0.8), while a gradual speed-up of the heart rate is not (about 0.95 per beat).
  * - [compensation] = (rrPre + rrPost) / (2 rrRef): about 1 after a PVC (full compensatory pause),
  *   clearly below 1 for many PACs.
  * - [corr]: correlation of the beat (-250..+400 ms) with the normal template at the best slide;
@@ -66,6 +68,7 @@ class BeatFeatures(
     val rrRefMs: Double?,
     val rrSpread: Double?,
     val prematurity: Double?,
+    val shortening: Double?,
     val compensation: Double?,
     val corr: Double?,
     val shift: Double?,
@@ -96,6 +99,7 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
     private val recentRr = ArrayDeque<Double>() // normal intervals: the reference
     private val lastRr = ArrayDeque<Double>() // the latest intervals whatever they look like (to restart from)
     private var refused = 0
+    private var lastRrPre: Double? = null // rrPre of the previous beat, same segment
     private val recentShifts = ArrayDeque<Double>()
 
     /** Adds the next beat; returns the features of the beat before it (empty for the first one of a segment). */
@@ -113,6 +117,7 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
         drain(out, next = null)
         previous = null
         pending = null
+        lastRrPre = null
         return out
     }
 
@@ -127,6 +132,8 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
         val rrRef = if (recentRr.size >= config.rrMinHistory) median(recentRr) else null
         val rrSpread = if (rrRef != null && rrRef > 0) median(recentRr.map { abs(it - rrRef) }) / rrRef else null
         val prematurity = if (rrPre != null && rrRef != null) rrPre / rrRef else null
+        val shortening = if (rrPre != null && lastRrPre != null && lastRrPre!! > 0) rrPre / lastRrPre!! else null
+        lastRrPre = rrPre
         val compensation = if (rrPre != null && rrPost != null && rrRef != null) (rrPre + rrPost) / (2 * rrRef) else null
         val normalTimed = prematurity != null && prematurity in config.normalTimedLow..config.normalTimedHigh
 
@@ -165,7 +172,7 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
         updateReference(rrPre, cur.good, prev?.good == true, rrRef)
 
         return BeatFeatures(
-            cur.timeMs, cur.good, rrPre, rrPost, rrRef, rrSpread, prematurity, compensation,
+            cur.timeMs, cur.good, rrPre, rrPost, rrRef, rrSpread, prematurity, shortening, compensation,
             match?.corr, match?.shift, width, widthRatio, ampRatio, areaRatio, flip, normalTimed, alignMs,
         )
     }

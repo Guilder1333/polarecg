@@ -41,6 +41,7 @@ with `TimeMapper`. Code: `dsp/analysis/EcgSegments.kt`.
 | `rrRefMs` | reference RR: median of the last 9 normal intervals (between good beats); empty until 3 are known |
 | `rrSpread` | irregularity of the recent normal intervals: median distance from `rrRefMs` as a fraction of it (steady sinus rhythm ~0.02; above 0.05 `S` is not called) |
 | `prematurity` | `rrMs / rrRefMs`; below 1 = early (a premature beat is typically below 0.85) |
+| `shortening` | `rrMs` / the interval before it. A premature beat is short against the one before (0.6-0.8); a gradual speed-up of the heart rate is about 0.95 per beat |
 | `compensation` | `(rrPre + rrPost) / (2 · rrRef)`: about 1 after a ventricular beat (full compensatory pause), clearly below 1 for many atrial ones; empty for the last beat of a segment |
 | `corr` | correlation (−1..1) of the beat (−250 … +400 ms of the 0.5–40 Hz signal) with the running normal-beat template at the best alignment (±5 samples); empty while the template is still being learned, for poor-quality-only stretches, or if the segment ends too close to the beat |
 | `shift` | that alignment in samples (fractional): how far after the marked R position the beat's own R feature lies, relative to the template |
@@ -62,7 +63,7 @@ Rules (P4.3, plan §7.6), in this order:
 
 1. `Q` if the beat is poor quality (`good` = 0) or has no `corr` (no template yet, segment edge).
 2. `V` if the shape is abnormal: `flip` = 1, or `corr` < 0.5, or (`widthRatio` ≥ 1.5 and `corr` < 0.9), or `areaRatio` > 2.
-3. `S` if `prematurity` < 0.85 and `rrSpread` ≤ 0.05 (a steady rhythm; in an irregular one "early" says little).
+3. `S` if `prematurity` < 0.85, `shortening` ≤ 0.9 (abrupt, not a gradual speed-up) and `rrSpread` ≤ 0.05 (a steady rhythm; in an irregular one "early" says little).
 4. `N` otherwise.
 
 Shape comparisons are done after removing a fitted parabola (baseline wander) from the beat and the template.
@@ -103,6 +104,16 @@ ACC samples are put on the UTC time line with the same sensor-clock mapping as t
 | Column | Meaning |
 |---|---|
 | `utcMs`, `utc` | start of the event |
-| `type` | `GAP` = no signal between two segments. Premature-beat events arrive with P4 |
-| `durationMs` | length |
-| `detail` | free text |
+| `type` | `GAP` = no signal between two segments; `PAUSE` = more than 2 s between two good beats of one segment; patterns of ectopic beats `V_…` (ventricular) and `S_…` (premature): `COUPLET` (exactly 2 in a row), `TRIPLET` (3), `RUN` (4 or more), `BIGEMINY` (N X N X N X…, at least 3 cycles), `TRIGEMINY` (N N X N N X…, at least 3 cycles). A Q beat or a gap ends a pattern |
+| `durationMs` | length (for a pattern: first to last beat) |
+| `detail` | free text: beats and rate of a run, cycles of a bigeminy, seconds of a pause |
+
+## `burden.csv`
+
+One row per UTC hour with at least one beat.
+
+| Column | Meaning |
+|---|---|
+| `startUtcMs`, `startUtc` | start of the hour |
+| `n`, `s`, `v`, `q` | number of beats of each class |
+| `vPercent`, `sPercent` | share of V / S among the beats that could be judged (`n + s + v`; `q` is left out); empty if there are none |

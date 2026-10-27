@@ -7,6 +7,9 @@ import com.punkunpun.polarisecg.dsp.beat.BeatInput
 import com.punkunpun.polarisecg.dsp.classify.BeatClass
 import com.punkunpun.polarisecg.dsp.classify.BeatClassifier
 import com.punkunpun.polarisecg.dsp.motion.MotionBin
+import com.punkunpun.polarisecg.dsp.pattern.HourlyBurden
+import com.punkunpun.polarisecg.dsp.pattern.detectPatterns
+import com.punkunpun.polarisecg.dsp.pattern.hourlyBurden
 import com.punkunpun.polarisecg.dsp.motion.MotionIndex
 import com.punkunpun.polarisecg.dsp.motion.buildMotionBins
 import com.punkunpun.polarisecg.dsp.quality.BeatQuality
@@ -54,7 +57,7 @@ class Window(
     val quality: Double,
 )
 
-/** [type] is GAP (no signal for [durationMs]) for now; arrhythmia events arrive in P4. */
+/** [type] is GAP (no signal for [durationMs]), PAUSE, or a pattern of ectopic beats (see `PatternType`). */
 class Event(val utcMs: Long, val type: String, val durationMs: Long, val detail: String)
 
 class AnalysisResult(
@@ -64,6 +67,8 @@ class AnalysisResult(
     val events: List<Event>,
     /** Motion per UTC second from the accelerometer; empty if the recording has no ACC data. */
     val motion: List<MotionBin>,
+    /** V and S burden per UTC hour (P4.4). */
+    val hourly: List<HourlyBurden> = emptyList(),
 )
 
 const val WINDOW_MS = 10_000L
@@ -117,7 +122,9 @@ fun analyzeEcg(frames: List<RawRecord.Ecg>, accFrames: List<RawRecord.Acc> = emp
         events += Event(gapStart, "GAP", gapMs, "segment ${i - 1} -> $i")
     }
 
-    return AnalysisResult(segments, beats, buildWindows(segments, beats, motion), events, motion)
+    events += detectPatterns(beats)
+    events.sortBy { it.utcMs }
+    return AnalysisResult(segments, beats, buildWindows(segments, beats, motion), events, motion, hourlyBurden(beats))
 }
 
 private fun buildWindows(segments: List<EcgSegment>, beats: List<Beat>, motion: List<MotionBin>): List<Window> {

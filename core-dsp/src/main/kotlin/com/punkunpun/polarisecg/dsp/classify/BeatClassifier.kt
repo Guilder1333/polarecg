@@ -31,6 +31,8 @@ data class ClassifierConfig(
     val sPrematurity: Double = 0.85,
     /** ...and the rhythm is steady (see `BeatFeatures.rrSpread`): in an irregular rhythm "early" says little. */
     val sMaxSpread: Double = 0.05,
+    /** ...and it is this much shorter than the interval before it: a gradual speed-up of the rate is not premature (shortening ~0.95 per beat). */
+    val sShortening: Double = 0.9,
 )
 
 /**
@@ -57,6 +59,7 @@ class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) 
         if (f.polarityFlip || corr < config.vCorr || (wide && corr < config.vWideCorr) || big) return BeatClass.VENTRICULAR
         val early = f.prematurity?.let { it < config.sPrematurity } == true
         val steady = f.rrSpread?.let { it <= config.sMaxSpread } == true
-        return if (early && steady) BeatClass.PREMATURE else BeatClass.NORMAL
+        val abrupt = f.shortening?.let { it <= config.sShortening } == true
+        return if (early && steady && abrupt) BeatClass.PREMATURE else BeatClass.NORMAL
     }
 }
