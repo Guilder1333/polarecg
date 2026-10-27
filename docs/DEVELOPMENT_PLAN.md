@@ -340,8 +340,21 @@ Details in §7.1–7.4.
   every RR was 1-2 ms long. Segment time now follows the sensor clock (`EcgSegment`, `polaris_segments.py`).
   Largest remaining disagreements (25-77 ms, a few per hour) are around single beats, probably premature
   beats whose R peak the strap places differently: look at them in P4.
-- [ ] **P3.7 [AI]** Noise robustness on MIT-BIH NSTDB: confirm low-quality segments are flagged
+- [x] **P3.7 [AI]** Noise robustness on MIT-BIH NSTDB: confirm low-quality segments are flagged
   rather than producing fake beats.
+  (12 records = 118 and 119 at 24, 18, 12, 6, 0, -6 dB, the first 5 s skipped, `score_beats.py data/reference/nstdb
+  --skip-start 5`. At 18-24 dB nothing to flag: 1-3 false beats per record. Found: the false beats that were
+  *not* flagged were tall (median 5.7 mV against 2.6 mV for true beats): noise was measured relative to the
+  beat's own height, so a tall artifact looked clean. Fix in `EcgBeatStream`: noise relative to
+  `min(beat height, usual height)`, usual height = median of the last 200 beats (was 20; in a noisy stretch
+  the 20-beat median is inflated by the noise itself), and a beat 3-6 times the usual height loses score
+  linearly (`tallAmplitudeRatio`); new test `beatsMuchTallerThanUsualAreNotGood`. Result, all 12 records:
+  false beats flagged poor 61 % -> **90 %**, Se(g) 96.4 -> 96.1 %, +P(g) 92.1 -> **97.6 %**; true beats left
+  out 11 % -> 19 % (they are in noise). MIT-BIH unchanged (Se(g) 99.8 / +P(g) 99.9, 3.5 % left out). Own
+  night/day: good beats 98.96 -> 98.59 % / 97.23 -> 96.96 %. Remaining false beats that count as good, per
+  hour of ECG: 56-258 at 12 dB or noisier (about 1-3 % of beats), 0-4 at 18 dB and cleaner; worst 119e06. The
+  noisiest records (0 and -6 dB) still lose 20-30 % of their true beats to Se(g) because the noise is bigger
+  than the signal. Fake V beats per hour: measure when the classifier exists (P4.5), noise should end in `Q`.)
 - [ ] **P3.8 [YOU+AI]** Make the reported R position stable (found in P3.6, written up in
   `docs/RR_DISAGREEMENTS.md`): in a biphasic QRS (R about as big as S) the detector sometimes marks the S
   trough instead of the R peak, 3-4 samples (25-30 ms) away, which puts a `+x, -x` error into two RR

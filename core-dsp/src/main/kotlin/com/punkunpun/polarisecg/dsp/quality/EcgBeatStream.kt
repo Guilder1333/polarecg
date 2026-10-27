@@ -28,8 +28,10 @@ data class QualityConfig(
      * an RMS, divided by the beat height. Electrode and motion noise (NSTDB) raises it; clean
      * beats are far below. Score 1 at or below `slopeOkRatio`, 0 at or above `slopeBadRatio`,
      * linear in between. Calibrated on MIT-BIH (clean) and NSTDB (noisy): the "good" cut-off of
-     * 0.6 falls at ratio 0.04, which loses 2 % of true beats on MIT-BIH and flags about 60 % of
-     * the false detections (and 10 % of the true ones in the noisy NSTDB records).
+     * 0.6 falls at ratio 0.04. Both noise ratios use the beat height, but never more than the usual
+     * height, so a tall artifact cannot look clean (P3.7). With that and a 200-beat usual height:
+     * 3.5 % of true beats lost on MIT-BIH, 93 % of its false detections flagged; on NSTDB (noisy
+     * records) 19 % of the true ones lost and 90 % of the false ones flagged.
      */
     val slopeOkRatio: Double = 0.02,
     val slopeBadRatio: Double = 0.07,
@@ -39,7 +41,7 @@ data class QualityConfig(
     val hfOkRatio: Double = 0.03,
     val hfBadRatio: Double = 0.10,
     /** Number of recent beat heights whose median is the "usual" height. */
-    val amplitudeHistory: Int = 20,
+    val amplitudeHistory: Int = 200,
     /** Beats lower than this (µV, peak to peak) are flat line / lost contact. */
     val minAmplitudeUv: Double = 20.0,
     /** Height relative to the usual one: score 0 at or below `lowAmplitudeRatio`, 1 from `okAmplitudeRatio`. */
@@ -47,6 +49,8 @@ data class QualityConfig(
     val okAmplitudeRatio: Double = 0.5,
     /** Taller than this many times the usual height: a spike, not a beat. */
     val spikeAmplitudeRatio: Double = 6.0,
+    /** Taller than this many times the usual height: the score falls linearly to 0 at [spikeAmplitudeRatio]. */
+    val tallAmplitudeRatio: Double = 3.0,
     /** The two detectors agree if their beats are this close. */
     val agreementMs: Double = 120.0,
     /** Score factor for a beat only one detector saw. */
@@ -218,6 +222,7 @@ class EcgBeatStream(private val config: QualityConfig = QualityConfig()) {
         val amplitudeScore = when {
             amplitude < config.minAmplitudeUv -> 0.0
             ratio > config.spikeAmplitudeRatio -> 0.0
+            ratio > config.tallAmplitudeRatio -> ramp(ratio, config.tallAmplitudeRatio, config.spikeAmplitudeRatio)
             else -> ((ratio - config.lowAmplitudeRatio) / (config.okAmplitudeRatio - config.lowAmplitudeRatio)).coerceIn(0.0, 1.0)
         }
 
@@ -236,8 +241,11 @@ class EcgBeatStream(private val config: QualityConfig = QualityConfig()) {
             n++
         }
         val medianStep = if (n > 0) steps.copyOf(n).also { it.sort() }.let { it[n / 2] } else 0.0
-        val slopeRatio = if (n > 0 && amplitude > 0) medianStep / MEDIAN_TO_RMS / amplitude else if (n > 0) Double.POSITIVE_INFINITY else 0.0
-        val hfRatio = if (n > 0 && amplitude > 0) sqrt(hfSq / n) / amplitude else if (n > 0) Double.POSITIVE_INFINITY else 0.0
+        // Noise is compared with the beat's height, but never with more than the usual height: an
+        // artifact many times taller than the real beats would otherwise look clean (P3.7).
+        val reference = if (usual > 0) min(amplitude, usual) else amplitude
+        val slopeRatio = if (n > 0 && reference > 0) medianStep / MEDIAN_TO_RMS / reference else if (n > 0) Double.POSITIVE_INFINITY else 0.0
+        val hfRatio = if (n > 0 && reference > 0) sqrt(hfSq / n) / reference else if (n > 0) Double.POSITIVE_INFINITY else 0.0
         val slopeScore = ramp(slopeRatio, config.slopeOkRatio, config.slopeBadRatio)
         val hfScore = ramp(hfRatio, config.hfOkRatio, config.hfBadRatio)
 

@@ -70,6 +70,21 @@ class EcgBeatStreamTest {
     }
 
     @Test
+    fun beatsMuchTallerThanUsualAreNotGood() {
+        // three beats five times as tall as the usual ones (an artifact, not a heartbeat): P3.7
+        val x = ecg(120.0)
+        for (k in 60..62) {
+            val c = 1.0 + 0.8 * k
+            for (j in ((c - 0.3) * fs).toInt()..((c + 0.3) * fs).toInt()) x[j] += (4000 * gauss(j / fs, c, 0.011)).roundToInt()
+        }
+        val beats = run(x, 70)
+        val tall = beats.filter { it.position / fs in 48.5..51.0 }
+        assertEquals(3, tall.size)
+        assertTrue(tall.none { it.good }, "tall beats counted as good")
+        assertTrue(beats.filter { it.position / fs < 45 || it.position / fs > 55 }.drop(3).all { it.good })
+    }
+
+    @Test
     fun mildNoiseStillCountsAsGood() {
         val beats = run(ecg(100.0, noiseUv = 15.0, noisyFromS = 0.0, noisyToS = 100.0), 70)
         assertTrue(beats.count { it.good } >= 0.97 * beats.size)
