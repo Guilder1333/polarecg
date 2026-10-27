@@ -317,6 +317,14 @@ Details in §7.1–7.4.
     the strap's RR counts still agree, so motion only discards extreme cases (1.4 % of the day's beats).
 - [ ] **P3.5 [YOU+AI]** Evaluate on MIT-BIH @130 Hz: target **Se ≥ 99.5 %, +P ≥ 99.5 %** on clean
   records. You run the scorer; AI tunes.
+  (Step 1, 2026-10-27, 44 non-paced records: Se 99.6 %, +P 99.3 % raw. Without the 8 hard records (105, 108,
+  201, 203, 207, 210, 228, 232): Se 99.9 %, +P 99.98 %. The +P gap is almost all noise/flutter bursts
+  (207: 329 false beats in 1541-1638 s, 108: 80 + 32 in 1670-1794 s), 89-96 % of them already flagged poor by
+  the quality index; "usable" +P (good-flagged beats only) is 99.9 %. Record 228 is bigeminy: the small narrow
+  normal beats were missed next to the big PVCs (135 misses). New `thresholdFraction` 0.25 -> 0.15 brings
+  228 from Se 93.4 to 98.5 %, total raw Se 99.6 -> 99.8 %, +P 99.3 -> 99.1 %; own night/day unchanged
+  (53 / 1 differences > 10 ms, +24 beats in 6.5 h). 0.10 gives Se 99.9 / +P 98.9. Open: agree what "clean"
+  means (list of excluded records or "good-flagged beats only") and then tick this.)
 - [x] **P3.6 [YOU+AI]** Evaluate on your own nights: compare our RR intervals with H10's RR stream
   (should agree within a few ms on clean beats). Look at plots of disagreements together with AI.
   (`analysis/compare_rr.py`, tests in `test_compare_rr.py`.) Result on one night (6.6 h) and one day (3 h):

@@ -29,6 +29,8 @@ data class QrsConfig(
     val searchBackFactor: Double = 1.66,
     /** The lower threshold, as a fraction of the normal one. */
     val searchBackThresholdRatio: Double = 0.5,
+    /** The threshold lies this fraction of the way from the noise level up to the beat level. */
+    val thresholdFraction: Double = 0.15,
     /** Seconds at the start used to set the first thresholds; no beat is reported before. */
     val learnSeconds: Double = 2.0,
     /** Number of recent RR intervals whose median is the "average RR". */
@@ -229,7 +231,7 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
         }
     }
 
-    private fun threshold() = npki + 0.25 * (spki - npki)
+    private fun threshold() = npki + config.thresholdFraction * (spki - npki)
 
     /** No beat for too long: take the biggest earlier candidate above the lower threshold. */
     private fun searchBack(currentIndex: Int) {
