@@ -16,6 +16,9 @@ Contents now:
 | `view_ecg.py` | Interactive ECG viewer for a recording + its `analyze` output (see below) |
 | `polaris_segments.py` | Gap-free segments with UTC time; mirrors the Kotlin `EcgSegments`/`TimeMapper` |
 | `test_view_ecg.py` | Offline tests of the viewer's data side |
+| `label_beats.py` | Label your own beats (or practise on MIT-BIH with `--gallery`), see below |
+| `label_data.py`, `eval_labels.py` | Queue / label files of the labeling tool; our class against your labels |
+| `test_label_data.py`, `test_label_beats.py` | Tests of the labeling tool |
 | `premature_beats.py` | Rough PAC-like / PVC-like counts per hour, before P4 (see below) |
 | `test_premature_beats.py` | Tests of the rough count |
 | `requirements.txt` | Python packages |
@@ -54,6 +57,9 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 In a new terminal, activate again with `analysis\.venv\Scripts\Activate.ps1`. The prompt then
 starts with `(.venv)`.
+
+> If a viewer exits at once with "FigureCanvasAgg is non-interactive", your Python has no
+> `tkinter`: run `pip install PyQt6` (it is in `requirements.txt`), then start the tool again.
 
 ## Check that it works
 
@@ -180,3 +186,20 @@ Several sessions are combined into one table. `--csv` lists every S / V beat wit
 `view_ecg.py --at`; `--out-beats DIR` writes `beats.csv` with the classes so `view_ecg.py --analysis
 DIR` colours them. The rules, the options and the MIT-BIH result (V about 81 % / 91 %, S only about
 40 % / 58 %: read S as a lower bound) are at the top of the script.
+
+## Labeling your own beats
+
+Design and rules: `docs/LABELING_TOOL.md`. Needs the `analyze` output of the session.
+
+```powershell
+python analysis\label_beats.py --gallery                        # ~10 min practice on MIT-BIH, scored (clear examples;
+                                                                 # add --hard for the raw cardiologist labels)
+python analysis\label_beats.py data\sessions61021T162147Z    # your labels, resumes where you stopped
+python analysis\eval_labels.py data\labels61021T162147Z      # our class against your labels
+python analysis\eval_labels.py data\labels61021T162147Z --plot eval.png   # + picture: confusion and time line
+python analysis\label_beats.py data\sessions61021T162147Z --review    # go through disagreements and your ? items
+```
+
+Keys: `n s v q` label, `b` blocked early beat (gap items), `?` unsure, `<-`/`->` move, `u` undo,
+`t` template, `g` reveal our class, `h` help, `Esc` save and quit. Every label is saved at once in
+`data/labels/<session>/labels.csv` (append-only, git-ignored).

@@ -1,7 +1,7 @@
 # Labeling tool for our own beats
 
 Plan for the tool that gives us **ground truth on the owner's own ECG** (tasks P4.5/P4.6 in
-`DEVELOPMENT_PLAN.md`). Status: **design only, not built**.
+`DEVELOPMENT_PLAN.md`). Status: **built** (L1-L6 done, 2026-10-27); not yet used on a real sitting.
 
 ## Why
 
@@ -85,7 +85,7 @@ session from `beats.csv` with a fixed random seed and written to `data/labels/<s
 | **GAP items** | up to 100, random | blocked early beats |
 | first/last beat of each pause, couplet, run | all | patterns are what is reported |
 
-About 600 items; at 3-5 s each that is **30-45 minutes**, and it can be split over several sittings (the
+About 600-700 items; at 3-5 s each that is **30-45 minutes**, and it can be split over several sittings (the
 queue remembers where it stopped). Items are shown in random order, so the owner cannot guess the group.
 Each queue row stores its group and sampling weight (group size / number taken) so that the results can be
 corrected for the sampling.
@@ -113,13 +113,16 @@ Everything lives under `data/labels/` which is git-ignored (health data, never c
 
 ## Build tasks
 
-- [ ] **L1** `analysis/label_beats.py` skeleton: window with the ECG, item list, keys, autosave, resume
+- [x] **L1** `analysis/label_beats.py` skeleton: window with the ECG, item list, keys, autosave, resume
   (matplotlib, same stack as `view_ecg.py`; reuse its data loading).
-- [ ] **L2** Queue builder from `beats.csv` and `events.csv` (groups, seed, weights), `queue.csv`.
-- [ ] **L3** Gap items and the `b` label (and the optional click on the bump).
-- [ ] **L4** Gallery mode on MIT-BIH, with reveal, running score and confusion table.
-- [ ] **L5** `analysis/eval_labels.py` and tests (queue building, append-only labels, weighting).
-- [ ] **L6** Help overlay with the checklist and the honest limits; a short section in `analysis/README.md`.
+- [x] **L2** Queue builder from `beats.csv` and `events.csv` (groups, seed, weights), `queue.csv`.
+- [x] **L3** Gap items and the `b` label (and the optional click on the bump).
+- [x] **L4** Gallery mode on MIT-BIH, with reveal, running score and confusion table.
+- [x] **L5** `analysis/eval_labels.py` and tests (queue building, append-only labels, weighting).
+- [x] **L6** Help overlay with the checklist and the honest limits; a short section in `analysis/README.md`.
+
+Code: `analysis/label_data.py` (queue, labels, gallery picks), `label_beats.py` (window), `eval_labels.py`;
+tests `test_label_data.py`, `test_label_beats.py` (window driven by simulated key presses).
 
 L2, L3 and L5 are plain data code and are unit-tested on the PC; L1/L4/L6 are the interactive part.
 
@@ -134,3 +137,22 @@ L2, L3 and L5 are plain data code and are unit-tested on the PC; L1/L4/L6 are th
 - Which sessions first: the first night (`20261021T162147Z`, the most beats and 71 V) is the natural start.
 - Is it acceptable to label in several short sittings (the queue is saved after every label)?
 - Does the owner want to see the template overlay by default, or only on request (default: on request)?
+
+## Built as designed, with these details
+
+- The queue is built on the first start and **never rebuilt or overwritten** (labels refer to it, and the
+  weights must stay consistent). To start over, move the folder away by hand.
+- Strata do not overlap: the first and last beat of every pause/pattern form their own group `PATTERN`
+  (weight 1), the other beats are split by our class. So the weights of the beat items add up to the number of
+  beats of the night.
+- Item ids: `B<utcMs>` (beat), `G<utcMs>` (middle of a long interval). Undo appends a row with an empty label.
+- Gallery: 20 beats each of N, S, V (`--per-class`), at most 4 per class from one record, answers in
+  `data/labels/gallery.csv`. By default only **clear examples**: S = atrial
+  premature beat that is early (< 0.85 of the usual interval) in regular rhythm, N = on time (0.9-1.1) in regular
+  rhythm, V = any. Reason (measured): only 32 % of MIT-BIH's S beats are visibly early (aberrated/nodal beats,
+  irregular rhythm, long pauses; one record, 232, has half of them), so a raw gallery teaches nothing about
+  "early". `--hard` gives the cardiologists' labels as they are.
+- Template overlay (`t`) is the median of up to 200 clean N beats of the session, aligned on `utcMs` only.
+- `label_beats.py --review`: opens only the items where your N/S/V label differs from our class and all your `?` items, in time order, with our
+  class and features shown; a label key there appends a new row (relabel), `->` keeps it. `eval_labels.py --plot` draws
+  the weighted confusion and a time line (green = agree, red = disagree).
