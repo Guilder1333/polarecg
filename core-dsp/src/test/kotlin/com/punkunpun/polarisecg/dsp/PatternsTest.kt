@@ -100,6 +100,16 @@ class PatternsTest {
         assertEquals(0.0, h[1].vPercent!!, 1e-9) // 2 judged beats, none ventricular
     }
 
+    @Test fun questionableVsAreCountedWithinTheVs() {
+        val b = beats("NNVVVN")
+        b[2].vDoubt = true
+        b[3].vDoubt = true
+        b[0].vDoubt = true // an N is never a questionable V
+        val h = hourlyBurden(b).single()
+        assertEquals(3, h.v)
+        assertEquals(2, h.vDoubt)
+    }
+
     @Test fun anHourWithOnlyPoorBeatsHasNoPercentage() {
         val h = hourlyBurden(beats("QQQ")).single()
         assertEquals(null, h.vPercent)

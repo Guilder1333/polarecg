@@ -438,7 +438,18 @@ Details in §7.5–7.6.
   labelling our own beats (P4.6).)
 - [ ] **P4.6 [YOU]** Label a set of your own beats in the review UI (P5.7) — at least a few hundred
   V/S beats and their neighbors. This is gold for tuning and for Phase 7.
-  (Design of the labeling tool, with the `n s v q b ?` labels and the sampling plan: `docs/LABELING_TOOL.md`; not built yet.)
+  (Design of the labeling tool, with the `n s v q b ?` labels and the sampling plan: `docs/LABELING_TOOL.md`. The tool is built (`analysis/label_beats.py`, `eval_labels.py`); the labelling itself is up to you: start with `--gallery`, then the first night.)
+- [ ] **P4.7 [AI]** Baseline drift makes the shape rules call normal beats V. Found by labelling (P4.6, first night,
+  2026-10-28): of our 71 V, 37 were normal beats on a drifting baseline (V +P 39 %), all fired by `corr` < 0.5 /
+  `areaRatio` > 2, with normal timing, width and height. Decision with the owner: **do not change the V rules or
+  filter the drift out of the signal** (the V rule is right in most cases; filtering could bend real shapes, and
+  on-time V beats exist in MIT-BIH/INCART: an "only early" gate would cost 7-11 points of V Se there, whose labels
+  are partly unjudgeable on one lead anyway). Instead: new feature `driftRatio` and flag `vDoubt` = a V resting only
+  on the drift-sensitive rules while `driftRatio` > 0.15 ("questionable V", still counted as V, listed for review).
+  On the first night: 37 of 71 V are questionable; of those the owner called 30 N, 5 Q, 2 V; of the other 29, 22 V,
+  7 N, 5 Q (confident V: precision 39 % -> 76 %). Threshold chosen on that one night, so **to be checked on the second
+  night** before the number is trusted. Not done yet: V patterns (couplets, runs) still count questionable Vs;
+  the Q rule (28 of 50 sampled Q were normal: motion score and slope score veto clean beats) is the next item.
 
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 

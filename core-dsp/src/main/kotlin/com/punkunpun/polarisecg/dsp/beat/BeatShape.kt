@@ -85,6 +85,36 @@ internal fun detrend(x: DoubleArray): DoubleArray {
     }
 }
 
+/**
+ * How much baseline wander there is around a beat, as a fraction of its QRS height (P4.7): the
+ * scatter (standard deviation) of the samples left from a straight line fitted through the stretches
+ * before and after the QRS (the QRS itself, +-[DRIFT_SKIP] samples, is left out). On a flat baseline
+ * only noise and the T wave remain (about 0.05-0.1); a drifting baseline bends the signal away from
+ * any line (0.2 and more). Measured on the raw signal of one night: 35 of 37 normal beats that the
+ * rules called V were above 0.10, and only 4 of 24 real V beats were.
+ *
+ * Unlike [core] this does NOT take out the parabola: the wander is exactly what is measured. Null if
+ * the QRS height is zero.
+ */
+internal fun driftRatio(snippet: DoubleArray, qrsHeight: Double): Double? {
+    if (qrsHeight <= 0.0) return null
+    val idx = (0 until BeatShape.CORE_LENGTH).filter { abs(it - BeatShape.PRE) > DRIFT_SKIP }
+    val x = DoubleArray(idx.size) { idx[it].toDouble() }
+    val y = DoubleArray(idx.size) { snippet[BeatShape.MARGIN + idx[it]] }
+    val mx = x.average()
+    val my = y.average()
+    var sxy = 0.0
+    var sxx = 0.0
+    for (i in x.indices) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) * (x[i] - mx) }
+    val slope = sxy / sxx
+    var ss = 0.0
+    for (i in x.indices) { val r = y[i] - (my + slope * (x[i] - mx)); ss += r * r }
+    return sqrt(ss / x.size) / qrsHeight
+}
+
+/** Samples on each side of R that [driftRatio] leaves out (14 samples = 108 ms: the whole QRS). */
+internal const val DRIFT_SKIP = 14
+
 /** Pearson correlation of two equally long signals (-1..1); 0 if one of them is flat. */
 internal fun pearson(a: DoubleArray, b: DoubleArray): Double {
     var ma = 0.0

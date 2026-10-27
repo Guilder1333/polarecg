@@ -39,6 +39,9 @@ class Beat(
 ) {
     /** Timing and shape features (P4.1), set right after the beat is created. */
     var features: BeatFeatures? = null
+
+    /** A V that may be a normal beat on a drifting baseline (P4.7): look at it again. Only ever true for [cls] V. */
+    var vDoubt: Boolean = false
 }
 
 /** One 10 s window aligned to UTC. [coverage] = samples received / samples expected (0..1). */
@@ -112,6 +115,7 @@ fun analyzeEcg(frames: List<RawRecord.Ecg>, accFrames: List<RawRecord.Acc> = emp
         for ((i, f) in features.withIndex()) {
             beats[first + i].features = f
             beats[first + i].cls = classifier.classify(f)
+            beats[first + i].vDoubt = classifier.vNeedsReview(f)
         }
     }
 

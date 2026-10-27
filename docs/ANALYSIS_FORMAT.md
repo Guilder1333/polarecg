@@ -49,6 +49,8 @@ with `TimeMapper`. Code: `dsp/analysis/EcgSegments.kt`.
 | `widthRatio` | `qrsWidthMs` relative to the template's width (a wearer with a bundle branch block has wide normal beats) |
 | `ampRatio`, `areaRatio` | QRS height / area (±92 ms around R) divided by the template's; empty while there is no template |
 | `flip` | 1 if the beat looks like the template upside down (inverted correlation ≥ 0.6 and better than the upright one) |
+| `driftRatio` | baseline wander around the beat: scatter of the samples left from a straight line through the stretches before and after the QRS, relative to the QRS height (P4.7). Flat baseline about 0.1; 0.15 and more = drifting, the shape comparison (`corr`, `areaRatio`) is unreliable there |
+| `vDoubt` | 1 = class `V` that rests only on the drift-sensitive rules (`corr` < 0.5 or big area) while `driftRatio` > 0.15: possibly a normal beat on a drifting baseline, **to be reviewed**. Still counted as V. Never set for `flip` or wide-and-dissimilar beats |
 | `alignMs` | time correction in ms (P3.8): 0 for almost all beats; ≥ 2 samples (15 ms) of difference from the usual `shift` of the recent beats means the beat was marked on another point of the QRS than its neighbours, and `utcMs + alignMs` is the time on the same feature as theirs. Not applied to `utcMs`/`rrMs` |
 
 `sqi` = amplitude score × slope score × hf score × motion score × (1 if `agreed`, else 0.4). Amplitude score: 0 for a
@@ -116,4 +118,5 @@ One row per UTC hour with at least one beat.
 |---|---|
 | `startUtcMs`, `startUtc` | start of the hour |
 | `n`, `s`, `v`, `q` | number of beats of each class |
+| `vDoubt` | of the `v` beats, how many are questionable (`vDoubt` = 1 in beats.csv); the V burden is between `v - vDoubt` and `v` |
 | `vPercent`, `sPercent` | share of V / S among the beats that could be judged (`n + s + v`; `q` is left out); empty if there are none |

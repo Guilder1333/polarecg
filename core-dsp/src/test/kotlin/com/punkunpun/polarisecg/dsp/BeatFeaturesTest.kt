@@ -35,6 +35,14 @@ class BeatFeaturesTest {
             sign * v + noise * rnd.nextGaussian()
         }
 
+    @Test fun driftRatioIsSmallOnAFlatBaselineAndLargeUnderWander() {
+        val flat = snippet()
+        val wander = DoubleArray(flat.size) { flat[it] + 500 * kotlin.math.sin(2 * Math.PI * it / 70.0) } // a slow wave under the beat
+        assertTrue((com.punkunpun.polarisecg.dsp.beat.driftRatio(flat, 1100.0) ?: 1.0) < 0.1)
+        assertTrue((com.punkunpun.polarisecg.dsp.beat.driftRatio(wander, 1100.0) ?: 0.0) > 0.15)
+        assertNull(com.punkunpun.polarisecg.dsp.beat.driftRatio(flat, 0.0))
+    }
+
     private fun learned(config: BeatTemplateConfig = BeatTemplateConfig()): BeatTemplate {
         val t = BeatTemplate(config)
         repeat(config.learnBeats) { t.offer(snippet(), normalTimed = true) }

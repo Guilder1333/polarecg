@@ -5,6 +5,8 @@ import com.punkunpun.polarisecg.dsp.classify.BeatClass
 import com.punkunpun.polarisecg.dsp.classify.BeatClassifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class BeatClassifierTest {
     private val classifier = BeatClassifier()
@@ -19,10 +21,11 @@ class BeatClassifierTest {
         widthRatio: Double? = 1.0,
         areaRatio: Double? = 1.0,
         flip: Boolean = false,
+        drift: Double? = null,
     ) = BeatFeatures(
         timeMs = 0.0, good = good, rrPreMs = 800.0, rrPostMs = 800.0, rrRefMs = 800.0, rrSpread = rrSpread,
         prematurity = prematurity, shortening = shortening, compensation = 1.0, corr = corr, shift = 0.0, qrsWidthMs = 60.0,
-        widthRatio = widthRatio, ampRatio = 1.0, areaRatio = areaRatio, polarityFlip = flip, normalTimed = true,
+        widthRatio = widthRatio, ampRatio = 1.0, areaRatio = areaRatio, polarityFlip = flip, normalTimed = true, driftRatio = drift,
     )
 
     private fun cls(f: BeatFeatures) = classifier.classify(f)
@@ -32,6 +35,23 @@ class BeatClassifierTest {
     @Test fun poorSignalIsQEvenIfItLooksLikeAnything() {
         assertEquals(BeatClass.UNCLASSIFIABLE, cls(features(good = false)))
         assertEquals(BeatClass.UNCLASSIFIABLE, cls(features(good = false, corr = 0.1, prematurity = 0.5)))
+    }
+
+    @Test fun lowCorrelationOnADriftingBaselineIsAQuestionableV() {
+        val f = features(corr = 0.3, drift = 0.3)
+        assertEquals(BeatClass.VENTRICULAR, cls(f)) // still a V...
+        assertTrue(classifier.vNeedsReview(f)) // ...but to be looked at
+        assertTrue(classifier.vNeedsReview(features(areaRatio = 3.0, drift = 0.2)))
+    }
+
+    @Test fun shapeThatDriftCannotCauseIsNeverQuestionable() {
+        assertFalse(classifier.vNeedsReview(features(corr = 0.3, drift = 0.0))) // flat baseline: a real V
+        assertFalse(classifier.vNeedsReview(features(corr = 0.3, drift = null))) // no measurement: not doubted
+        assertFalse(classifier.vNeedsReview(features(corr = 0.3, drift = 0.14))) // below the limit
+        assertFalse(classifier.vNeedsReview(features(flip = true, corr = 0.3, drift = 0.5)))
+        assertFalse(classifier.vNeedsReview(features(widthRatio = 1.8, corr = 0.8, drift = 0.5)))
+        assertFalse(classifier.vNeedsReview(features(drift = 0.5))) // a normal beat is not a V at all
+        assertFalse(classifier.vNeedsReview(features(good = false, corr = 0.3, drift = 0.5))) // Q
     }
 
     @Test fun noTemplateYetIsQ() = assertEquals(BeatClass.UNCLASSIFIABLE, cls(features(corr = null)))

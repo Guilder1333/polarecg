@@ -58,6 +58,8 @@ class BeatInput(val timeMs: Double, val snippet: DoubleArray?, val good: Boolean
  *   unless the beat was marked 2 or more samples away from where its neighbours are (P3.8). On a night
  *   of 25 000 beats this brings the intervals that differ from the strap's by more than 10 ms from
  *   36 to 12, without adding noise to the others.
+ * - [driftRatio]: baseline wander around the beat relative to its QRS height (see `driftRatio` in BeatShape.kt);
+ *   0.1 and more = the shape comparisons (correlation, area) are unreliable here.
  * - [normalTimed]: timing alone says "normal" (used for learning the template).
  */
 class BeatFeatures(
@@ -79,6 +81,7 @@ class BeatFeatures(
     val polarityFlip: Boolean,
     val normalTimed: Boolean,
     val alignMs: Double = 0.0,
+    val driftRatio: Double? = null,
 )
 
 /**
@@ -143,9 +146,11 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
         var ampRatio: Double? = null
         var areaRatio: Double? = null
         var widthRatio: Double? = null
+        var drift: Double? = null
         if (snippet != null) {
             val own = core(snippet, 0) // without baseline wander
             width = qrsWidthMs(own, BeatShape.PRE, config.sampleRateHz)
+            drift = driftRatio(snippet, qrsHeightAndArea(own, BeatShape.PRE).first)
             val t = template.current
             if (t != null) {
                 val (height, area) = qrsHeightAndArea(own, BeatShape.PRE)
@@ -173,7 +178,7 @@ class BeatFeatureExtractor(private val config: BeatFeatureConfig = BeatFeatureCo
 
         return BeatFeatures(
             cur.timeMs, cur.good, rrPre, rrPost, rrRef, rrSpread, prematurity, shortening, compensation,
-            match?.corr, match?.shift, width, widthRatio, ampRatio, areaRatio, flip, normalTimed, alignMs,
+            match?.corr, match?.shift, width, widthRatio, ampRatio, areaRatio, flip, normalTimed, alignMs, drift,
         )
     }
 

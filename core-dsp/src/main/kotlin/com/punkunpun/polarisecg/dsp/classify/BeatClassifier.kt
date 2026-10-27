@@ -33,6 +33,12 @@ data class ClassifierConfig(
     val sMaxSpread: Double = 0.05,
     /** ...and it is this much shorter than the interval before it: a gradual speed-up of the rate is not premature (shortening ~0.95 per beat). */
     val sShortening: Double = 0.9,
+    /**
+     * A V that rests only on the drift-sensitive shape rules (correlation, area) is "questionable" when
+     * the baseline wanders this much around it (`BeatFeatures.driftRatio`, P4.7). Still a V; the flag only
+     * says "look at this one". Measured on one night: 32 of 37 normal beats called V were above 0.15, 2 of 24 real V.
+     */
+    val vDoubtDrift: Double = 0.15,
 )
 
 /**
@@ -51,6 +57,19 @@ data class ClassifierConfig(
  * branch block) is not found by shape.
  */
 class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) {
+    /**
+     * True for a beat that is class V only because of the drift-sensitive rules (low correlation, big area)
+     * while the baseline drifts: it may be a normal beat on a drifting baseline, so it is to be reviewed.
+     * Shapes that drift cannot cause (upside down, wide and dissimilar) are never questionable.
+     */
+    fun vNeedsReview(f: BeatFeatures): Boolean {
+        if (classify(f) != BeatClass.VENTRICULAR || f.polarityFlip) return false
+        val corr = f.corr ?: return false
+        val wide = f.widthRatio?.let { it >= config.vWidthRatio } == true
+        if (wide && corr < config.vWideCorr) return false
+        return (f.driftRatio ?: 0.0) > config.vDoubtDrift
+    }
+
     fun classify(f: BeatFeatures): String {
         val corr = f.corr
         if (!f.good || corr == null) return BeatClass.UNCLASSIFIABLE

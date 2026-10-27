@@ -127,6 +127,8 @@ class HourlyBurden(
     val s: Int,
     val v: Int,
     val q: Int,
+    /** Of the [v] beats, how many are questionable (baseline drift, P4.7). */
+    val vDoubt: Int = 0,
 ) {
     /** Beats that could be judged (N + S + V). */
     val judged: Int get() = n + s + v
@@ -149,6 +151,7 @@ fun hourlyBurden(beats: List<Beat>): List<HourlyBurden> {
             s = bs.count { it.cls == BeatClass.PREMATURE },
             v = bs.count { it.cls == BeatClass.VENTRICULAR },
             q = bs.count { it.cls == BeatClass.UNCLASSIFIABLE },
+            vDoubt = bs.count { it.cls == BeatClass.VENTRICULAR && it.vDoubt },
         )
     }
 }
