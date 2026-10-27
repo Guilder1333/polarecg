@@ -1,6 +1,7 @@
 package com.punkunpun.polarisecg.dsp.quality
 
 import com.punkunpun.polarisecg.dsp.ECG_SAMPLE_RATE_HZ
+import com.punkunpun.polarisecg.dsp.beat.BeatShape
 import com.punkunpun.polarisecg.dsp.detect.QrsConfig
 import com.punkunpun.polarisecg.dsp.detect.QrsDetector
 import com.punkunpun.polarisecg.dsp.filter.EcgFilterConfig
@@ -102,8 +103,12 @@ data class BeatQuality(
 /** 1 at or below [ok], 0 at or above [bad], straight line in between. */
 internal fun ramp(value: Double, ok: Double, bad: Double) = (1 - (value - ok) / (bad - ok)).coerceIn(0.0, 1.0)
 
-/** A beat from the main detector with its quality. [position] is in samples since the start. */
-class ScoredBeat(val position: Double, val quality: BeatQuality, val good: Boolean)
+/**
+ * A beat from the main detector with its quality. [position] is in samples since the start.
+ * [snippet] is the 0.5-40 Hz signal around the beat in the layout of [BeatShape] (R at
+ * [BeatShape.CENTER]); null if the segment starts or ends too close to the beat.
+ */
+class ScoredBeat(val position: Double, val quality: BeatQuality, val good: Boolean, val snippet: DoubleArray? = null)
 
 /**
  * The beat pipeline of one gap-free stretch of ECG: main QRS detector, a second detector to
@@ -132,6 +137,7 @@ class EcgBeatStream(private val config: QualityConfig = QualityConfig()) {
     private val qrsExclude = (config.qrsExcludeMs * fs / 1000).roundToInt()
     private val agreement = (config.agreementMs * fs / 1000).roundToInt()
     private val morphDelay = ceil(filters.morphologyDelayMs * fs / 1000).toInt()
+    private val shapeNeed = BeatShape.POST + BeatShape.MARGIN + morphDelay // samples after R the snippet needs
 
     private val morphBuf = DoubleArray(RING)
     private val noiseSqBuf = DoubleArray(RING)
@@ -190,15 +196,24 @@ class EcgBeatStream(private val config: QualityConfig = QualityConfig()) {
     private fun emit(complete: Boolean) {
         while (waiting.isNotEmpty()) {
             val pos = waiting.first()
-            if (!complete && pos + context > count - 1) break // 0.4 s after the beat is not here yet
+            if (!complete && pos + max(context, shapeNeed) > count - 1) break // 0.4 s after the beat is not here yet
             waiting.removeFirst()
             val q = score(pos)
-            result += ScoredBeat(pos, q, q.sqi >= config.goodBeatSqi)
+            result += ScoredBeat(pos, q, q.sqi >= config.goodBeatSqi, snippetAt(pos))
         }
         // Forget second-detector peaks that no beat can match any more. The main detector reports a
         // beat ~0.2 s late, a search-back beat up to ~3 s late, so peaks are kept for 4 s.
         val oldest = min(waiting.firstOrNull() ?: count.toDouble(), count - 4 * fs) - agreement - 1
         while (secondPeaks.isNotEmpty() && secondPeaks.first() < oldest) secondPeaks.removeFirst()
+    }
+
+    /** The beat snippet (P4.1), or null if part of it lies outside the signal we have. */
+    private fun snippetAt(pos: Double): DoubleArray? {
+        val center = pos.roundToInt() + morphDelay // the filtered signal lags by morphDelay
+        val from = center - BeatShape.CENTER
+        val to = from + BeatShape.SNIPPET_LENGTH - 1
+        if (from < 0 || to > count - 1 || count - 1 - from >= RING) return null
+        return DoubleArray(BeatShape.SNIPPET_LENGTH) { morphBuf[(from + it) and MASK] }
     }
 
     private fun score(pos: Double): BeatQuality {

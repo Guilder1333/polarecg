@@ -2,6 +2,7 @@ package com.punkunpun.polarisecg.cli
 
 import com.punkunpun.polarisecg.dsp.analysis.AnalysisResult
 import com.punkunpun.polarisecg.dsp.analysis.analyzeEcg
+import com.punkunpun.polarisecg.dsp.beat.BeatFeatures
 import com.punkunpun.polarisecg.dsp.raw.RawRecord
 import java.io.File
 import java.time.Instant
@@ -21,16 +22,25 @@ private fun num(v: Double?, digits: Int) = if (v == null) "" else String.format(
 /** Quotes a field if it contains a comma, quote or line break. */
 private fun field(s: String) = if (s.any { it == ',' || it == '"' || it == '\n' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
 
+/** The P4.1 columns of one beat; all empty without features. */
+private fun featureColumns(f: BeatFeatures?): String {
+    if (f == null) return ",,,,,,,,,"
+    return "${num(f.rrRefMs, 0)},${num(f.prematurity, 3)},${num(f.compensation, 3)},${num(f.corr, 3)}," +
+        "${num(f.shift, 2)},${num(f.qrsWidthMs, 0)},${num(f.ampRatio, 2)},${num(f.areaRatio, 2)},${if (f.polarityFlip) 1 else 0},${num(f.alignMs, 1)}"
+}
+
 fun writeCsvs(result: AnalysisResult, dir: File) {
     File(dir, "beats.csv").bufferedWriter().use { w ->
-        w.write("utcMs,utc,segment,rrMs,class,sqi,good,amplitudeUv,slopeRatio,hfRatio,agreed,motionMg\n")
+        w.write("utcMs,utc,segment,rrMs,class,sqi,good,amplitudeUv,slopeRatio,hfRatio,agreed,motionMg," +
+            "rrRefMs,prematurity,compensation,corr,shift,qrsWidthMs,ampRatio,areaRatio,flip,alignMs\n")
         for (b in result.beats) {
             val q = b.quality
             w.write(
                 "${b.utcMs},${iso(b.utcMs)},${b.segment},${b.rrMs ?: ""},${b.cls}," +
                     "${num(q.sqi, 3)},${if (b.good) 1 else 0},${num(q.amplitudeUv, 0)}," +
                     "${num(q.slopeRatio.takeIf { it.isFinite() }, 3)},${num(q.hfRatio.takeIf { it.isFinite() }, 3)}," +
-                    "${if (q.agreed) 1 else 0},${num(q.motionMg, 1)}\n",
+                    "${if (q.agreed) 1 else 0},${num(q.motionMg, 1)}," +
+                    featureColumns(b.features) + "\n",
             )
         }
     }

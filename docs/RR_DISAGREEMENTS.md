@@ -251,6 +251,25 @@ Options for later, in the order I would try them:
 Whichever is chosen, check against the same four criteria as before (day and night > 10 ms counts, MIT-BIH
 Se/+P and jumps, `QrsDetectorTest` polarity tests).
 
+## Step 3 (2026-10-27): the template shift fixes it (option 3 of the decision list)
+
+With the beat template of P4.2 every beat gets a `shift`: how many samples (fractional) it must be slid to
+line up with the template. A beat marked on the S trough instead of the R peak has a shift 3-4 samples away
+from its neighbours. `alignMs` (`BeatFeatureExtractor`) turns a shift that differs by >= 2 samples from the
+median of the last 9 beats into a time correction; other beats get 0 (the alignment itself is only good to
+about +-0.5 sample = +-4 ms, applying it everywhere made the spread worse: std 1.3 -> 3.1 ms).
+
+| Night, good pairs | > 10 ms | Std of the difference | Within 5 ms |
+|---|---|---|---|
+| as marked | 36 of 25 227 (0.143 %) | 1.30 ms | 99.85 % |
+| with `alignMs` | **12 (0.048 %)** | **0.92 ms** | 99.89 % |
+
+59 beats of 25 876 get a correction, none in the day recording (1 difference > 10 ms before and after). The
+36 (not 54) come from the quality changes of P3.7, which marked more beats poor before this step. `utcMs` and
+`rrMs` in `beats.csv` are *not* changed; the correction is a separate column, so HRV (P5.5) and the pattern
+detector decide whether to use it. Reproduce: `analyze`, `compare_rr.py --csv`, then add
+`alignMs[this] - alignMs[previous]` to `diff` for each interval.
+
 ## How to reproduce
 
 ```powershell

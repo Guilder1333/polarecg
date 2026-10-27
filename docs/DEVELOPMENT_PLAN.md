@@ -355,7 +355,7 @@ Details in §7.1–7.4.
   hour of ECG: 56-258 at 12 dB or noisier (about 1-3 % of beats), 0-4 at 18 dB and cleaner; worst 119e06. The
   noisiest records (0 and -6 dB) still lose 20-30 % of their true beats to Se(g) because the noise is bigger
   than the signal. Fake V beats per hour: measure when the classifier exists (P4.5), noise should end in `Q`.)
-- [ ] **P3.8 [YOU+AI]** Make the reported R position stable (found in P3.6, written up in
+- [x] **P3.8 [YOU+AI]** Make the reported R position stable (found in P3.6, written up in
   `docs/RR_DISAGREEMENTS.md`): in a biphasic QRS (R about as big as S) the detector sometimes marks the S
   trough instead of the R peak, 3-4 samples (25-30 ms) away, which puts a `+x, -x` error into two RR
   intervals (0.06 % of beats by day, 0.4 % at night, more around premature beats). Options and the test
@@ -369,14 +369,33 @@ Details in §7.1–7.4.
   Marking the steepest slope (`steepestSlope`, off by default) gives night 54 -> 11 (0.043 %), day 1,
   MIT-BIH Se/+P unchanged, but the mark is ~2 samples after the R peak and 3 tests fail. **Owner decided to
   accept 0.21 % for now**; details and options in `docs/RR_DISAGREEMENTS.md`. Revisit with the P4.2 template.)
+  (Step 3, 2026-10-27, after P4.2: the template shift corrects the displaced beats, `alignMs` in `beats.csv`:
+  night 36 -> 12 of 25 227 (0.048 %, target met), day unchanged, MIT-BIH untouched. Caveat: `utcMs`/`rrMs` still
+  carry the detector's marks; consumers (HRV, patterns) should add `alignMs`. Details in
+  `docs/RR_DISAGREEMENTS.md`, "Step 3".)
 
 ### Phase 4 — Premature beat classification (≈ 2–3 weeks)
 
 Details in §7.5–7.6.
 
-- [ ] **P4.1 [AI]** Beat feature extraction: RR before/after, local reference RR, prematurity ratio,
+- [x] **P4.1 [AI]** Beat feature extraction: RR before/after, local reference RR, prematurity ratio,
   compensatory-pause ratio, correlation with normal template, QRS width estimate, amplitude/area ratios.
-- [ ] **P4.2 [AI]** Running **normal beat template** (updated only by clean, normal-timed beats).
+  (`dsp/beat/BeatFeatures.kt` (`BeatFeatureExtractor`), `BeatShape.kt`; the beat snippet comes from
+  `EcgBeatStream` (`ScoredBeat.snippet`); columns in `beats.csv`, docs/ANALYSIS_FORMAT.md; tests in
+  `BeatFeaturesTest.kt`. QRS width is coarse (7.7 ms per sample). `analysis/eval_features.py` shows how the
+  features separate the MIT-BIH classes: AUC V vs N: corr 0.94, area ratio 0.82, prematurity 0.85, width 0.68;
+  S vs N: prematurity 0.71, corr 0.68; V vs S: corr 0.88. Timing alone and shape alone are both only half
+  of it, as expected: the classifier (P4.3) must combine them.)
+- [x] **P4.2 [AI]** Running **normal beat template** (updated only by clean, normal-timed beats).
+  (`dsp/beat/BeatTemplate.kt`: learned from 8 good, normal-timed beats (most typical beat + those that
+  resemble it), updated at 5 % per beat by beats with corr >= 0.9, slides +-5 samples with sub-sample
+  refinement. Safeguard: if among the last 40 good beats >= 60 % fit a second "candidate" shape and more fit
+  it than the template, the template is replaced (a strap turned around, a posture change, or a template
+  learned from the wrong beats: MIT-BIH 208 started on ventricular beats, V vs N AUC 0.86 -> 0.94 with this
+  rule). A bigeminy or a short PVC run does not trigger it; a ventricular run of 25+ beats would, a known
+  trade-off. **Side result for P3.8:** the per-beat `shift` reveals beats marked on another point of the QRS;
+  `alignMs` corrects those (shift >= 2 samples from the recent median). Night RR differences > 10 ms from the
+  strap: 36 -> 12 of 25 227 good pairs (0.048 %, target < 0.05 %), spread 1.30 -> 0.92 ms; day unchanged.)
 - [ ] **P4.3 [AI]** Rule-based classifier → `N` (normal), `S` (premature, normal shape),
   `V` (ventricular-looking), `Q` (unclassifiable / noisy). All thresholds in one config object.
 - [ ] **P4.4 [AI]** Pattern detector: couplets, triplets, runs (≥ 3 V), bigeminy, trigeminy,

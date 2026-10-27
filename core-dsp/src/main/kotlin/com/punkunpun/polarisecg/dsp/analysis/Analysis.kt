@@ -1,6 +1,9 @@
 package com.punkunpun.polarisecg.dsp.analysis
 
 import com.punkunpun.polarisecg.dsp.ECG_SAMPLE_RATE_HZ
+import com.punkunpun.polarisecg.dsp.beat.BeatFeatureExtractor
+import com.punkunpun.polarisecg.dsp.beat.BeatFeatures
+import com.punkunpun.polarisecg.dsp.beat.BeatInput
 import com.punkunpun.polarisecg.dsp.motion.MotionBin
 import com.punkunpun.polarisecg.dsp.motion.MotionIndex
 import com.punkunpun.polarisecg.dsp.motion.buildMotionBins
@@ -28,7 +31,10 @@ class Beat(
     val quality: BeatQuality,
     /** True if [BeatQuality.sqi] reaches the "good beat" threshold. */
     val good: Boolean,
-)
+) {
+    /** Timing and shape features (P4.1), set right after the beat is created. */
+    var features: BeatFeatures? = null
+}
 
 /** One 10 s window aligned to UTC. [coverage] = samples received / samples expected (0..1). */
 class Window(
@@ -74,18 +80,28 @@ fun analyzeEcg(frames: List<RawRecord.Ecg>, accFrames: List<RawRecord.Acc> = emp
     val qualityConfig = QualityConfig()
 
     val beats = ArrayList<Beat>()
+    // One extractor for the whole recording: its normal-beat template carries over gaps (P4.2).
+    val extractor = BeatFeatureExtractor()
     for (seg in segments) {
         var previous: Long? = null
         // One stream per gap-free segment: detectors never run across a gap.
         val stream = EcgBeatStream()
         val scored = stream.process(seg.samplesUv) + stream.finish() // `+` joins two Lists
-        for (b in scored) {
-            val t = seg.sampleUtcMs(b.position)
+        val times = scored.map { seg.sampleUtcMs(it.position) }
+        val features = ArrayList<BeatFeatures>(scored.size)
+        for ((i, b) in scored.withIndex()) {
+            val t = times[i]
             // the stream knows only the ECG: add the accelerometer here, on the UTC time line
             val quality = b.quality.withMotion(motionIndex.around(t), qualityConfig)
-            beats += Beat(t, seg.index, previous?.let { t - it }, "U", quality, quality.sqi >= qualityConfig.goodBeatSqi)
+            val good = quality.sqi >= qualityConfig.goodBeatSqi
+            features += extractor.add(BeatInput(t.toDouble(), b.snippet, good))
+            beats += Beat(t, seg.index, previous?.let { t - it }, "U", quality, good)
             previous = t
         }
+        features += extractor.finish()
+        // features come out in input order, one per beat: attach them to the beats of this segment
+        val first = beats.size - scored.size
+        for ((i, f) in features.withIndex()) beats[first + i].features = f
     }
 
     val events = ArrayList<Event>()

@@ -38,13 +38,21 @@ with `TimeMapper`. Code: `dsp/analysis/EcgSegments.kt`.
 | `hfRatio` | RMS of the >40 Hz signal near the beat relative to `amplitudeUv` (muscle noise); clean beats below 0.03 |
 | `agreed` | 1 if the second, differently built detector also saw the beat |
 | `motionMg` | accelerometer motion in the second around the beat (highest of the 1 s bins within ±0.5 s), mG; empty without ACC data |
+| `rrRefMs` | reference RR: median of the last 9 normal intervals (between good beats); empty until 3 are known |
+| `prematurity` | `rrMs / rrRefMs`; below 1 = early (a premature beat is typically below 0.85) |
+| `compensation` | `(rrPre + rrPost) / (2 · rrRef)`: about 1 after a ventricular beat (full compensatory pause), clearly below 1 for many atrial ones; empty for the last beat of a segment |
+| `corr` | correlation (−1..1) of the beat (−250 … +400 ms of the 0.5–40 Hz signal) with the running normal-beat template at the best alignment (±5 samples); empty while the template is still being learned, for poor-quality-only stretches, or if the segment ends too close to the beat |
+| `shift` | that alignment in samples (fractional): how far after the marked R position the beat's own R feature lies, relative to the template |
+| `qrsWidthMs` | QRS width from the slope (coarse, ±8 ms at 130 Hz): normal beats 54–92 ms, ventricular ones often wider |
+| `ampRatio`, `areaRatio` | QRS height / area (±92 ms around R) divided by the template's; empty while there is no template |
+| `flip` | 1 if the beat looks like the template upside down (inverted correlation ≥ 0.6 and better than the upright one) |
+| `alignMs` | time correction in ms (P3.8): 0 for almost all beats; ≥ 2 samples (15 ms) of difference from the usual `shift` of the recent beats means the beat was marked on another point of the QRS than its neighbours, and `utcMs + alignMs` is the time on the same feature as theirs. Not applied to `utcMs`/`rrMs` |
 
 `sqi` = amplitude score × slope score × hf score × motion score × (1 if `agreed`, else 0.4). Amplitude score: 0 for a
-flat line (< 20 µV), a tiny beat (< 15 % of the median of the last 20 beats) or a spike (> 6×), rising to
-1 at 50 %. Slope score: 1 at `slopeRatio` ≤ 0.02, 0 at ≥ 0.07. hf score: 1 at ≤ 0.03, 0 at ≥ 0.10. Motion score: 1 at ≤ 100 mG, 0 at ≥ 600 mG (1 without ACC data).
+flat line (< 20 µV), a tiny beat (< 15 % of the median of the last 200 beats) or a spike (> 6×; between 3× and 6× the score falls linearly), rising to
+1 at 50 %. Slope score (noise relative to the smaller of the beat's height and the usual height, P3.7): 1 at `slopeRatio` ≤ 0.02, 0 at ≥ 0.07. hf score: 1 at ≤ 0.03, 0 at ≥ 0.10. Motion score: 1 at ≤ 100 mG, 0 at ≥ 600 mG (1 without ACC data).
 All thresholds are in `QualityConfig` (`dsp/quality/EcgBeatStream.kt`). Beats are scored 0.4 s
-after they happen (the noise after the beat counts too). Comparison with a normal-beat template is
-added with P4.2.
+after they happen (the noise after the beat counts too). The template is in the feature columns (`corr`); it is not part of `sqi` yet.
 
 ## `windows.csv`
 

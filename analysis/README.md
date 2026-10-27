@@ -11,6 +11,7 @@ Contents now:
 | `test_polaris_raw.py` | Tests of the reader |
 | `fetch_physionet.py` | Downloads MIT-BIH / INCART / NSTDB and converts them (see below) |
 | `test_fetch_physionet.py` | Offline tests of the conversion |
+| `eval_features.py` | How well the beat features (P4.1/P4.2) separate the MIT-BIH classes: percentiles per class and AUC |
 | `view_ecg.py` | Interactive ECG viewer for a recording + its `analyze` output (see below) |
 | `polaris_segments.py` | Gap-free segments with UTC time; mirrors the Kotlin `EcgSegments`/`TimeMapper` |
 | `test_view_ecg.py` | Offline tests of the viewer's data side |
