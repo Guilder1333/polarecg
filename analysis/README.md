@@ -14,6 +14,8 @@ Contents now:
 | `view_ecg.py` | Interactive ECG viewer for a recording + its `analyze` output (see below) |
 | `polaris_segments.py` | Gap-free segments with UTC time; mirrors the Kotlin `EcgSegments`/`TimeMapper` |
 | `test_view_ecg.py` | Offline tests of the viewer's data side |
+| `premature_beats.py` | Rough PAC-like / PVC-like counts per hour, before P4 (see below) |
+| `test_premature_beats.py` | Tests of the rough count |
 | `requirements.txt` | Python packages |
 
 ## Setup on Windows (once)
@@ -157,3 +159,22 @@ The H10 sends RR intervals without per-beat timestamps, so the script first pair
 (in order, using the arrival time as a guide; beats one side missed stay unpaired), then reports
 `ours - strap` in ms: for all pairs, for pairs where both our beats are good, by motion and by
 heart rate. `--worst` lists the biggest disagreements with their time for `view_ecg.py --at`.
+
+## Rough premature-beat count (before P4)
+
+Needs a session folder and its `analyze` output. **Not validated for medical use**: a stop-gap until
+the real classifier (P4) exists.
+
+```powershell
+python analysis/premature_beats.py data/sessions/20261021T162147Z
+python analysis/premature_beats.py data/sessions/20261026T110150Z data/sessions/20261026T150114Z --bin 3h --tz +09:00
+python analysis/premature_beats.py data/sessions/20261021T162147Z --csv data/analysis/night_sv.csv
+```
+
+Per period (`--bin`, default 1 h, in the PC's time zone unless `--tz` is given): usable hours, beats,
+S (early with normal shape, PAC-like) and V (different shape and early, PVC-like) per hour and in %,
+and both together (`S+V %`, premature beats as a share of all judged beats).
+Several sessions are combined into one table. `--csv` lists every S / V beat with its UTC time for
+`view_ecg.py --at`; `--out-beats DIR` writes `beats.csv` with the classes so `view_ecg.py --analysis
+DIR` colours them. The rules, the options and the MIT-BIH result (V about 81 % / 91 %, S only about
+40 % / 58 %: read S as a lower bound) are at the top of the script.
