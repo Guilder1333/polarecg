@@ -22,6 +22,7 @@ class QrsDetectorTest {
     /**
      * [beatTimesS] are the R peak times. [rAmp] is negative for an upside-down ECG.
      * [ampOf] scales single beats (index -> factor), [tAmp] is the T wave height.
+     * [sOf] gives each beat an S wave 30 ms after R, as a fraction of the R height (0 = none).
      */
     private fun ecg(
         beatTimesS: List<Double>,
@@ -31,15 +32,18 @@ class QrsDetectorTest {
         noise: Double = 0.0,
         wander: Double = 0.0,
         ampOf: (Int) -> Double = { 1.0 },
+        sOf: (Int) -> Double = { 0.0 },
     ): Ecg {
         val rnd = Random(7)
         val n = (seconds * fs).toInt()
         val x = DoubleArray(n)
         for ((i, bt) in beatTimesS.withIndex()) {
             val a = ampOf(i)
+            val s = sOf(i)
             for (j in 0 until n) {
                 val t = j / fs
                 x[j] += a * rAmp * gauss(t, bt, 0.011) +            // QRS
+                    -s * rAmp * gauss(t, bt + 0.03, 0.011) +       // S wave
                     tAmp * gauss(t, bt + 0.25, 0.045) * (if (rAmp < 0) -1 else 1) + // T wave
                     0.1 * rAmp * gauss(t, bt - 0.16, 0.025)         // P wave
             }
@@ -144,6 +148,32 @@ class QrsDetectorTest {
         for (k in 21 until times.size) times[k] = times[k - 1] + 0.8
         val e = ecg(times, 40.0)
         val (missed, extra) = compare(detect(e.samples), e.rPositions)
+        assertEquals(0, missed)
+        assertEquals(0, extra)
+    }
+
+    @Test
+    fun biphasicQrsIsMarkedOnTheSameFeatureEveryBeat() {
+        // R 600 µV, S from 0.8 to 3.2 times as deep, changing from beat to beat (breathing,
+        // posture). The real H10 lead looks like this; with polarityOverride 2 the deeper beats
+        // were marked on the S trough, 4 samples late (P3.8).
+        val e = ecg(regular(60.0), 60.0, rAmp = 600.0, sOf = { 0.8 + 2.4 * (it % 7) / 6 })
+        val found = detect(e.samples).filter { it > STABLE_FROM_S * fs }
+        val offsets = found.map { f -> f - e.rPositions.minBy { abs(it - f) } }
+        assertTrue(offsets.size >= 70, "found ${offsets.size} beats")
+        // the S tail pulls the R peak a little earlier; a jump to S would be +4 samples
+        assertTrue(offsets.all { abs(it) < 1.5 }, "offsets from R: ${offsets.filter { abs(it) >= 1.5 }}")
+    }
+
+    @Test
+    fun followsAPolarityChangeDuringTheRecording() {
+        // the strap turned around after 30 s: the whole ECG is upside down from then on
+        val e = ecg(regular(60.0), 60.0)
+        val flipAt = (30 * fs).toInt()
+        val x = IntArray(e.samples.size) { if (it < flipAt) e.samples[it] else 40_000 - e.samples[it] }
+        val found = detect(x)
+        val settled = (35 * fs).toInt() // a few beats to get over the jump itself
+        val (missed, extra) = compare(found.filter { it > settled }, e.rPositions.filter { it > settled }, tolerance = 1)
         assertEquals(0, missed)
         assertEquals(0, extra)
     }

@@ -129,7 +129,7 @@ much longer. **We never miss a beat that the strap sees**, which is the importan
 - **Not a detection problem.** Counts of beats agree (mean difference ~0 per 10 s window); only the
   position within the QRS is unstable.
 
-## Options for fixing it (for tomorrow)
+## Options for fixing it (written before trying them; results in the next section)
 
 Goal: the reported position of a beat is the *same feature* in every beat, while still adapting if the
 QRS polarity changes for good.
@@ -151,6 +151,42 @@ number of good pairs differing by more than 10 ms (now 10 and 102), (b) the spre
 (now 1.0 ms day / 2.1 ms night), (c) MIT-BIH sensitivity/+P (now 99.6 % / 99.3 %), and (d) that the
 upside-down and polarity-change tests in `QrsDetectorTest` still pass. A new test should use a synthetic
 biphasic beat with R and S of varying ratio.
+
+## What was tried (P3.8, 2026-10-27) and what was kept
+
+Each variant was run on both sessions and all MIT-BIH records. "MIT-BIH jumps" = how often our position
+relative to the reference annotation changes by > 10 ms from one beat to the next (Se/+P cannot show
+position changes, it matches within ±150 ms; it stayed at 99.6 / 99.3 % for every variant).
+
+| Variant | Day > 10 ms | Night > 10 ms | MIT-BIH jumps |
+|---|---|---|---|
+| Before (`polarityOverride` 2) | 10 | 102 (0.40 %) | 4.0 % |
+| 1: baseline = median of the signal around the QRS | 23 | 529 | 4.1 % |
+| 2: vote counts the bigger extreme, flip past a margin of 3 | 64 | 13 | 6.9 % |
+| 2, vote weighted by the R/S ratio | 548 | 13 | 6.9 % |
+| 2, vote counts only clear beats (ratio > 2) | 2788 | 13 | 6.7 % |
+| **`polarityOverride` 4 (kept)** | **1** | **54 (0.21 %)** | **4.0 %** |
+| `polarityOverride` 8 | 1 | 27 (0.11 %) | 6.3 % |
+| `polarityOverride` 20 | 1 | 14 (0.055 %) | 6.5 % |
+| `polarityOverride` 100 (never switch) | 1 | 12 (0.047 %) | 8.7 % |
+
+What this showed:
+
+- **The line baseline is not the problem**: the median baseline makes flips five times as frequent.
+- **A vote on "which extreme is bigger" fails on the day lead.** R is never clearly bigger than S there, so the
+  vote drifts, or settles on S. The S trough is a poor fiducial: it moves against the strap's beat time
+  (std 10 ms vs 1 ms on R). The old self-reinforcing vote is actually what keeps the detector on R.
+- **The trade-off is between the night and inverted ventricular beats.** At night 68 of the 102 large
+  differences are one stretch around 20:00, and only a high override removes them. On MIT-BIH, records with
+  many inverted ventricular beats (200, 233) are annotated on the big extreme; a high override marks those
+  beats on the small one, 25-40 ms away. Above ~20 a strap that is turned around is no longer followed.
+- **Kept: `polarityOverride = 4`.** Day fixed, night halved, MIT-BIH unchanged, a truly inverted QRS (ratio far
+  above 4) still switches. Tests: `biphasicQrsIsMarkedOnTheSameFeatureEveryBeat` (S 0.8-3.2 times R; fails
+  with 2, every deep beat 4 samples late) and `followsAPolarityChangeDuringTheRecording`.
+
+Still open: the P3.8 target (< 0.05 % at night) is not reached. Next step is to look at the 20:00 stretch of the
+night (`view_ecg.py data/sessions/20261021T162147Z --at 20:20`); if no simple rule fixes it, aligning beats to
+a running template (P4.2) fixes the fiducial point by construction.
 
 ## How to reproduce
 

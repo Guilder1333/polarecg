@@ -334,6 +334,10 @@ Details in §7.1–7.4.
   intervals (0.06 % of beats by day, 0.4 % at night, more around premature beats). Options and the test
   procedure are in the document. **Done when:** good pairs differing > 10 ms from the strap are rare
   (target: < 0.05 % at night), MIT-BIH scores do not drop, and polarity changes are still followed.
+  (Step 1, 2026-10-27: tried a median baseline, polarity votes with hysteresis and several override values;
+  table in the document. Kept `polarityOverride` 2 -> 4: > 10 ms pairs day 10 -> 1, night 102 -> 54 (0.21 %),
+  MIT-BIH unchanged. New tests for a biphasic QRS and a mid-recording polarity change. Open: the night
+  target; most remaining ones are one stretch around 20:00.)
 
 ### Phase 4 — Premature beat classification (≈ 2–3 weeks)
 

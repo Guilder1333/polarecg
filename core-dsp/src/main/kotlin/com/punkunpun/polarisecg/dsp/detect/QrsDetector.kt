@@ -35,8 +35,13 @@ data class QrsConfig(
     val rrHistory: Int = 8,
     /** How slowly the learned polarity changes: 0.97 forgets in about 30 beats. */
     val polarityDecay: Double = 0.97,
-    /** The opposite-polarity extreme wins only if it is this many times bigger. */
-    val polarityOverride: Double = 2.0,
+    /**
+     * The opposite-polarity extreme wins only if it is this many times bigger. 2.0 made a biphasic
+     * QRS (R about as big as S) jump between R and S from beat to beat (P3.8,
+     * docs/RR_DISAGREEMENTS.md); 4.0 keeps the same feature but still follows a QRS that is
+     * really inverted (a flipped strap, an inverted ventricular beat).
+     */
+    val polarityOverride: Double = 4.0,
     /**
      * One candidate counts at most this many times the current beat level when the level (SPKI) is
      * updated, so a huge artifact (a strap being adjusted: 30 mV against a 1 mV beat) cannot lift
