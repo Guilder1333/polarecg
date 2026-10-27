@@ -315,7 +315,7 @@ Details in §7.1–7.4.
     deviation per UTC second, `motion.csv`, `motionMg` columns, a motion score (1 at <= 100 mG, 0 at >= 600 mG)
     in the beat score. Calibrated on one night and one day: in strong motion the ECG stays mostly clean and
     the strap's RR counts still agree, so motion only discards extreme cases (1.4 % of the day's beats).
-- [ ] **P3.5 [YOU+AI]** Evaluate on MIT-BIH @130 Hz: target **Se ≥ 99.5 %, +P ≥ 99.5 %** on clean
+- [x] **P3.5 [YOU+AI]** Evaluate on MIT-BIH @130 Hz: target **Se ≥ 99.5 %, +P ≥ 99.5 %** on clean
   records. You run the scorer; AI tunes.
   (Step 1, 2026-10-27, 44 non-paced records: Se 99.6 %, +P 99.3 % raw. Without the 8 hard records (105, 108,
   201, 203, 207, 210, 228, 232): Se 99.9 %, +P 99.98 %. The +P gap is almost all noise/flutter bursts
@@ -325,6 +325,12 @@ Details in §7.1–7.4.
   228 from Se 93.4 to 98.5 %, total raw Se 99.6 -> 99.8 %, +P 99.3 -> 99.1 %; own night/day unchanged
   (53 / 1 differences > 10 ms, +24 beats in 6.5 h). 0.10 gives Se 99.9 / +P 98.9. Open: agree what "clean"
   means (list of excluded records or "good-flagged beats only") and then tick this.)
+  **Done (decided with the owner): "clean" = detections the quality index marks good.** `score_beats.py` now
+  prints `Se(g)` and `+P(g)`: poor-flagged detections are left out of the count (hits and extras), misses stay
+  misses. Not a standard MIT-BIH figure, so always read it with the raw numbers. Result (44 non-paced records,
+  all, at `thresholdFraction` 0.15): raw Se 99.8 % / +P 99.1 %, **Se(g) 99.8 % / +P(g) 99.9 %** (3.0 % of true
+  detections left out as poor); DS2 only: 99.8 / 100.0. Weak records, per record: 108 (53 % of its beats
+  flagged poor, Se(g) 95.3), 203 (+P(g) 98.4), 207 (flutter, +P(g) 98.2), 201 (Se 98.7).
 - [x] **P3.6 [YOU+AI]** Evaluate on your own nights: compare our RR intervals with H10's RR stream
   (should agree within a few ms on clean beats). Look at plots of disagreements together with AI.
   (`analysis/compare_rr.py`, tests in `test_compare_rr.py`.) Result on one night (6.6 h) and one day (3 h):

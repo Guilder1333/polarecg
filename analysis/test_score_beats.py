@@ -62,6 +62,15 @@ class QualityTest(unittest.TestCase):
         self.assertEqual((r["tp"], r["fp"]), (2, 2))
         self.assertEqual((r["tp_bad"], r["fp_bad"], r["judged"]), (1, 1, 4))
 
+    def test_good_scores_leave_poor_detections_out(self):
+        # ref A (hit, good), ref B (hit, bad), ref C (missed); extras: one good, one bad
+        r = sb.score_record(np.array([1000.0, 2000.0, 5000.0]), ["N"] * 3,
+                            np.array([1000.0, 2000.0, 3000.0, 4000.0]), ["U"] * 4,
+                            det_good=[True, False, True, False])
+        se_g, ppv_g = sb.good_scores(r)
+        self.assertAlmostEqual(se_g, 1 / 2)   # 1 good hit, 1 miss; the poor hit is not counted
+        self.assertAlmostEqual(ppv_g, 1 / 2)  # 1 good hit, 1 good extra; the poor extra is ignored
+
     def test_without_flags_nothing_is_judged(self):
         r = score([1000], [1000])
         self.assertEqual((r["tp_bad"], r["fp_bad"], r["judged"]), (0, 0, 0))

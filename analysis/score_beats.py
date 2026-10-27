@@ -13,6 +13,11 @@ A detection and a reference beat match when they are within ``--tolerance`` ms (
 Every beat is used at most once, so a double detection counts as one hit and one false positive.
 
 * Detection: TP / FP / FN, sensitivity Se = TP/(TP+FN), positive predictivity +P = TP/(TP+FP).
+* Good-quality scores (P3.5): detections flagged poor by the quality index are left out of the count
+  (true ones are not hits, false ones are not extras); beats we miss stay misses. ``Se(g) =
+  (TP - TPbad) / (TP - TPbad + FN)``, ``+P(g) = (TP - TPbad) / (TP - TPbad + FP - FPbad)``. This is
+  what the app will use, since poor-quality beats are not analysed; ``TPbad%`` says how much is
+  left out. Not a standard MIT-BIH figure: always read it together with the raw Se / +P.
 * Classes (AAMI N/S/V/F/Q): for matched pairs, reference class against our class. Se and +P per
   class are shown only for classes that occur; until P4 every detection is ``U`` and this part
   is skipped.
@@ -146,6 +151,12 @@ def class_stats(r: dict) -> dict[str, dict]:
     return stats
 
 
+def good_scores(r: dict) -> tuple[float | None, float | None]:
+    """Se and +P counting only detections flagged good (the plain values without quality flags)."""
+    tp, fp = r["tp"] - r["tp_bad"], r["fp"] - r["fp_bad"]
+    return ratio(tp, tp + r["fn"]), ratio(tp, tp + fp)
+
+
 def pct(x: float | None) -> str:
     return "  n/a" if x is None else f"{100 * x:5.1f}"
 
@@ -153,8 +164,10 @@ def pct(x: float | None) -> str:
 def bad_cols(r: dict) -> str:
     """Share of true / false detections flagged as poor quality (blank without quality flags)."""
     if not r["judged"]:
-        return f"{'':>16}"
-    return f"{pct(ratio(r['tp_bad'], r['tp'])):>8}{pct(ratio(r['fp_bad'], r['fp'])):>8}"
+        return f"{'':>32}"
+    se_g, ppv_g = good_scores(r)
+    return (f"{pct(ratio(r['tp_bad'], r['tp'])):>8}{pct(ratio(r['fp_bad'], r['fp'])):>8}"
+            f"{pct(se_g):>8}{pct(ppv_g):>8}")
 
 
 def find_records(paths: list[Path], exclude_paced: bool, split: str | None) -> list[Path]:
@@ -191,7 +204,7 @@ def main(argv=None) -> int:
 
     total, rows, missing = None, [], []
     print(f"{'record':<14}{'ref':>7}{'det':>7}{'TP':>7}{'FP':>6}{'FN':>6}{'Se%':>7}{'+P%':>7}"
-          f"{'TPbad%':>8}{'FPbad%':>8}")
+          f"{'TPbad%':>8}{'FPbad%':>8}{'Se(g)%':>8}{'+P(g)%':>8}")
     for rec in records:
         analysis = args.analysis_root / f"{rec.parent.name}-{rec.name}"
         if not (analysis / "beats.csv").exists():
@@ -205,7 +218,8 @@ def main(argv=None) -> int:
         print(f"{rec.parent.name + '/' + rec.name:<14}{r['ref_beats']:>7}{r['det_beats']:>7}"
               f"{r['tp']:>7}{r['fp']:>6}{r['fn']:>6}{pct(se):>7}{pct(ppv):>7}{bad_cols(r)}")
         rows.append({"db": rec.parent.name, "record": rec.name, "ref": r["ref_beats"], "det": r["det_beats"],
-                     "tp": r["tp"], "fp": r["fp"], "fn": r["fn"], "se": se, "ppv": ppv})
+                     "tp": r["tp"], "fp": r["fp"], "fn": r["fn"], "se": se, "ppv": ppv,
+                     "se_good": good_scores(r)[0], "ppv_good": good_scores(r)[1]})
 
     if missing:
         print(f"\nno beats.csv for {len(missing)} record(s), run `analyze` first: {', '.join(missing)}")
@@ -216,7 +230,8 @@ def main(argv=None) -> int:
     print(f"{'TOTAL':<14}{total['ref_beats']:>7}{total['det_beats']:>7}{total['tp']:>7}"
           f"{total['fp']:>6}{total['fn']:>6}{pct(se):>7}{pct(ppv):>7}{bad_cols(total)}")
     if total["judged"]:
-        print("TPbad% = true detections flagged poor quality (lost), FPbad% = false detections flagged poor quality (caught)")
+        print("TPbad% = true detections flagged poor quality (lost), FPbad% = false detections flagged poor quality (caught)\n"
+              "Se(g)% / +P(g)% = scores with poor-quality detections left out (see the module help)")
 
     judged = {c: s for c, s in class_stats(total).items()}
     if any(dc != "U" for (_, dc) in total["confusion"]) or any(c != "U" for c in total["false_pos_by_class"]):
