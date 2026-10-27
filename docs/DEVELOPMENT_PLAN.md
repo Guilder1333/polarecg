@@ -338,6 +338,10 @@ Details in §7.1–7.4.
   table in the document. Kept `polarityOverride` 2 -> 4: > 10 ms pairs day 10 -> 1, night 102 -> 54 (0.21 %),
   MIT-BIH unchanged. New tests for a biphasic QRS and a mid-recording polarity change. Open: the night
   target; most remaining ones are one stretch around 20:00.)
+  (Step 2, 2026-10-27: the 20:00 stretch is a strongly wandering baseline making R look 4x smaller than S.
+  Marking the steepest slope (`steepestSlope`, off by default) gives night 54 -> 11 (0.043 %), day 1,
+  MIT-BIH Se/+P unchanged, but the mark is ~2 samples after the R peak and 3 tests fail. **Owner decided to
+  accept 0.21 % for now**; details and options in `docs/RR_DISAGREEMENTS.md`. Revisit with the P4.2 template.)
 
 ### Phase 4 — Premature beat classification (≈ 2–3 weeks)
 

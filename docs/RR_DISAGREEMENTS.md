@@ -184,9 +184,72 @@ What this showed:
   above 4) still switches. Tests: `biphasicQrsIsMarkedOnTheSameFeatureEveryBeat` (S 0.8-3.2 times R; fails
   with 2, every deep beat 4 samples late) and `followsAPolarityChangeDuringTheRecording`.
 
-Still open: the P3.8 target (< 0.05 % at night) is not reached. Next step is to look at the 20:00 stretch of the
-night (`view_ecg.py data/sessions/20261021T162147Z --at 20:20`); if no simple rule fixes it, aligning beats to
-a running template (P4.2) fixes the fiducial point by construction.
+Still open: the P3.8 target (< 0.05 % at night) is not reached with the kept setting. Step 2 (below) looked at
+the 20:00 stretch and found a fix that reaches it, which was **not adopted for now**.
+
+## Step 2 (2026-10-27): the 20:00 stretch and the steepest-slope experiment
+
+### The 20:00 stretch
+
+Of the 54 night differences > 10 ms that remain with `polarityOverride` 4, 22 fall in 20:30-20:39 and most of
+the rest in 20:2x-20:5x (counts by 10 minutes: 20:3x 22, 20:2x 6, 21:3x 5, 20:5x 4, 22:4x 4, 20:4x 3, the rest
+1-4 each). View: `view_ecg.py data/sessions/20261021T162147Z --at 20:30:30 --width 8`.
+
+What the signal looks like there:
+
+- **Large baseline wander**, about ±1500 µV swings over 1-2 s (breathing or posture), against QRS complexes of
+  only 300-600 µV. The QRS often sits on a steep slope of the baseline.
+- The beats are the same biphasic R-then-S shape as before. In the displaced beats the **R is small next to the
+  S** (e.g. R +228, S -361...-515, µV above the local median, R 4 samples before the S trough), because the
+  falling baseline lifts the left end of the window and sinks the right end. After subtracting the straight
+  line between the window ends, S is about 4 times (or more) bigger than R, which is at the `polarityOverride`
+  limit, so the detector marks the S trough, 3-4 samples (28-30 ms) after the R the neighbouring beats use.
+- Normal beats next to them: R +186...+389, S -220...-316. The pair pattern is the same `+x, -x` as in the
+  main section, with x = 28-30 ms.
+- So raising the override further (8 -> 27, 20 -> 14, 100 -> 12) removes them, but costs inverted ventricular
+  beats in MIT-BIH (see the table above). The cause is not the baseline *line*; it is that "which extreme is
+  bigger" is not a stable feature in this lead.
+
+### Experiment: mark the steepest slope (option 3)
+
+`QrsConfig.steepestSlope` (default **off**; `QrsDetector.localizeR`): in the window used for R, take
+the sample where `|x[j+1] - x[j-1]|` is largest, with the parabolic sub-sample refinement applied to the
+slope. For an R-S complex that is the down-stroke between the peak and the trough; it lies between the two
+extremes whether R or S is the bigger one, so it does not flip.
+
+| | Day > 10 ms | Night > 10 ms | Std of difference (good pairs) | MIT-BIH Se / +P | TPbad |
+|---|---|---|---|---|---|
+| `polarityOverride` 4 (kept) | 1 | 54 (0.21 %) | 0.8 ms day / 1.6 ms night | 99.6 / 99.3 | 2.6 % |
+| `steepestSlope` on | 1 of 15 620 | **11 of 25 350 (0.043 %)** | 0.8 ms day / 1.1 ms night | 99.6 / 99.3 | 2.9 % |
+
+Night "good pairs within 5 ms" 99.8 % -> 99.9 %. The "MIT-BIH jumps" figure was not re-measured in this step.
+
+Why it was not adopted:
+
+- The marked point is **about 2 samples (15 ms) after the R peak**, so "R position" would no longer mean the R
+  peak. The viewer, the sub-sample accuracy test (P3.3) and, later, template matching in P4 all assume the R
+  peak.
+- Three unit tests fail with it on, because they compare with the true R peak: `QrsDetectorTest`
+  `followsAPolarityChangeDuringTheRecording` (31 differences instead of 0),
+  `biphasicQrsIsMarkedOnTheSameFeatureEveryBeat` (the offsets printed are consistent, about 2.0 samples, but
+  the test expects 0) and `SubSampleTimingTest.refinedPositionsBeatWholeSampleRounding` (12.8 ms error).
+- The RR values themselves are fine either way (a constant offset cancels in an interval).
+
+### Decision and how to pick this up
+
+Decision (owner): accept 0.21 % at night for now. P3.8 stays open; the numbers above are the starting point.
+Options for later, in the order I would try them:
+
+1. **Switch the fiducial to the steepest slope** (turn the option on, rewrite the three tests to check
+   consistency and a fixed offset instead of the R peak, update plan §8). Simplest, reaches the target.
+2. **Use the steepest slope only to choose between R and S**, then still report the R peak (the extreme within
+   a few samples before the steepest down-stroke). Keeps the viewer and tests, but is a second rule that
+   could itself flip. Not tried.
+3. **Align beats to a running template (P4.2)**: the fiducial is then fixed by construction. Probably the
+   right long-term answer; revisit when the template exists.
+
+Whichever is chosen, check against the same four criteria as before (day and night > 10 ms counts, MIT-BIH
+Se/+P and jumps, `QrsDetectorTest` polarity tests).
 
 ## How to reproduce
 

@@ -43,6 +43,12 @@ data class QrsConfig(
      */
     val polarityOverride: Double = 4.0,
     /**
+     * EXPERIMENT (P3.8, off): mark the steepest slope of the QRS (about 2 samples after R) instead of
+     * the R peak. Night RR outliers 54 -> 11, but three tests expect the R peak; see
+     * docs/RR_DISAGREEMENTS.md, "Step 2".
+     */
+    val steepestSlope: Boolean = false,
+    /**
      * One candidate counts at most this many times the current beat level when the level (SPKI) is
      * updated, so a huge artifact (a strap being adjusted: 30 mV against a 1 mV beat) cannot lift
      * the threshold out of reach of the real beats.
@@ -275,6 +281,13 @@ class QrsDetector(private val config: QrsConfig = QrsConfig()) {
         val from = (k - integrationLen - 6).coerceAtLeast(count - RING + 1).coerceAtLeast(0)
         val to = k
         if (to - from < 4) return k.toDouble()
+        if (config.steepestSlope) {
+            fun slope(j: Int) = abs((rawBuf[(j + 1) and MASK] - rawBuf[(j - 1) and MASK]).toDouble())
+            var best = from + 1
+            for (j in from + 1 until to) if (slope(j) > slope(best)) best = j
+            if (best <= from + 1 || best >= to - 1) return best.toDouble()
+            return best + parabolicPeakOffset(slope(best - 1), slope(best), slope(best + 1))
+        }
         val a = (rawBuf[from and MASK] + rawBuf[(from + 1) and MASK]) / 2
         val b = (rawBuf[to and MASK] + rawBuf[(to - 1) and MASK]) / 2
         // signal minus the straight line between the window ends
