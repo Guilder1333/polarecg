@@ -371,7 +371,8 @@ Details in §7.1–7.4.
   accept 0.21 % for now**; details and options in `docs/RR_DISAGREEMENTS.md`. Revisit with the P4.2 template.)
   (Step 3, 2026-10-27, after P4.2: the template shift corrects the displaced beats, `alignMs` in `beats.csv`:
   night 36 -> 12 of 25 227 (0.048 %, target met), day unchanged, MIT-BIH untouched. Caveat: `utcMs`/`rrMs` still
-  carry the detector's marks; consumers (HRV, patterns) should add `alignMs`. Details in
+  carry the detector's marks; consumers (HRV, patterns) should add `alignMs`. **Decision (owner): leave
+  `utcMs`/`rrMs` as the detector marked them; `alignMs` stays a separate column.** Details in
   `docs/RR_DISAGREEMENTS.md`, "Step 3".)
 
 ### Phase 4 — Premature beat classification (≈ 2–3 weeks)
