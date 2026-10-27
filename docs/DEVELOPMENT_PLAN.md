@@ -438,6 +438,7 @@ Details in §7.5–7.6.
   labelling our own beats (P4.6).)
 - [ ] **P4.6 [YOU]** Label a set of your own beats in the review UI (P5.7) — at least a few hundred
   V/S beats and their neighbors. This is gold for tuning and for Phase 7.
+  (Design of the labeling tool, with the `n s v q b ?` labels and the sampling plan: `docs/LABELING_TOOL.md`; not built yet.)
 
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 
