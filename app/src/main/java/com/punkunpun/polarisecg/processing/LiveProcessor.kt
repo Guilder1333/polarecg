@@ -4,6 +4,8 @@ import android.util.Log
 import com.punkunpun.polarisecg.dsp.analysis.Beat
 import com.punkunpun.polarisecg.dsp.classify.BeatClass
 import com.punkunpun.polarisecg.dsp.live.LivePipeline
+import com.punkunpun.polarisecg.polar.AccFrame
+import com.punkunpun.polarisecg.polar.EcgFrame
 import com.punkunpun.polarisecg.polar.PolarConnection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -12,6 +14,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -21,6 +24,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 private const val TAG = "LiveProcessor"
+
+/** Frames a replay may have queued ahead of the pipeline. */
+private const val REPLAY_QUEUE = 256
 
 /** What the pipeline has found since [LiveProcessor.start]: beats per class, and the latest one. */
 data class LiveStats(
@@ -40,21 +46,27 @@ data class LiveStats(
  * Runs the [LivePipeline] (`:core-dsp`, the same code as the PC tool) on everything [connection] streams (P5.1).
  *
  * Threading: the Polar SDK delivers on its own threads; [PolarConnection] republishes the frames in
- * SharedFlows. Here both streams are collected on ONE background thread (`limitedParallelism(1)`), so
- * frames are processed one at a time in arrival order, which the pipeline requires, and never on the UI
- * thread. Each frame takes a few milliseconds (it is half a second of data).
+ * SharedFlows. Two cheap forwarders put the ECG and ACC frames into ONE queue in the order they arrive, and one
+ * coroutine on a background thread takes them out one at a time (the pipeline requires arrival order, and the two
+ * streams must not run ahead of each other: beats wait for the motion of their second). Never on the UI thread.
+ * Each frame takes a few milliseconds (it is half a second of data).
  *
  * [start] begins with a fresh pipeline (template, quality history), [stop] flushes the last beats.
  * Nothing is stored yet (Room comes in P5.3); finished beats go to [beats] and into [stats].
  */
 class LiveProcessor(private val connection: PolarConnection) {
+    private sealed interface Input {
+        class Ecg(val frame: EcgFrame) : Input
+        class Acc(val frame: AccFrame) : Input
+    }
+
     // Dispatchers.Default is a pool for CPU work; limitedParallelism(1) lets only one coroutine run at a time on it.
     @OptIn(ExperimentalCoroutinesApi::class)
     private val dispatcher = Dispatchers.Default.limitedParallelism(1)
 
     private var scope: CoroutineScope? = null
     private var collectors: List<Job> = emptyList()
-    private var pipeline = LivePipeline()
+    private var queue: Channel<Input>? = null
     private var stats = LiveStats()
 
     private val _stats = MutableStateFlow(LiveStats())
@@ -64,33 +76,52 @@ class LiveProcessor(private val connection: PolarConnection) {
     private val _beats = MutableSharedFlow<Beat>(extraBufferCapacity = 1024)
     val beats: SharedFlow<Beat> = _beats.asSharedFlow()
 
+    /**
+     * Starts with a fresh pipeline. With [fromConnection] (a real session) the frames of [connection] are
+     * processed; without it (replay, P5.2) the caller hands them over with [submitEcg] / [submitAcc], in order
+     * and with back-pressure, so that a replay at any speed gives the same beats as `analyze`.
+     */
     @Synchronized
-    fun start() {
+    fun start(fromConnection: Boolean = true) {
         if (scope != null) return
-        pipeline = LivePipeline()
+        val pipeline = LivePipeline()
         stats = LiveStats()
         _stats.value = stats
         val s = CoroutineScope(SupervisorJob() + dispatcher)
         scope = s
-        val p = pipeline
+        // Real strap: never block the SDK's callbacks, the queue is unbounded (a few frames per second). Replay: bounded.
+        val q = Channel<Input>(if (fromConnection) Channel.UNLIMITED else REPLAY_QUEUE)
+        queue = q
         // UNDISPATCHED: run on this thread up to the first suspension, i.e. until collect() has subscribed. A SharedFlow
         // forgets what was emitted before a collector subscribed, and a replay (P5.2) emits right after start().
-        collectors = listOf(
-            s.launch(start = CoroutineStart.UNDISPATCHED) { connection.ecg.collect { f -> guarded { p.addEcg(f.sensorTimeNs, f.phoneTimeMs, f.samplesUv) } } },
-            s.launch(start = CoroutineStart.UNDISPATCHED) { connection.acc.collect { f -> guarded { p.addAcc(f.sensorTimeNs, f.phoneTimeMs, f.xMg, f.yMg, f.zMg) } } },
-        )
+        collectors = if (fromConnection) listOf(
+            s.launch(start = CoroutineStart.UNDISPATCHED) { connection.ecg.collect { q.trySend(Input.Ecg(it)) } },
+            s.launch(start = CoroutineStart.UNDISPATCHED) { connection.acc.collect { q.trySend(Input.Acc(it)) } },
+        ) else emptyList()
+        s.launch {
+            for (input in q) { // ends when the queue is closed and empty, see stop()
+                when (input) {
+                    is Input.Ecg -> guarded { pipeline.addEcg(input.frame.sensorTimeNs, input.frame.phoneTimeMs, input.frame.samplesUv) }
+                    is Input.Acc -> input.frame.let { f -> guarded { pipeline.addAcc(f.sensorTimeNs, f.phoneTimeMs, f.xMg, f.yMg, f.zMg) } }
+                }
+            }
+            guarded { pipeline.finish() } // after the last frame: the beats that were still waiting
+            s.cancel()
+        }
     }
 
-    /** Stops collecting and publishes the beats that were still waiting. */
+    /** For a replay: hands over one frame, waiting if the pipeline is busy. */
+    suspend fun submitEcg(frame: EcgFrame) { queue?.send(Input.Ecg(frame)) }
+    suspend fun submitAcc(frame: AccFrame) { queue?.send(Input.Acc(frame)) }
+
+    /** Stops taking frames and publishes the beats that were still waiting (after the frames already queued). */
     @Synchronized
     fun stop() {
-        val s = scope ?: return
+        if (scope == null) return
         scope = null
-        // A frame is handled without suspending, so cancelling never cuts one in half. The flush is queued on the
-        // same single thread, hence after the last frame; it uses the pipeline of THIS run (a new start() makes another).
         collectors.forEach { it.cancel() }
-        val p = pipeline
-        s.launch { guarded { p.finish() } }.invokeOnCompletion { s.cancel() }
+        queue?.close() // the processing coroutine drains what is queued, flushes, and ends
+        queue = null
     }
 
     /** Runs [step] and publishes the beats it returns; an exception costs this frame, not the service. */

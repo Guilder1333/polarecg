@@ -13,11 +13,17 @@ private const val USAGE = """PolarisECG CLI
                         record (data/reference/<db>/<record>): any folder with ecg*.bin files
     --out <dir>         where to write beats.csv, windows.csv, events.csv
                         (default: data/analysis/<parent>-<folder>)
+
+  live-check <recording-folder>
+
+    Feeds the recording to the live pipeline (the phone's code) in arrival order and compares the
+    beats with `analyze`. Prints both class counts and the beats that differ.
 """
 
 fun main(args: Array<String>) {
     when (args.firstOrNull()) {
         "analyze" -> exitProcess(analyzeCommand(args.drop(1)))
+        "live-check" -> exitProcess(args.getOrNull(1)?.let { liveCheckCommand(File(it)) } ?: usageError("Missing <recording-folder>"))
         null, "-h", "--help", "help" -> print(USAGE)
         else -> {
             System.err.println("Unknown command '${args.first()}'.\n")

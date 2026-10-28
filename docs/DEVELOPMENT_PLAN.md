@@ -497,7 +497,13 @@ Details in §7.5–7.6.
   uses, so `LiveProcessor` and the live screen are unchanged; no recorder runs. Pauses over 3 s are shortened; speeds 1x, 10x,
   60x, max (backpressure, no frames lost). `LiveProcessor` collectors now start undispatched so that the first frames are not
   missed. Screen: **Replay** button on the start screen; sessions from the app and from `files/replay/` (adb push, see
-  `docs/RAW_FORMAT.md`). **Done when:** replaying a night shows counts equal to `analyze` of the same session.)
+  `docs/RAW_FORMAT.md`). **Done when:** replaying a night shows counts equal to `analyze` of the same session.
+  First try (2026-10-29, night 20261028, replay not finished): phone 65 094 beats, N 64 209, S 638, V 50 (41 questionable),
+  Q 197 against `analyze` 65 545, N 64 607, S 652, V 46 (38), Q 240. `cli live-check <session>` (new) feeds the pipeline in
+  arrival order on the PC and gets exactly the `analyze` result (0 of 65 545 beats differ), so the logic is fine; the cause was
+  the app plumbing: ECG and ACC went through two separate flows, and in a fast replay the ECG ran seconds ahead of the ACC, so
+  beats were scored without motion (the 3 s "ACC stalled" fallback). Fix: both streams go through one ordered queue in
+  `LiveProcessor`; a replay hands its frames over directly, in order, with back-pressure. To repeat the test on the phone.)
 - [ ] **P5.3 [AI]** Room database (§8), batched writes, retention policy.
 - [ ] **P5.4 [AI]** Ring buffer + **event clips**: for each event (V, S, couplet, run, pause…), save
   10 s before + 10 s after. Rate-limit clips (e.g. bigeminy for 1 hour shouldn't save 1800 clips —

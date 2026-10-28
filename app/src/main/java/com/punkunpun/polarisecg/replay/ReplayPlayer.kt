@@ -74,7 +74,7 @@ class ReplayPlayer(private val connection: PolarConnection, private val processo
                     return@launch
                 }
                 _state.value = ReplayState(running = true, session = sessionDir.name)
-                processor.start()
+                processor.start(fromConnection = false) // frames are handed over in order, see play()
                 connection.replayState(ConnectionState.Streaming)
                 play(records, speed, sessionDir.name)
             } catch (e: CancellationException) {
@@ -118,8 +118,9 @@ class ReplayPlayer(private val connection: PolarConnection, private val processo
             }
             previous = r.phoneTimeMs
             when (r) {
-                is RawRecord.Ecg -> connection.replayEcg(EcgFrame(r.sensorTimeNs, r.phoneTimeMs, r.samplesUv))
-                is RawRecord.Acc -> connection.replayAcc(AccFrame(r.sensorTimeNs, r.phoneTimeMs, r.xMg, r.yMg, r.zMg))
+                // To the pipeline directly (strict order, back-pressure), and through the connection's flows for the live screen.
+                is RawRecord.Ecg -> EcgFrame(r.sensorTimeNs, r.phoneTimeMs, r.samplesUv).let { processor.submitEcg(it); connection.replayEcg(it) }
+                is RawRecord.Acc -> AccFrame(r.sensorTimeNs, r.phoneTimeMs, r.xMg, r.yMg, r.zMg).let { processor.submitAcc(it); connection.replayAcc(it) }
                 is RawRecord.Hr -> connection.replayHr(HrSample(r.phoneTimeMs, r.heartRateBpm, r.rrMs, r.contact))
             }
             if (i % 50 == 0) _state.value = ReplayState(running = true, session = session, progress = (r.phoneTimeMs - first).toFloat() / span)
