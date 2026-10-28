@@ -86,7 +86,7 @@ the last sample.
 | `meanHrBpm` | 60000 / mean RR of the beats in the window with 250 ≤ RR ≤ 3000 ms; empty if none |
 | `motionMg` | highest motion of the 1 s bins in the window (mG); empty without ACC data |
 | `goodBeats` | beats of the window with `good` = 1 |
-| `quality` | `goodBeats` / `beats`, 0..1; 0 if the window has no beat. Below 0.5 the window is unusable (red in the viewer, to be left out of burden and HRV) |
+| `quality` | (`goodBeats` + rescued beats, `qRescue` = 1) / `beats`, 0..1; 0 if the window has no beat. Below 0.5 the window is unusable (red in the viewer, to be left out of burden and HRV) |
 
 ## `motion.csv`
 

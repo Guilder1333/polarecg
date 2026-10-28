@@ -59,7 +59,7 @@ class Window(
     val goodBeats: Int,
     /** Highest motion (accelerometer, mG) of the 1 s bins in the window; null without ACC data. */
     val motionMg: Double?,
-    /** Good beats / beats (0 when there is no beat at all). Below [USABLE_QUALITY] the window is unusable. */
+    /** (Good + rescued beats, P4.7) / beats (0 when there is no beat at all). Below [USABLE_QUALITY] the window is unusable. */
     val quality: Double,
 )
 
@@ -155,6 +155,7 @@ private fun buildWindows(segments: List<EcgSegment>, beats: List<Beat>, motion: 
     }
     val beatCount = IntArray(count)
     val goodCount = IntArray(count)
+    val usableCount = IntArray(count) // good or rescued: a classified beat counts for the window, not for HRV
     val rrSum = LongArray(count)
     val rrN = IntArray(count)
     for (b in beats) {
@@ -162,6 +163,7 @@ private fun buildWindows(segments: List<EcgSegment>, beats: List<Beat>, motion: 
         if (w !in 0 until count) continue
         beatCount[w]++
         if (b.good) goodCount[w]++
+        if (b.good || b.rescued) usableCount[w]++
         val rr = b.rrMs
         if (rr != null && rr in RR_MIN_MS..RR_MAX_MS) { rrSum[w] += rr; rrN[w]++ }
     }
@@ -176,7 +178,7 @@ private fun buildWindows(segments: List<EcgSegment>, beats: List<Beat>, motion: 
             meanHrBpm = if (rrN[w] > 0) 60_000.0 * rrN[w] / rrSum[w] else null,
             motionMg = maxMotion[w],
             goodBeats = goodCount[w],
-            quality = if (beatCount[w] > 0) goodCount[w].toDouble() / beatCount[w] else 0.0,
+            quality = if (beatCount[w] > 0) usableCount[w].toDouble() / beatCount[w] else 0.0,
         )
     }
 }

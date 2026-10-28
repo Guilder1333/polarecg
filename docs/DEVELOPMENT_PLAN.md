@@ -472,8 +472,11 @@ Details in §7.5–7.6.
   0.7-0.89; sample of poor beats with both detectors agreeing and low noise: 23 N / 2 Q at >= 0.75 (0 at >= 0.9). MIT-BIH
   (non-paced) N Se +0.3, V +P -1.0; NSTDB V +P -2.4; detection and noise flagging unchanged. (c) V pattern events say
   "k questionable" in `detail` (still reported). Disagreements with the owner's labels, nights 1 / 2 / 3: 74 -> 67, 41 -> 36,
-  23 -> 16. Confident V: 91 % / 95 % V among N/V (nights 1 / 2; night 3 had no confident V with a label). Open: windows/HRV
-  still count rescued beats as poor; V burden stays "between v - vDoubt and v".
+  23 -> 16. Confident V: 91 % / 95 % V among N/V (nights 1 / 2; night 3 had no confident V with a label). (d) Window `quality` counts rescued beats as usable
+  (`goodBeats` stays strictly good, for HRV to decide): unusable windows 18 -> 7, 24 -> 2, 290 -> 0 of 4252 (the motion
+  stretches of night 3). Open: HRV (P5.5) decides whether rescued beats give NN intervals (their R position under motion is
+  less reliable; default: no); V burden stays "between v - vDoubt and v"; a "confident only" count of V events for the
+  summary/alerts (P5.6).
 
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 
