@@ -459,6 +459,12 @@ Details in §7.5–7.6.
   the Kotlin run was not repeated there): V Se +2.8 / +3.2 / +2.4 points, V +P -1.5 / -5.4 / +0.2. Remaining disagreement:
   early, different-looking beats the owner calls S where we say V (5 and 12 items): V vs S for such beats is where the
   owner is unsure too.
+  Step 3 (same day): Q rescue. Of 100 sampled Q the owner called 65 N, 4 S, 1 V and 30 Q (motion >= 100 mG and
+  `slopeRatio` > 0.04 veto clean beats via `sqi`). A poor beat with `corr` >= 0.9, both detectors agreeing, slope <= 0.15 and
+  hf <= 0.05 is now classified (`qRescue` = 1; `good` unchanged). Owner's Q beats that were normal: 52 % recovered, 8 %
+  of real Q came along; MIT-BIH true beats lost to poor quality 3.5 -> 2.7 %, INCART 16.0 -> 11.5 %, noise detections
+  caught as before (MIT 93.0 -> 92.9 %, INCART 89.8, NSTDB 89.7). Disagreements with the owner's labels, nights 1 / 2:
+  85 -> 74 and 63 -> 41. Open: the Q beats left (motion), windows/HRV still count rescued beats as poor.
 
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 

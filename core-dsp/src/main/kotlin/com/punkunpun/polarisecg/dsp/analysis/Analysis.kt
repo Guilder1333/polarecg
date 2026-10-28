@@ -42,6 +42,9 @@ class Beat(
 
     /** A V that may be a normal beat on a drifting baseline (P4.7): look at it again. Only ever true for [cls] V. */
     var vDoubt: Boolean = false
+
+    /** A beat of poor quality index that was classified anyway because it matches the normal template (P4.7). */
+    var rescued: Boolean = false
 }
 
 /** One 10 s window aligned to UTC. [coverage] = samples received / samples expected (0..1). */
@@ -114,8 +117,10 @@ fun analyzeEcg(frames: List<RawRecord.Ecg>, accFrames: List<RawRecord.Acc> = emp
         val first = beats.size - scored.size
         for ((i, f) in features.withIndex()) {
             beats[first + i].features = f
-            beats[first + i].cls = classifier.classify(f)
-            beats[first + i].vDoubt = classifier.vNeedsReview(f)
+            val b = beats[first + i]
+            b.cls = classifier.classify(f, b.quality)
+            b.vDoubt = classifier.vNeedsReview(f, b.quality)
+            b.rescued = classifier.rescues(f, b.quality)
         }
     }
 

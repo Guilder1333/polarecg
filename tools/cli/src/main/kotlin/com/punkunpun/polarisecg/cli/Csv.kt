@@ -32,7 +32,7 @@ private fun featureColumns(f: BeatFeatures?): String {
 fun writeCsvs(result: AnalysisResult, dir: File) {
     File(dir, "beats.csv").bufferedWriter().use { w ->
         w.write("utcMs,utc,segment,rrMs,class,sqi,good,amplitudeUv,slopeRatio,hfRatio,agreed,motionMg," +
-            "rrRefMs,rrSpread,prematurity,shortening,compensation,corr,shift,qrsWidthMs,widthRatio,ampRatio,areaRatio,flip,alignMs,driftRatio,vDoubt\n")
+            "rrRefMs,rrSpread,prematurity,shortening,compensation,corr,shift,qrsWidthMs,widthRatio,ampRatio,areaRatio,flip,alignMs,driftRatio,vDoubt,qRescue\n")
         for (b in result.beats) {
             val q = b.quality
             w.write(
@@ -40,7 +40,7 @@ fun writeCsvs(result: AnalysisResult, dir: File) {
                     "${num(q.sqi, 3)},${if (b.good) 1 else 0},${num(q.amplitudeUv, 0)}," +
                     "${num(q.slopeRatio.takeIf { it.isFinite() }, 3)},${num(q.hfRatio.takeIf { it.isFinite() }, 3)}," +
                     "${if (q.agreed) 1 else 0},${num(q.motionMg, 1)}," +
-                    featureColumns(b.features) + ",${if (b.vDoubt) 1 else 0}\n",
+                    featureColumns(b.features) + ",${if (b.vDoubt) 1 else 0},${if (b.rescued) 1 else 0}\n",
             )
         }
     }

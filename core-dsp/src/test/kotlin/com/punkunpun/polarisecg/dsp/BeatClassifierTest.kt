@@ -3,6 +3,7 @@ package com.punkunpun.polarisecg.dsp
 import com.punkunpun.polarisecg.dsp.beat.BeatFeatures
 import com.punkunpun.polarisecg.dsp.classify.BeatClass
 import com.punkunpun.polarisecg.dsp.classify.BeatClassifier
+import com.punkunpun.polarisecg.dsp.quality.BeatQuality
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -52,6 +53,27 @@ class BeatClassifierTest {
         assertFalse(classifier.vNeedsReview(features(widthRatio = 1.8, corr = 0.8, drift = 0.5)))
         assertFalse(classifier.vNeedsReview(features(drift = 0.5))) // a normal beat is not a V at all
         assertFalse(classifier.vNeedsReview(features(good = false, corr = 0.3, drift = 0.5))) // Q
+    }
+
+    private fun quality(agreed: Boolean = true, slope: Double = 0.05, hf: Double = 0.01) = BeatQuality(
+        sqi = 0.3, amplitudeUv = 800.0, amplitudeScore = 1.0, slopeRatio = slope, slopeScore = 0.4, hfRatio = hf, hfScore = 1.0, agreed = agreed,
+    )
+
+    @Test fun aPoorBeatThatMatchesTheTemplateIsRescued() {
+        val poor = features(good = false, corr = 0.95)
+        assertEquals(BeatClass.UNCLASSIFIABLE, cls(poor)) // without quality: always Q
+        assertEquals(BeatClass.NORMAL, classifier.classify(poor, quality()))
+        assertEquals(BeatClass.PREMATURE, classifier.classify(features(good = false, corr = 0.95, prematurity = 0.6, shortening = 0.6), quality()))
+        assertTrue(classifier.rescues(poor, quality()))
+        assertFalse(classifier.rescues(features(corr = 0.95), quality())) // a good beat is not "rescued"
+    }
+
+    @Test fun noRescueWithoutAgreementTemplateMatchOrWithNoise() {
+        assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.95), quality(agreed = false)))
+        assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.85), quality()))
+        assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.95), quality(slope = 0.2)))
+        assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.95), quality(hf = 0.08)))
+        assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = null), quality()))
     }
 
     @Test fun noTemplateYetIsQ() = assertEquals(BeatClass.UNCLASSIFIABLE, cls(features(corr = null)))

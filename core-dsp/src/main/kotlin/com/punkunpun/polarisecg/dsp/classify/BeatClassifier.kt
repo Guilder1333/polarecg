@@ -1,6 +1,7 @@
 package com.punkunpun.polarisecg.dsp.classify
 
 import com.punkunpun.polarisecg.dsp.beat.BeatFeatures
+import com.punkunpun.polarisecg.dsp.quality.BeatQuality
 
 /** The classes a beat gets (AAMI-like, plan §7.6). Beats carry them as one-letter strings. */
 object BeatClass {
@@ -34,6 +35,16 @@ data class ClassifierConfig(
      * owner, 13 S, 4 N (P4.7). On time, a correlation between [vCorr] and this is left alone (normal beat on drift, mostly).
      */
     val vGreyCorr: Double = 0.72,
+    /**
+     * Rescue (P4.7): a beat whose quality index is below the "good" limit is still judged (N/S/V instead of Q) if it matches
+     * the normal-beat template this well, both detectors saw it and neither noise measure is high. Noise does not
+     * correlate with a template; motion and drift lower the quality index of clean beats. On two labelled nights 52 % of the
+     * Q beats that were normal were recovered, 8 % of the real Q came with them; on MIT-BIH, INCART and NSTDB noise detections
+     * were caught as before.
+     */
+    val rescueCorr: Double = 0.9,
+    val rescueMaxSlope: Double = 0.15,
+    val rescueMaxHf: Double = 0.05,
     /** Timing: a beat with normal shape is premature (S) if its prematurity is below this... */
     val sPrematurity: Double = 0.85,
     /** ...and the rhythm is steady (see `BeatFeatures.rrSpread`): in an irregular rhythm "early" says little. */
@@ -71,8 +82,8 @@ class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) 
      * On two labelled nights 47 of 49 such on-time V were normal beats for the owner. Shapes that drift cannot
      * cause (upside down, wide and dissimilar) are never questionable.
      */
-    fun vNeedsReview(f: BeatFeatures): Boolean {
-        if (classify(f) != BeatClass.VENTRICULAR || f.polarityFlip) return false
+    fun vNeedsReview(f: BeatFeatures, quality: BeatQuality? = null): Boolean {
+        if (classify(f, quality) != BeatClass.VENTRICULAR || f.polarityFlip) return false
         val corr = f.corr ?: return false
         val wide = f.widthRatio?.let { it >= config.vWidthRatio } == true
         if (wide && corr < config.vWideCorr) return false
@@ -80,9 +91,17 @@ class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) 
         return (f.driftRatio ?: 0.0) > config.vDoubtDrift || onTime
     }
 
-    fun classify(f: BeatFeatures): String {
+    /** True if [f], a beat of poor quality index, is judged anyway (see [ClassifierConfig.rescueCorr]). */
+    fun rescues(f: BeatFeatures, quality: BeatQuality): Boolean {
+        val corr = f.corr ?: return false
+        return !f.good && quality.agreed && corr >= config.rescueCorr &&
+            !(quality.slopeRatio > config.rescueMaxSlope) && !(quality.hfRatio > config.rescueMaxHf) // NaN passes: not measured
+    }
+
+    /** [quality] is only needed for the rescue; without it a poor beat is always Q. */
+    fun classify(f: BeatFeatures, quality: BeatQuality? = null): String {
         val corr = f.corr
-        if (!f.good || corr == null) return BeatClass.UNCLASSIFIABLE
+        if (corr == null || (!f.good && !(quality != null && rescues(f, quality)))) return BeatClass.UNCLASSIFIABLE
         val wide = f.widthRatio?.let { it >= config.vWidthRatio } == true // "?.let ... == true": false if null
         val big = f.areaRatio?.let { it > config.vAreaRatio } == true && corr < config.vWideCorr // same shape, only larger: not V
         val early = f.prematurity?.let { it < config.sPrematurity } == true

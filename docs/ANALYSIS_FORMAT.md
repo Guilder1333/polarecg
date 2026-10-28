@@ -49,6 +49,7 @@ with `TimeMapper`. Code: `dsp/analysis/EcgSegments.kt`.
 | `widthRatio` | `qrsWidthMs` relative to the template's width (a wearer with a bundle branch block has wide normal beats) |
 | `ampRatio`, `areaRatio` | QRS height / area (±92 ms around R) divided by the template's; empty while there is no template |
 | `flip` | 1 if the beat looks like the template upside down (inverted correlation ≥ 0.6 and better than the upright one) |
+| `qRescue` | 1 = a beat with `good` = 0 that was classified N/S/V instead of Q because it matches the template (rule 1 below). `good` and `sqi` are unchanged |
 | `driftRatio` | baseline wander around the beat: scatter of the samples left from a straight line through the stretches before and after the QRS, relative to the QRS height (P4.7). Flat baseline about 0.1; 0.15 and more = drifting, the shape comparison (`corr`, `areaRatio`) is unreliable there |
 | `vDoubt` | 1 = class `V` that may be a normal beat, **to be reviewed**: `driftRatio` > 0.15, or the beat is on time (`prematurity` ≥ 0.85) and only the correlation/area rules call it V. Still counted as V. Never set for `flip` or wide-and-dissimilar beats |
 | `alignMs` | time correction in ms (P3.8): 0 for almost all beats; ≥ 2 samples (15 ms) of difference from the usual `shift` of the recent beats means the beat was marked on another point of the QRS than its neighbours, and `utcMs + alignMs` is the time on the same feature as theirs. Not applied to `utcMs`/`rrMs` |
@@ -63,7 +64,7 @@ after they happen (the noise after the beat counts too). The template is in the 
 
 Rules (P4.3, plan §7.6), in this order:
 
-1. `Q` if the beat is poor quality (`good` = 0) or has no `corr` (no template yet, segment edge).
+1. `Q` if the beat is poor quality (`good` = 0) or has no `corr` (no template yet, segment edge). **Rescue (P4.7):** a poor beat is judged anyway if `corr` ≥ 0.9, `agreed` = 1, `slopeRatio` ≤ 0.15 and `hfRatio` ≤ 0.05 (`qRescue` = 1); it keeps `good` = 0 for windows, quality and the reference RR.
 2. `V` if the shape is abnormal: `flip` = 1, or `corr` < 0.5, or (`widthRatio` ≥ 1.5 and `corr` < 0.9), or (`areaRatio` > 2 and `corr` < 0.9: the same shape only larger is not a different beat), or the beat is early (`prematurity` < 0.85) and `corr` < 0.72 (looks different AND comes early; P4.7).
 3. `S` if `prematurity` < 0.85, `shortening` ≤ 0.9 (abrupt, not a gradual speed-up) and `rrSpread` ≤ 0.05 (a steady rhythm; in an irregular one "early" says little).
 4. `N` otherwise.
