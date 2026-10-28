@@ -490,7 +490,7 @@ Details in §7.5–7.6.
   on one thread (`limitedParallelism(1)`), publishes `beats` and `LiveStats`; started/stopped by `AcquisitionService`; the
   live screen shows the counts. Nothing is stored (P5.3). **Done when:** a night with the phone shows plausible counts in the
   morning (compare with `analyze` of the same session's raw files: should be near-identical), and the CPU use is small (P6.2).)
-- [ ] **P5.2 [AI]** Replay mode: feed a recorded session through the live pipeline at N× speed —
+- [x] **P5.2 [AI]** Replay mode: feed a recorded session through the live pipeline at N× speed —
   lets you debug UI and pipeline at your desk without wearing the strap.
   (Built 2026-10-29, **not yet tried on the phone**. `replay/ReplayPlayer.kt` reads a session folder (`readStream`), merges the
   three streams by phone time and publishes them through new `PolarConnection.replayEcg/Acc/Hr`, i.e. the flows the strap
@@ -503,7 +503,7 @@ Details in §7.5–7.6.
   arrival order on the PC and gets exactly the `analyze` result (0 of 65 545 beats differ), so the logic is fine; the cause was
   the app plumbing: ECG and ACC went through two separate flows, and in a fast replay the ECG ran seconds ahead of the ACC, so
   beats were scored without motion (the 3 s "ACC stalled" fallback). Fix: both streams go through one ordered queue in
-  `LiveProcessor`; a replay hands its frames over directly, in order, with back-pressure. To repeat the test on the phone.)
+  `LiveProcessor`; a replay hands its frames over directly, in order, with back-pressure. Repeated on the phone after the fix: Beats 65 545, N 64 607, S 652, V 46 (38), Q 240, exactly `analyze`: done.)
 - [ ] **P5.3 [AI]** Room database (§8), batched writes, retention policy.
 - [ ] **P5.4 [AI]** Ring buffer + **event clips**: for each event (V, S, couplet, run, pause…), save
   10 s before + 10 s after. Rate-limit clips (e.g. bigeminy for 1 hour shouldn't save 1800 clips —
