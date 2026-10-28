@@ -50,7 +50,7 @@ class BeatClassifierTest {
         assertFalse(classifier.vNeedsReview(features(corr = 0.3, prematurity = 0.6, drift = null))) // no measurement: not doubted
         assertFalse(classifier.vNeedsReview(features(corr = 0.3, prematurity = 0.6, drift = 0.14))) // below the limit
         assertFalse(classifier.vNeedsReview(features(flip = true, corr = 0.3, drift = 0.5)))
-        assertFalse(classifier.vNeedsReview(features(widthRatio = 1.8, corr = 0.8, drift = 0.5)))
+        assertFalse(classifier.vNeedsReview(features(widthRatio = 1.8, corr = 0.8, prematurity = 0.6, drift = 0.5)))
         assertFalse(classifier.vNeedsReview(features(drift = 0.5))) // a normal beat is not a V at all
         assertFalse(classifier.vNeedsReview(features(good = false, corr = 0.3, drift = 0.5))) // Q
     }
@@ -70,7 +70,7 @@ class BeatClassifierTest {
 
     @Test fun noRescueWithoutAgreementTemplateMatchOrWithNoise() {
         assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.95), quality(agreed = false)))
-        assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.85), quality()))
+        assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.7), quality()))
         assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.95), quality(slope = 0.2)))
         assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = 0.95), quality(hf = 0.08)))
         assertEquals(BeatClass.UNCLASSIFIABLE, classifier.classify(features(good = false, corr = null), quality()))
@@ -105,6 +105,7 @@ class BeatClassifierTest {
     @Test fun anOnTimeVRestingOnShapeAloneIsQuestionable() {
         assertTrue(classifier.vNeedsReview(features(corr = 0.3, prematurity = 1.0)))
         assertFalse(classifier.vNeedsReview(features(corr = 0.3, prematurity = 0.6))) // early, flat baseline: confident
+        assertTrue(classifier.vNeedsReview(features(widthRatio = 1.8, corr = 0.6, prematurity = 1.0))) // on time: wide and dissimilar is still doubted
         assertFalse(classifier.vNeedsReview(features(flip = true, prematurity = 1.0)))
     }
 

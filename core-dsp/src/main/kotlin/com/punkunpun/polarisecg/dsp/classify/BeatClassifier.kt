@@ -42,7 +42,7 @@ data class ClassifierConfig(
      * Q beats that were normal were recovered, 8 % of the real Q came with them; on MIT-BIH, INCART and NSTDB noise detections
      * were caught as before.
      */
-    val rescueCorr: Double = 0.9,
+    val rescueCorr: Double = 0.75,
     val rescueMaxSlope: Double = 0.15,
     val rescueMaxHf: Double = 0.05,
     /** Timing: a beat with normal shape is premature (S) if its prematurity is below this... */
@@ -79,16 +79,17 @@ class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) 
     /**
      * True for a V that may be a normal beat, so it is to be reviewed: the baseline drifts around it, or it comes
      * on time (prematurity at least [ClassifierConfig.sPrematurity]) and only the correlation/area rules call it V.
-     * On two labelled nights 47 of 49 such on-time V were normal beats for the owner. Shapes that drift cannot
+     * On two labelled nights 47 of 49 such on-time V were normal beats for the owner. Early shapes that drift cannot
      * cause (upside down, wide and dissimilar) are never questionable.
      */
     fun vNeedsReview(f: BeatFeatures, quality: BeatQuality? = null): Boolean {
         if (classify(f, quality) != BeatClass.VENTRICULAR || f.polarityFlip) return false
         val corr = f.corr ?: return false
+        val onTime = f.prematurity?.let { it >= config.sPrematurity } == true
+        if (onTime) return true // also a wide, dissimilar one: 0 of 15 such beats were V for the owner (3 nights)
         val wide = f.widthRatio?.let { it >= config.vWidthRatio } == true
         if (wide && corr < config.vWideCorr) return false
-        val onTime = f.prematurity?.let { it >= config.sPrematurity } == true
-        return (f.driftRatio ?: 0.0) > config.vDoubtDrift || onTime
+        return (f.driftRatio ?: 0.0) > config.vDoubtDrift
     }
 
     /** True if [f], a beat of poor quality index, is judged anyway (see [ClassifierConfig.rescueCorr]). */

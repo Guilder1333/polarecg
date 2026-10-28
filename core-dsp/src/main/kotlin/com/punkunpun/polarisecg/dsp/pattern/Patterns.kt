@@ -52,7 +52,16 @@ fun detectPatterns(beats: List<Beat>, config: PatternConfig = PatternConfig()): 
             events += Event(a.utcMs, PatternType.PAUSE, b.utcMs - a.utcMs, "%.1f s between two beats".format((b.utcMs - a.utcMs) / 1000.0))
         }
     }
-    return events.sortedBy { it.utcMs } // sortedBy returns a new, sorted list
+    return events.sortedBy { it.utcMs }.map { markQuestionable(it, beats) } // sortedBy returns a new, sorted list
+}
+
+/** A V event whose beats include questionable V (`Beat.vDoubt`, P4.7) says so in its detail: still reported, to be reviewed. */
+private fun markQuestionable(event: Event, beats: List<Beat>): Event {
+    if (!event.type.startsWith(BeatClass.VENTRICULAR + "_")) return event
+    val doubted = beats.count {
+        it.cls == BeatClass.VENTRICULAR && it.vDoubt && it.utcMs >= event.utcMs && it.utcMs <= event.utcMs + event.durationMs
+    }
+    return if (doubted == 0) event else Event(event.utcMs, event.type, event.durationMs, "${event.detail}, $doubted questionable")
 }
 
 private fun rateText(first: Beat, last: Beat, count: Int): String {

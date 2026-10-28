@@ -110,6 +110,13 @@ class PatternsTest {
         assertEquals(2, h.vDoubt)
     }
 
+    @Test fun aPatternWithQuestionableVsSaysSo() {
+        val b = beats("NNVVNN")
+        assertEquals("2 beats, 75 bpm", detectPatterns(b).single().detail)
+        b[2].vDoubt = true
+        assertEquals("2 beats, 75 bpm, 1 questionable", detectPatterns(b).single().detail)
+    }
+
     @Test fun anHourWithOnlyPoorBeatsHasNoPercentage() {
         val h = hourlyBurden(beats("QQQ")).single()
         assertEquals(null, h.vPercent)

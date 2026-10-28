@@ -427,7 +427,7 @@ Details in §7.5–7.6.
   power of the length; the S patterns are not evaluated (S too weak). Own recordings: the night has 1 V couplet
   and 1 S couplet, no pauses, V burden below 1.1 % in every hour; after the `shortening` rule the false "S runs"
   of the first version (sinus speed-up, 4 runs + 10 triplets on the night) are gone.)
-- [ ] **P4.5 [YOU+AI]** Evaluate on MIT-BIH + INCART (AAMI classes) and on your own data vs your
+- [x] **P4.5 [YOU+AI]** Evaluate on MIT-BIH + INCART (AAMI classes) and on your own data vs your
   existing tool. Iterate thresholds.
   (Step 1, 2026-10-27, INCART (not used for tuning; lead II, 33 records, resampled to 130 Hz): detection raw
   Se 99.7 % / +P 98.9 %, good-quality Se(g) 99.7 % / +P(g) 99.9 %. Classes, matched beats, Q counts as a miss:
@@ -435,7 +435,7 @@ Details in §7.5–7.6.
   flagged poor quality here (MIT-BIH: 3.5 %, own night: 1.5 %): the quality thresholds were calibrated on
   MIT-BIH and NSTDB, not on this lead. The existing tool the owner uses has no export (only paid images or raw
   ECG, same as ours), so a beat-by-beat comparison with it is not possible: own-data ground truth comes from
-  labelling our own beats (P4.6).)
+  labelling our own beats (P4.6). **Closed 2026-10-28 (owner): external data is done for now; other sources of own-data labels may come later.**)
 - [ ] **P4.6 [YOU]** Label a set of your own beats in the review UI (P5.7) — at least a few hundred
   V/S beats and their neighbors. This is gold for tuning and for Phase 7.
   (Design of the labeling tool, with the `n s v q b ?` labels and the sampling plan: `docs/LABELING_TOOL.md`. The tool is built (`analysis/label_beats.py`, `eval_labels.py`); the labelling itself is up to you: start with `--gallery`, then the first night.)
@@ -465,6 +465,15 @@ Details in §7.5–7.6.
   of real Q came along; MIT-BIH true beats lost to poor quality 3.5 -> 2.7 %, INCART 16.0 -> 11.5 %, noise detections
   caught as before (MIT 93.0 -> 92.9 %, INCART 89.8, NSTDB 89.7). Disagreements with the owner's labels, nights 1 / 2:
   85 -> 74 and 63 -> 41. Open: the Q beats left (motion), windows/HRV still count rescued beats as poor.
+  Step 4 (2026-10-28, from the third labelled night, 20261028, 11.8 h): on that night all 19 sampled V were N (8) or Q (11),
+  none V. (a) An on-time V (prematurity >= 0.85) is now questionable even when wide and dissimilar: that exemption let
+  15 such beats through on the three nights, none of them V for the owner (8 N, 7 Q); on time, 0 of 15 unflagged and 2 of
+  52 flagged were V. (b) `rescueCorr` 0.9 -> 0.75: the owner's N beats lost to motion (350-875 mG) had a correlation of
+  0.7-0.89; sample of poor beats with both detectors agreeing and low noise: 23 N / 2 Q at >= 0.75 (0 at >= 0.9). MIT-BIH
+  (non-paced) N Se +0.3, V +P -1.0; NSTDB V +P -2.4; detection and noise flagging unchanged. (c) V pattern events say
+  "k questionable" in `detail` (still reported). Disagreements with the owner's labels, nights 1 / 2 / 3: 74 -> 67, 41 -> 36,
+  23 -> 16. Confident V: 91 % / 95 % V among N/V (nights 1 / 2; night 3 had no confident V with a label). Open: windows/HRV
+  still count rescued beats as poor; V burden stays "between v - vDoubt and v".
 
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 
