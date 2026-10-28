@@ -7,6 +7,7 @@ import com.punkunpun.polarisecg.log.ConnectionLog
 import com.punkunpun.polarisecg.log.LogType
 import com.punkunpun.polarisecg.pairing.DeviceStore
 import com.punkunpun.polarisecg.polar.PolarConnection
+import com.punkunpun.polarisecg.processing.LiveProcessor
 import java.io.File
 
 /**
@@ -49,4 +50,7 @@ class PolarisApp : Application() {
 
     /** The single connection to the strap; its Flows are what the rest of the app consumes. */
     val polarConnection by lazy { PolarConnection(polarApi, connectionLog) }
+
+    /** Beat detection and classification on the live frames (P5.1); the service starts and stops it. */
+    val liveProcessor by lazy { LiveProcessor(polarConnection) }
 }

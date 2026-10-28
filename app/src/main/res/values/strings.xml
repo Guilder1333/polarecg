@@ -64,6 +64,7 @@
     <string name="live_float_hint">Swiping up to Home while this screen is open also turns the app into a small floating ECG window.</string>
     <string name="live_no_contact">No skin contact: moisten the electrodes</string>
     <string name="live_gaps">This session: %1$d gaps · %2$s without data</string>
+    <string name="live_beats">Beats: %1$d · N %2$d · S %3$d · V %4$d (%5$d questionable) · Q %6$d</string>
     <string name="live_scale_hint">Last 5 s, vertical lines are 1 s apart. The vertical scale adapts automatically.</string>
 
     <string name="raw_toggle">Record raw data (developer)</string>

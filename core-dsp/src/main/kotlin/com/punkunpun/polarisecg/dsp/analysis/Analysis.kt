@@ -1,19 +1,14 @@
 package com.punkunpun.polarisecg.dsp.analysis
 
 import com.punkunpun.polarisecg.dsp.ECG_SAMPLE_RATE_HZ
-import com.punkunpun.polarisecg.dsp.beat.BeatFeatureExtractor
 import com.punkunpun.polarisecg.dsp.beat.BeatFeatures
-import com.punkunpun.polarisecg.dsp.beat.BeatInput
 import com.punkunpun.polarisecg.dsp.classify.BeatClass
-import com.punkunpun.polarisecg.dsp.classify.BeatClassifier
+import com.punkunpun.polarisecg.dsp.live.LivePipeline
 import com.punkunpun.polarisecg.dsp.motion.MotionBin
 import com.punkunpun.polarisecg.dsp.pattern.HourlyBurden
 import com.punkunpun.polarisecg.dsp.pattern.detectPatterns
 import com.punkunpun.polarisecg.dsp.pattern.hourlyBurden
-import com.punkunpun.polarisecg.dsp.motion.MotionIndex
-import com.punkunpun.polarisecg.dsp.motion.buildMotionBins
 import com.punkunpun.polarisecg.dsp.quality.BeatQuality
-import com.punkunpun.polarisecg.dsp.quality.EcgBeatStream
 import com.punkunpun.polarisecg.dsp.quality.QualityConfig
 import com.punkunpun.polarisecg.dsp.raw.RawRecord
 
@@ -88,41 +83,13 @@ private const val RR_MAX_MS = 3_000L
 
 fun analyzeEcg(frames: List<RawRecord.Ecg>, accFrames: List<RawRecord.Acc> = emptyList()): AnalysisResult {
     val segments = buildSegments(frames)
-    val motion = buildMotionBins(accFrames)
-    val motionIndex = MotionIndex(motion)
-    val qualityConfig = QualityConfig()
-
+    // The same pipeline as on the phone, fed with the whole recording (accelerometer first, so that no beat waits for it).
+    val pipeline = LivePipeline(QualityConfig(), motionRetainMs = Long.MAX_VALUE)
     val beats = ArrayList<Beat>()
-    // One extractor for the whole recording: its normal-beat template carries over gaps (P4.2).
-    val extractor = BeatFeatureExtractor()
-    val classifier = BeatClassifier()
-    for (seg in segments) {
-        var previous: Long? = null
-        // One stream per gap-free segment: detectors never run across a gap.
-        val stream = EcgBeatStream()
-        val scored = stream.process(seg.samplesUv) + stream.finish() // `+` joins two Lists
-        val times = scored.map { seg.sampleUtcMs(it.position) }
-        val features = ArrayList<BeatFeatures>(scored.size)
-        for ((i, b) in scored.withIndex()) {
-            val t = times[i]
-            // the stream knows only the ECG: add the accelerometer here, on the UTC time line
-            val quality = b.quality.withMotion(motionIndex.around(t), qualityConfig)
-            val good = quality.sqi >= qualityConfig.goodBeatSqi
-            features += extractor.add(BeatInput(t.toDouble(), b.snippet, good))
-            beats += Beat(t, seg.index, previous?.let { t - it }, BeatClass.UNKNOWN, quality, good)
-            previous = t
-        }
-        features += extractor.finish()
-        // features come out in input order, one per beat: attach them to the beats of this segment
-        val first = beats.size - scored.size
-        for ((i, f) in features.withIndex()) {
-            beats[first + i].features = f
-            val b = beats[first + i]
-            b.cls = classifier.classify(f, b.quality)
-            b.vDoubt = classifier.vNeedsReview(f, b.quality)
-            b.rescued = classifier.rescues(f, b.quality)
-        }
-    }
+    for (a in accFrames) beats += pipeline.addAcc(a.sensorTimeNs, a.phoneTimeMs, a.xMg, a.yMg, a.zMg)
+    for (f in frames) beats += pipeline.addEcg(f.sensorTimeNs, f.phoneTimeMs, f.samplesUv)
+    beats += pipeline.finish()
+    val motion = pipeline.motionBins()
 
     val events = ArrayList<Event>()
     for (i in 1 until segments.size) {

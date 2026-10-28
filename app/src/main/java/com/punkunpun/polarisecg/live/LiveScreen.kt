@@ -64,6 +64,7 @@ fun LiveScreen(
     val battery by connection.batteryPercent.collectAsState()
     val events by app.connectionLog.events.collectAsState()
     // Only this session: the log file also holds every earlier run.
+    val stats by app.liveProcessor.statsFlow.collectAsState()
     val gaps = remember(events) { computeGaps(eventsOfLatestSession(events)) }
 
     // The ring is a plain object, not Compose state, so writing to it does not redraw anything.
@@ -143,6 +144,13 @@ fun LiveScreen(
                 R.string.live_gaps,
                 gaps.size,
                 formatDuration(gaps.sumOf { it.durationMs(System.currentTimeMillis()) }),
+            ),
+        )
+
+        Text(
+            stringResource(
+                R.string.live_beats,
+                stats.beats, stats.normal, stats.premature, stats.ventricular, stats.ventricularDoubt, stats.unclassifiable,
             ),
         )
 

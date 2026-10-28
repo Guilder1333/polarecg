@@ -28,57 +28,87 @@ private const val MIN_SAMPLES_PER_BIN = ACC_SAMPLE_RATE_HZ / 2
 private const val CONTIGUOUS_TOLERANCE_MS = 25L
 
 /**
- * Cuts the ACC frames into gap-free runs, puts every sample on the UTC time line with a
- * [TimeMapper] (same method as for the ECG, so both streams agree to a few ms), and returns one
- * [MotionBin] per UTC second that has enough samples, sorted by time.
+ * Motion per UTC second, built frame by frame. Cuts the ACC frames into gap-free runs, puts every
+ * sample on the UTC time line with a [TimeMapper] (same method as for the ECG, so both streams agree
+ * to a few ms) and sums them into bins of one UTC second. Not thread-safe.
+ *
+ * [retainMs] limits how far back bins are kept (a live pipeline needs only the last seconds); the
+ * default keeps everything, for [buildMotionBins].
  */
-fun buildMotionBins(frames: List<RawRecord.Acc>, rateHz: Int = ACC_SAMPLE_RATE_HZ): List<MotionBin> {
-    class Sums {
+class MotionStream(private val rateHz: Int = ACC_SAMPLE_RATE_HZ, private val retainMs: Long = Long.MAX_VALUE) {
+    private class Sums {
         var n = 0
         var sx = 0.0; var sy = 0.0; var sz = 0.0
         var qx = 0.0; var qy = 0.0; var qz = 0.0 // sums of squares
     }
 
-    val bins = TreeMap<Long, Sums>()
-    val mapper = TimeMapper()
-    var runStartUtc = 0L
-    var runIndex = 0 // samples since the start of the current gap-free run
-    var expectedNextNs: Long? = null
-    var lastSensorNs = Long.MIN_VALUE
+    private val bins = TreeMap<Long, Sums>()
+    private val mapper = TimeMapper()
+    private var runStartUtc = 0L
+    private var runIndex = 0 // samples since the start of the current gap-free run
+    private var expectedNextNs: Long? = null
+    private var lastSensorNs = Long.MIN_VALUE
 
-    for (f in frames) {
-        val n = f.xMg.size
-        if (n == 0) continue
-        if (lastSensorNs != Long.MIN_VALUE && f.sensorTimeNs < lastSensorNs - 1_000_000_000L) mapper.startConnection()
-        lastSensorNs = f.sensorTimeNs
-        mapper.observe(f.sensorTimeNs + (n - 1) * 1_000_000_000L / rateHz, f.phoneTimeMs)
+    /** UTC of the latest sample added; bins before the second it lies in are complete. Null before the first frame. */
+    var watermarkUtcMs: Long? = null
+        private set
+
+    fun add(sensorTimeNs: Long, phoneTimeMs: Long, xMg: IntArray, yMg: IntArray, zMg: IntArray) {
+        val n = xMg.size
+        if (n == 0) return
+        if (lastSensorNs != Long.MIN_VALUE && sensorTimeNs < lastSensorNs - 1_000_000_000L) mapper.startConnection()
+        lastSensorNs = sensorTimeNs
+        mapper.observe(sensorTimeNs + (n - 1) * 1_000_000_000L / rateHz, phoneTimeMs)
 
         val expected = expectedNextNs
-        val contiguous = expected != null && abs(f.sensorTimeNs - expected) <= CONTIGUOUS_TOLERANCE_MS * 1_000_000L
+        val contiguous = expected != null && abs(sensorTimeNs - expected) <= CONTIGUOUS_TOLERANCE_MS * 1_000_000L
         if (!contiguous) {
-            runStartUtc = mapper.toUtcMs(f.sensorTimeNs) ?: f.phoneTimeMs
+            runStartUtc = mapper.toUtcMs(sensorTimeNs) ?: phoneTimeMs
             runIndex = 0
         }
         for (i in 0 until n) {
             val utc = runStartUtc + (runIndex + i) * 1000L / rateHz
             val s = bins.getOrPut(Math.floorDiv(utc, MOTION_BIN_MS)) { Sums() }
-            val x = f.xMg[i].toDouble(); val y = f.yMg[i].toDouble(); val z = f.zMg[i].toDouble()
+            val x = xMg[i].toDouble(); val y = yMg[i].toDouble(); val z = zMg[i].toDouble()
             s.n++
             s.sx += x; s.sy += y; s.sz += z
             s.qx += x * x; s.qy += y * y; s.qz += z * z
         }
+        watermarkUtcMs = runStartUtc + (runIndex + n - 1) * 1000L / rateHz
         runIndex += n
-        expectedNextNs = f.sensorTimeNs + n * 1_000_000_000L / rateHz
+        expectedNextNs = sensorTimeNs + n * 1_000_000_000L / rateHz
+        if (retainMs != Long.MAX_VALUE) bins.headMap(Math.floorDiv(watermarkUtcMs!! - retainMs, MOTION_BIN_MS)).clear()
     }
 
-    return bins.mapNotNull { (bin, s) ->
-        if (s.n < MIN_SAMPLES_PER_BIN) return@mapNotNull null
+    /** Motion of one bin (a UTC second number), or null if it has too few samples. */
+    private fun motionOf(bin: Long, s: Sums): Double? {
+        if (s.n < MIN_SAMPLES_PER_BIN) return null
         // variance of each axis = mean of squares - square of mean; the vector's RMS deviation is the root of their sum
         val v = (s.qx / s.n - (s.sx / s.n) * (s.sx / s.n)) +
             (s.qy / s.n - (s.sy / s.n) * (s.sy / s.n)) +
             (s.qz / s.n - (s.sz / s.n) * (s.sz / s.n))
-        MotionBin(bin * MOTION_BIN_MS, sqrt(maxOf(v, 0.0)), s.n)
+        return sqrt(maxOf(v, 0.0))
     }
+
+    /** All bins with enough samples, sorted by time (those still kept, see [retainMs]). */
+    fun bins(): List<MotionBin> = bins.mapNotNull { (bin, s) -> motionOf(bin, s)?.let { MotionBin(bin * MOTION_BIN_MS, it, s.n) } }
+
+    /** Highest motion of the seconds that overlap `[utcMs - halfWidthMs, utcMs + halfWidthMs]`, or null without data there. */
+    fun around(utcMs: Long, halfWidthMs: Long = 500): Double? {
+        var best: Double? = null
+        for (bin in Math.floorDiv(utcMs - halfWidthMs, MOTION_BIN_MS)..Math.floorDiv(utcMs + halfWidthMs, MOTION_BIN_MS)) {
+            val v = bins[bin]?.let { motionOf(bin, it) } ?: continue
+            if (best == null || v > best) best = v
+        }
+        return best
+    }
+}
+
+/** See [MotionStream]: all bins of a whole recording. */
+fun buildMotionBins(frames: List<RawRecord.Acc>, rateHz: Int = ACC_SAMPLE_RATE_HZ): List<MotionBin> {
+    val stream = MotionStream(rateHz)
+    for (f in frames) stream.add(f.sensorTimeNs, f.phoneTimeMs, f.xMg, f.yMg, f.zMg)
+    return stream.bins()
 }
 
 /**

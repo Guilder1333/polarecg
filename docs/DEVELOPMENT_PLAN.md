@@ -481,6 +481,15 @@ Details in §7.5–7.6.
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 
 - [ ] **P5.1 [AI]** Wire `:core-dsp` into `AcquisitionService` (single ordered processing thread).
+  (Built 2026-10-29, **not yet tried on the phone**. `dsp/live/LivePipeline.kt`: the beat pipeline frame by frame (segments,
+  quality, motion, features, classes); `analyzeEcg` now runs a whole recording through the same class, so the PC tool and
+  the phone cannot disagree. Checked: the CLI output on the 3 labelled nights + MIT-BIH 100/207/228 is cell-for-cell
+  identical to before, and `LivePipelineTest` feeds frames in arrival order and gets the same beats as the batch run (also with a
+  gap and without ACC). Beats come out 2-3 s late (quality looks 0.4 s ahead, the next frame fixes the time, the motion second
+  must be complete, the classifier needs the next beat). App: `processing/LiveProcessor.kt` collects `PolarConnection.ecg/acc`
+  on one thread (`limitedParallelism(1)`), publishes `beats` and `LiveStats`; started/stopped by `AcquisitionService`; the
+  live screen shows the counts. Nothing is stored (P5.3). **Done when:** a night with the phone shows plausible counts in the
+  morning (compare with `analyze` of the same session's raw files: should be near-identical), and the CPU use is small (P6.2).)
 - [ ] **P5.2 [AI]** Replay mode: feed a recorded session through the live pipeline at N× speed —
   lets you debug UI and pipeline at your desk without wearing the strap.
 - [ ] **P5.3 [AI]** Room database (§8), batched writes, retention policy.
