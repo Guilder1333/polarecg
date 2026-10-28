@@ -33,6 +33,7 @@ fun PairingScreen(
     onSelect: (FoundDevice) -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenLive: () -> Unit,
+    onOpenReplay: () -> Unit,
     connectionPanel: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -58,6 +59,9 @@ fun PairingScreen(
             }
             OutlinedButton(onClick = onOpenDiagnostics) {
                 Text(stringResource(R.string.diag_open))
+            }
+            OutlinedButton(onClick = onOpenReplay) {
+                Text(stringResource(R.string.replay_open))
             }
         }
 

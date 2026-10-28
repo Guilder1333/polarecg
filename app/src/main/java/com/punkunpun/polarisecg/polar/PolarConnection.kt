@@ -86,6 +86,14 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
 
     // Counters for the current session. They live here (not in a screen) so they survive
     // navigating between screens; connect() resets them.
+    // --- Replay (P5.2): a recorded session is published through the same flows as the live strap, so the live
+    // screen and the DSP cannot tell the difference. Only `ReplayPlayer` calls these, never while the strap is in use.
+    // They suspend when the buffer is full (like the real stream does), so a fast replay loses no frames.
+    suspend fun replayEcg(frame: EcgFrame) { _ecg.emit(frame); _ecgFrames.value++ }
+    suspend fun replayAcc(frame: AccFrame) { _acc.emit(frame); _accFrames.value++ }
+    suspend fun replayHr(sample: HrSample) { _hr.emit(sample); _lastHr.value = sample.heartRateBpm }
+    fun replayState(state: ConnectionState) { _state.value = state }
+
     private val _ecgFrames = MutableStateFlow(0)
     private val _accFrames = MutableStateFlow(0)
     private val _lastHr = MutableStateFlow<Int?>(null)

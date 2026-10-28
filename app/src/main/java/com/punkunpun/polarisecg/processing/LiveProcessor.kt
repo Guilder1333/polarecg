@@ -6,6 +6,7 @@ import com.punkunpun.polarisecg.dsp.classify.BeatClass
 import com.punkunpun.polarisecg.dsp.live.LivePipeline
 import com.punkunpun.polarisecg.polar.PolarConnection
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -72,9 +73,11 @@ class LiveProcessor(private val connection: PolarConnection) {
         val s = CoroutineScope(SupervisorJob() + dispatcher)
         scope = s
         val p = pipeline
+        // UNDISPATCHED: run on this thread up to the first suspension, i.e. until collect() has subscribed. A SharedFlow
+        // forgets what was emitted before a collector subscribed, and a replay (P5.2) emits right after start().
         collectors = listOf(
-            s.launch { connection.ecg.collect { f -> guarded { p.addEcg(f.sensorTimeNs, f.phoneTimeMs, f.samplesUv) } } },
-            s.launch { connection.acc.collect { f -> guarded { p.addAcc(f.sensorTimeNs, f.phoneTimeMs, f.xMg, f.yMg, f.zMg) } } },
+            s.launch(start = CoroutineStart.UNDISPATCHED) { connection.ecg.collect { f -> guarded { p.addEcg(f.sensorTimeNs, f.phoneTimeMs, f.samplesUv) } } },
+            s.launch(start = CoroutineStart.UNDISPATCHED) { connection.acc.collect { f -> guarded { p.addAcc(f.sensorTimeNs, f.phoneTimeMs, f.xMg, f.yMg, f.zMg) } } },
         )
     }
 

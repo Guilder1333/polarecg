@@ -492,6 +492,12 @@ Details in §7.5–7.6.
   morning (compare with `analyze` of the same session's raw files: should be near-identical), and the CPU use is small (P6.2).)
 - [ ] **P5.2 [AI]** Replay mode: feed a recorded session through the live pipeline at N× speed —
   lets you debug UI and pipeline at your desk without wearing the strap.
+  (Built 2026-10-29, **not yet tried on the phone**. `replay/ReplayPlayer.kt` reads a session folder (`readStream`), merges the
+  three streams by phone time and publishes them through new `PolarConnection.replayEcg/Acc/Hr`, i.e. the flows the strap
+  uses, so `LiveProcessor` and the live screen are unchanged; no recorder runs. Pauses over 3 s are shortened; speeds 1x, 10x,
+  60x, max (backpressure, no frames lost). `LiveProcessor` collectors now start undispatched so that the first frames are not
+  missed. Screen: **Replay** button on the start screen; sessions from the app and from `files/replay/` (adb push, see
+  `docs/RAW_FORMAT.md`). **Done when:** replaying a night shows counts equal to `analyze` of the same session.)
 - [ ] **P5.3 [AI]** Room database (§8), batched writes, retention policy.
 - [ ] **P5.4 [AI]** Ring buffer + **event clips**: for each event (V, S, couplet, run, pause…), save
   10 s before + 10 s after. Rate-limit clips (e.g. bigeminy for 1 hour shouldn't save 1800 clips —

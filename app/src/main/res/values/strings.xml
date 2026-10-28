@@ -65,6 +65,18 @@
     <string name="live_no_contact">No skin contact: moisten the electrodes</string>
     <string name="live_gaps">This session: %1$d gaps · %2$s without data</string>
     <string name="live_beats">Beats: %1$d · N %2$d · S %3$d · V %4$d (%5$d questionable) · Q %6$d</string>
+    <string name="replay_open">Replay</string>
+    <string name="replay_title">Replay a session</string>
+    <string name="replay_hint">Plays a recorded session through the same pipeline as a live one, without the strap. Nothing is recorded. Watch it on the Live screen; the counts here must match `analyze` of the same session.</string>
+    <string name="replay_session_running">A recording session is running: stop it first.</string>
+    <string name="replay_none">No sessions found. Record one, or copy a session folder to Android/data/com.punkunpun.polarisecg/files/replay/.</string>
+    <string name="replay_pick">Session:</string>
+    <string name="replay_speed">Speed:</string>
+    <string name="replay_max">Max</string>
+    <string name="replay_start">Start</string>
+    <string name="replay_stop">Stop</string>
+    <string name="replay_loading">Reading the session…</string>
+    <string name="replay_errors">Frames that failed: %1$d</string>
     <string name="live_scale_hint">Last 5 s, vertical lines are 1 s apart. The vertical scale adapts automatically.</string>
 
     <string name="raw_toggle">Record raw data (developer)</string>

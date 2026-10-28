@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.punkunpun.polarisecg.diagnostics.DiagnosticsScreen
 import com.punkunpun.polarisecg.live.LiveScreen
+import com.punkunpun.polarisecg.replay.ReplayScreen
 import com.punkunpun.polarisecg.pairing.PairingRoute
 import com.punkunpun.polarisecg.permissions.AppPermissions
 import com.punkunpun.polarisecg.permissions.PermissionsScreen
@@ -87,6 +88,7 @@ class MainActivity : ComponentActivity() {
                 var permissionsAcknowledged by rememberSaveable { mutableStateOf(false) }
                 var showDiagnostics by rememberSaveable { mutableStateOf(false) }
                 var showLive by rememberSaveable { mutableStateOf(false) }
+                var showReplay by rememberSaveable { mutableStateOf(false) }
                 val allGranted = bluetoothGranted && notificationsGranted && batteryGranted
                 val showPairing = bluetoothGranted && (allGranted || permissionsAcknowledged)
 
@@ -109,6 +111,13 @@ class MainActivity : ComponentActivity() {
                                 )
                             },
                         )
+                    } else if (showPairing && showReplay) {
+                        ReplayScreen(
+                            app = application as PolarisApp,
+                            onBack = { showReplay = false },
+                            onOpenLive = { showLive = true },
+                            modifier = Modifier.padding(innerPadding),
+                        )
                     } else if (showPairing && showDiagnostics) {
                         DiagnosticsScreen(
                             log = (application as PolarisApp).connectionLog,
@@ -120,6 +129,7 @@ class MainActivity : ComponentActivity() {
                             app = application as PolarisApp,
                             onOpenDiagnostics = { showDiagnostics = true },
                             onOpenLive = { showLive = true },
+                            onOpenReplay = { showReplay = true },
                             modifier = Modifier.padding(innerPadding),
                         )
                     } else PermissionsScreen(

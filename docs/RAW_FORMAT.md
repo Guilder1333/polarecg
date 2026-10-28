@@ -127,6 +127,18 @@ logged as `CLOCK_JUMP` in the connection log). The offset is the smallest one se
 In the app: **Export last session** → share sheet → send the zip to yourself (Drive, email, USB…).
 Unzip into `data/sessions/`.
 
+## Replaying a session on the phone
+
+The **Replay** screen (P5.2) plays a session folder through the live pipeline without the strap. It lists
+the app's own sessions and the folders in `Android/data/com.punkunpun.polarisecg/files/replay/` (open the
+Replay screen once, so the folder exists). To replay a night from the PC:
+
+```
+adb push data/sessions/<session> /sdcard/Android/data/com.punkunpun.polarisecg/files/replay/
+```
+
+Pauses longer than 3 s in the recording are shortened to 3 s; speeds are 1×, 10×, 60× and "Max".
+
 ## Size
 
 ECG ≈ 520 B/s, ACC ≈ 300 B/s, HR ≈ 30 B/s → roughly 3 MB per hour, ≈ 30 MB per night.

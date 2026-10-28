@@ -8,6 +8,7 @@ import com.punkunpun.polarisecg.log.LogType
 import com.punkunpun.polarisecg.pairing.DeviceStore
 import com.punkunpun.polarisecg.polar.PolarConnection
 import com.punkunpun.polarisecg.processing.LiveProcessor
+import com.punkunpun.polarisecg.replay.ReplayPlayer
 import java.io.File
 
 /**
@@ -53,4 +54,16 @@ class PolarisApp : Application() {
 
     /** Beat detection and classification on the live frames (P5.1); the service starts and stops it. */
     val liveProcessor by lazy { LiveProcessor(polarConnection) }
+
+    /** Plays a recorded session through the live pipeline (P5.2). */
+    val replayPlayer by lazy { ReplayPlayer(polarConnection, liveProcessor) }
+
+    /**
+     * Folders with sessions to replay: the app's own recordings, and `replay/` in the app's external files folder,
+     * where a night recorded earlier can be copied from the PC (adb push, see docs/RAW_FORMAT.md).
+     */
+    fun replayableSessions(): List<File> {
+        val dirs = listOfNotNull(sessionsDir, getExternalFilesDir("replay"))
+        return dirs.flatMap { d -> d.listFiles { f -> f.isDirectory }?.toList().orEmpty() }.sortedByDescending { it.name }
+    }
 }
