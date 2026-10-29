@@ -523,7 +523,9 @@ Details in §7.5–7.6.
 - [ ] **P5.6 [YOU+AI]** Summary screen: today / last night / last 24 h — beats, V and S burden per
   hour (bar chart), longest run, HR min/avg/max, HRV trend, data coverage.
 - [ ] **P5.7 [YOU+AI]** Event list + **review screen**: ECG clip viewer with beat markers and class
-  labels; tap a beat to relabel (N/S/V/noise). Labels stored separately from automatic classes.
+  labels; tap a beat to relabel (N/S/V/noise). Labels stored separately from automatic classes:
+  a relabel never changes `beat.cls`; it appends a row to `label` (history kept, newest wins), and the screen shows
+  the automatic class next to the owner's label (rule in §8).
 - [ ] **P5.8 [AI]** Settings: raw recording toggle, ACC rate, classifier sensitivity presets,
   optional alerts (off by default), data export (CSV) and delete.
 - [ ] **P5.9 [YOU]** 1–2 weeks of daily use; keep a short note of anything wrong or annoying.
@@ -676,11 +678,19 @@ the Diagnostics screen.
 |---|---|---|---|
 | `session` | id, start, end, deviceId, firmware, settings JSON | 1–2 | forever |
 | `gap` | sessionId, start, end, reason | few–dozens | forever |
-| `beat` | time (UTC µs), rrPre, cls (N/S/V/Q), sqi, corr, labelOverride? | ~100 000 | e.g. 90 days |
+| `beat` | time (UTC µs), rrPre, cls (N/S/V/Q), sqi, corr | ~100 000 | e.g. 90 days |
 | `minute_summary` | minute, beats, hrMean, hrMin, hrMax, nS, nV, nQ, coverage, accActivity | 1 440 | forever |
 | `hrv_window` | start (5 min), meanHr, rmssd, sdnn, pnn50, lf, hf, coverage | 288 | forever |
 | `event` | id, start, end, type (V, S, couplet, run, bigeminy, pause…), beatCount, clipFile | varies | forever (clips may be pruned) |
 | `label` | beatTime, userClass, note, createdAt | as you label | forever |
+
+**Labels never touch the automatic result (decided with the owner, 2026-10-29).** The `beat.cls` written by the pipeline is
+never changed by a relabel: the original automatic value must always be there to compare with, to measure the classifier and
+to tune it. The owner's marks live only in `label`, as an **append-only history**: a changed mind or a corrected mistake adds
+a new row (`beatTime`, `userClass`, `note`, `createdAt`) and never overwrites or deletes the earlier one; the current label of
+a beat is its newest row. Screens show the automatic class and the owner's label side by side. The same holds for exports
+(CSV): both columns, plus the history. Labels are the one thing that cannot be rebuilt from the raw files, so `label` needs real
+migrations and must be part of the backup (P6.3).
 
 Clips: `files/clips/<eventId>.bin` (20 s × 130 Hz ≈ 10 KB each).
 
