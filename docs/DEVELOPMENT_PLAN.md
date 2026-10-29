@@ -557,6 +557,15 @@ Details in §7.5–7.6.
     yet:** a screen to correct a record (the store can: `AnnotationStore.correct`), renaming a name, the database index
     (`activity`/`event` tables; P5.11 needs it), and an open action is only closed in the data by reading (it ends at the next
     action or the session's `endUtc`).)
+  - **Known limitations of the first version (owner tests it from 2026-10-29 night):**
+    - Marks need a running session with raw recording on; otherwise the buttons are disabled (nothing is written anywhere else).
+    - A wrong mark cannot be corrected on the phone yet (no screen). Workaround: mark the right one now; the wrong one stays in the
+      file and, if it is an action, the next action simply ends it. Do not edit `annotations.jsonl` by hand.
+    - No rename of a name (hide it and add a new one); hiding is per phone, not per session.
+    - Marks are not in the database yet, so the phone shows only "Now: ..."; bands and markers on screens come with P5.11.
+    - Tapping a name records the time of the *button press*, not of the tap on the name; backing out records nothing.
+    - If the app is killed between the press and the choice, the press is lost (nothing was written).
+    - An action that is still running at a kill continues after the restart (same session); it ends only by the next mark.
   - **Done when:** a day of use shows correct bands and markers, an action left open at a kill is closed at the next Stop, and the export
     zip contains the annotations.
 - [ ] **P5.11 [AI]** Show actions and events on the phone: bands (actions) and markers (events) on the review screen's timeline and in
@@ -564,6 +573,11 @@ Details in §7.5–7.6.
 - [x] **P5.12 [AI]** Desktop: `analyze` reads `annotations.jsonl` and writes `activities.csv`, an `action` column in `windows.csv`, and a
   per-action summary (time spent, mean HR, V/S burden per hour, HRV); which of the viewers/plots get action bands is decided after the
   first week of data (candidates: the hourly burden plot, the beat viewer, the labelling tool as context).
+  **Known limitations:** the last action ends at the end of the analysed data (not at the session's `endUtc`); an action change is
+  accurate to about 10 s (a window belongs to the action at its middle); S/V rates use usable windows only, so an action with little
+  usable time has noisy rates (look at `usableMin` before trusting `vPerHour`); an event's before/after figures are plain means
+  over 5 min and say nothing about cause; no HRV per action until P5.5; marks outside the recording's time range are ignored;
+  `analyze` of an old session without `annotations.jsonl` writes the `action` column empty.
   (Built 2026-10-29. `:core-dsp` `dsp/annotations/` (`Marks.kt`: reads the log, spans; `ActionStats.kt`: per-action summary from usable
   windows only, event context = heart rate and S+V beats 5 min before/after); `analyze` writes `activities.csv`, `action_summary.csv`
   and the `action` column of `windows.csv` (`docs/ANALYSIS_FORMAT.md`); the console prints a short table. Tested with unit tests

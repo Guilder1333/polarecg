@@ -152,3 +152,7 @@ otherwise any old copy in the output folder is removed. The newest line of an `i
 
 Each 10 s window belongs to the action running at its middle, so an action change is accurate to about 10 s. HRV per action comes
 with P5.5.
+
+Limits: the last action ends at the end of the analysed data, not at the session's `endUtc`. An action with little usable time
+(`usableMin`) gives noisy `vPerHour` / `sPerHour`: check it before comparing actions. The before/after figures of an event are plain
+means and counts over 5 minutes; they do not say what caused a change. Marks outside the recording's time range are ignored.
