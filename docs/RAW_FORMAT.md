@@ -126,6 +126,9 @@ logged as `CLOCK_JUMP` in the connection log). The offset is the smallest one se
 
 In the app: **Export last session** → share sheet → send the zip to yourself (Drive, email, USB…).
 Unzip into `data/sessions/`.
+The zip also holds `beats.csv`, the beats the phone saved in its database for the session's time range
+(P5.3; columns `utcMs,utc,segment,rrMs,class,good,rescued,vDoubt,sqi,motionMg,prematurity,corr,qrsWidthMs,driftRatio`).
+It is not raw data: compare it with `analyze` output, and do not rely on it as the recording.
 
 ## Replaying a session on the phone
 

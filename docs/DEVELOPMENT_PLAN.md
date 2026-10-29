@@ -513,7 +513,8 @@ Details in §7.5–7.6.
   rows older than 90 days are deleted at each start. Replay does not write. The database is excluded from cloud backup.
   Other tables of §8 (`session`, `gap`, `event`, `hrv_window`, `label`...) come with the tasks that need them; `exportSchema` is off
   and there is no migration yet (the `beat` table can be rebuilt from the raw files; before `label` is added, real migrations are
-  needed). The live screen shows "Saved in the database (last 24 h)". Replaces the short-lived `liveRuns` checkpoints in
+  needed). The session zip (Export button) also contains `beats.csv`: the beats saved for that session's time range, with the
+  first columns named as in `analyze`'s beats.csv, for comparing with it; the database file itself is not exported (P6.3). The live screen shows "Saved in the database (last 24 h)". Replaces the short-lived `liveRuns` checkpoints in
   `session.json`. **Done when:** after a night the number of saved beats equals the live count (and `analyze`); after a kill and
   restart the earlier beats are still there.)
 - [ ] **P5.4 [AI]** Ring buffer + **event clips**: for each event (V, S, couplet, run, pause…), save

@@ -26,6 +26,10 @@ interface BeatDao {
     @Query("SELECT cls, COUNT(*) AS n FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs GROUP BY cls")
     suspend fun countByClass(fromUtcMs: Long, toUtcMs: Long): List<ClassCount>
 
+    /** Blocking (not `suspend`): for the export, which already runs off the UI thread. */
+    @Query("SELECT * FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs ORDER BY utcMs")
+    fun beatsBetween(fromUtcMs: Long, toUtcMs: Long): List<BeatEntity>
+
     @Query("SELECT COUNT(*) FROM beat WHERE utcMs >= :fromUtcMs")
     fun observeCountSince(fromUtcMs: Long): Flow<Int>
 }
