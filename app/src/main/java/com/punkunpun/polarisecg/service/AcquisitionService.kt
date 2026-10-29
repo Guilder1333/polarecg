@@ -27,8 +27,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 
 private const val CHANNEL_ID = "acquisition"
 private const val NOTIFICATION_ID = 1
@@ -86,9 +84,7 @@ class AcquisitionService : Service() {
             app.polarConnection.connect(deviceId)
         }
         if (recorder == null && app.deviceStore.rawRecording) {
-            recorder = RawRecorder(app.sessionsDir, app.polarConnection, deviceId, appVersion(), app.connectionLog) {
-                app.liveProcessor.statsFlow.value.takeIf { it.startedMs != 0L }?.toJson()
-            }.also { it.start() }
+            recorder = RawRecorder(app.sessionsDir, app.polarConnection, deviceId, appVersion(), app.connectionLog).also { it.start() }
         }
         app.liveProcessor.start() // no-op if already running (START_STICKY restarts call this again)
         watchStatusForNotification()
@@ -102,13 +98,10 @@ class AcquisitionService : Service() {
         _running.value = false
         notificationJob?.cancel()
         scope.cancel()
-        val worker = app.liveProcessor.stop()
+        app.liveProcessor.stop()
         app.polarConnection.disconnect()
         // onDestroy also runs when Android itself shuts the service down. Only an explicit stop by
         // the user ends the session; otherwise it stays open and the restart resumes it.
-        // On the user's stop, wait (at most 3 s) until the pipeline has flushed its last beats, so that
-        // the counts saved in session.json are final. runBlocking blocks this thread until the block is done.
-        if (userStopped && worker != null) runBlocking { withTimeoutOrNull(3_000) { worker.join() } }
         recorder?.stop(sessionEnded = userStopped)
         recorder = null
         wakeLock?.let { if (it.isHeld) it.release() }

@@ -37,7 +37,6 @@ internal fun liveCheckCommand(folder: File): Int {
     )
     println("batch: ${counts(batch)}")
     println("live:  ${counts(live)}")
-    printPhoneRuns(folder)
 
     val liveByTime = live.associateBy { it.utcMs }
     val different = batch.filter { b -> liveByTime[b.utcMs]?.let { it.cls != b.cls || it.vDoubt != b.vDoubt || it.good != b.good } != false }
@@ -52,29 +51,4 @@ internal fun liveCheckCommand(folder: File): Int {
         )
     }
     return 0
-}
-
-/**
- * What the phone counted itself: the `liveRuns` entries of session.json (one per start of the pipeline, see
- * docs/RAW_FORMAT.md), and their sum. Compare the sum with the "batch" line above.
- * The CLI has no JSON library, so the numbers are picked out with a regex: every key below occurs only inside
- * `liveRuns`, once per entry.
- */
-private fun printPhoneRuns(folder: File) {
-    val text = File(folder, "session.json").takeIf { it.isFile }?.readText()
-    val keys = listOf("beats", "normal", "premature", "ventricular", "ventricularDoubt", "unclassifiable", "errors")
-    val columns = keys.map { key ->
-        Regex("\"$key\"\\s*:\\s*(\\d+)").findAll(text ?: "").map { it.groupValues[1].toInt() }.toList()
-    }
-    val runs = columns[0].size
-    if (runs == 0 || columns.any { it.size != runs }) {
-        println("phone: no liveRuns in session.json (recorded before they were saved, or no raw recording)")
-        return
-    }
-    val since = Regex("\"sinceUtc\"\\s*:\\s*\"([^\"]+)\"").findAll(text!!).map { it.groupValues[1] }.toList()
-    fun line(i: (List<Int>) -> Int) = "beats %d  N %d  S %d  V %d (%d questionable)  Q %d  errors %d".format(
-        i(columns[0]), i(columns[1]), i(columns[2]), i(columns[3]), i(columns[4]), i(columns[5]), i(columns[6]),
-    )
-    for (r in 0 until runs) println("phone run ${r + 1} (since ${since.getOrNull(r) ?: "?"}): ${line { it[r] }}")
-    println("phone total:  ${line { it.sum() }}")
 }

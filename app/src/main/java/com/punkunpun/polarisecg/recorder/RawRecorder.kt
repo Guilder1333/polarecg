@@ -24,15 +24,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.json.JSONArray
 import org.json.JSONObject
 
 private const val TAG = "RawRecorder"
 private const val MS_PER_HOUR = 3_600_000L
 private const val TIME_MAP_EVERY_MS = 60_000L
-private const val LIVE_STATS_EVERY_MS = 60_000L
 
 /** Copy of the connection events of this session, with JST times; lives in the session folder. */
 internal const val CONNECTION_LOG_FILE = "connection.log"
@@ -51,8 +48,6 @@ class RawRecorder(
     private val deviceId: String,
     private val appVersion: String,
     private val log: ConnectionLog,
-    /** The live pipeline's counts so far (`LiveStats.toJson()`), or null if it is not running. Saved as `liveRuns`. */
-    private val liveStats: () -> JSONObject? = { null },
 ) {
     // Dispatchers.IO: a thread pool meant for file/network work, so writing never blocks the UI.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -70,9 +65,6 @@ class RawRecorder(
     @Volatile private var newConnection = false
     private var lastTimeMapMs = 0L
 
-    // session.json "liveRuns": one entry per start of this app run (a resume after a kill adds a new one).
-    private var liveRunIndex = 0
-
     fun start() {
         // Blocking file work (a resume inspects the files a killed run left), but it is a few ms.
         session = SessionFolders.open(sessionsDir, deviceId, System.currentTimeMillis(), ::newSessionMeta)
@@ -84,14 +76,6 @@ class RawRecorder(
         ecgFile = HourlyFile(dir, "ecg", RawStream.ECG)
         accFile = HourlyFile(dir, "acc", RawStream.ACC)
         hrFile = HourlyFile(dir, "hr", RawStream.HR)
-
-        liveRunIndex = session.meta.optJSONArray("liveRuns")?.length() ?: 0
-        collectInto("LIVE_STATS") {
-            while (true) {
-                delay(LIVE_STATS_EVERY_MS)
-                saveLiveStats()
-            }
-        }
 
         val timeMap = File(dir, TIME_MAP_FILE)
         if (!timeMap.exists()) timeMap.writeText("connection,phoneUtcMs,sensorNs,offsetMs,kind\n")
@@ -132,7 +116,6 @@ class RawRecorder(
      */
     fun stop(sessionEnded: Boolean) {
         scope.cancel()
-        saveLiveStats() // the last counts, also when the system stops the service
         log.detachSession()
         ecgFile.close()
         accFile.close()
@@ -143,23 +126,6 @@ class RawRecorder(
             } catch (e: Exception) {
                 Log.e(TAG, "could not write end time", e)
             }
-        }
-    }
-
-    /**
-     * Writes the live pipeline's counts into this run's entry of `liveRuns` in session.json. Called every
-     * minute, so that a kill loses at most a minute of counts; [Synchronized] because the timer (IO thread)
-     * and [stop] (main thread) both change the same JSON and write the same file.
-     */
-    @Synchronized
-    private fun saveLiveStats() {
-        val stats = liveStats() ?: return
-        try {
-            val runs = session.meta.optJSONArray("liveRuns") ?: JSONArray().also { session.meta.put("liveRuns", it) }
-            runs.put(liveRunIndex, stats) // replaces this run's entry, or appends it
-            SessionFolders.writeMeta(session.dir, session.meta)
-        } catch (e: Exception) {
-            Log.e(TAG, "could not save live stats", e)
         }
     }
 
