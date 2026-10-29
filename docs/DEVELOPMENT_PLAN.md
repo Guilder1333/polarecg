@@ -534,6 +534,28 @@ Details in §7.5–7.6.
   the automatic class next to the owner's label (rule in §8).
 - [ ] **P5.8 [AI]** Settings: raw recording toggle, ACC rate, classifier sensitivity presets,
   optional alerts (off by default), data export (CSV) and delete.
+- [ ] **P5.10 [YOU+AI]** **Actions and events** (idea from the owner, 2026-10-29: see why the per-hour numbers change, e.g. during a
+  workout or in the middle of the day). Design agreed in outline, details to settle when building:
+  - *Two kinds.* **Action** = a state with a duration (walking, running, sitting, eating, sleeping...): starts when pressed, ends when
+    the next action starts, on "no action", or on the session's Stop. **Event** = a moment (dizzy, stress, palpitations...): a time and
+    an optional note.
+  - *Buttons.* "Action" and "Event" on both the live screen and the main screen. **The time is taken at the press**, then the picker
+    opens, so choosing slowly does not shift the time; backing out of the picker records nothing. The picker lists the available
+    types (most recently used first, a few presets to start with) and has a "new type" button; long-press a type to rename or hide it
+    (hidden, never deleted: old records keep their name). Events can get a one-line note.
+  - *Mistakes.* A record can be corrected ("it was 10 min ago", wrong type) but, like labels (§8), the original press time and type are
+    kept: corrections are new rows, the newest wins.
+  - *Storage.* These are human input and cannot be rebuilt from the raw ECG, so the **source of truth is an append-only file in the
+    session folder** (`annotations.jsonl`, one line per press/correction, JST shown but UTC stored; layout to be added to
+    `docs/RAW_FORMAT.md`), so it travels with the export and survives clearing the database; the database tables (`activity_type`,
+    `activity`, `event`) are an index of it, rebuilt from the files if needed.
+  - **Done when:** a day of use shows correct bands and markers, an action left open at a kill is closed at the next Stop, and the export
+    zip contains the annotations.
+- [ ] **P5.11 [AI]** Show actions and events on the phone: bands (actions) and markers (events) on the review screen's timeline and in
+  the event list; the summary (P5.6) gets "per action" figures (mean HR, V/S per hour, HRV).
+- [ ] **P5.12 [AI]** Desktop: `analyze` reads `annotations.jsonl` and writes `activities.csv`, an `action` column in `windows.csv`, and a
+  per-action summary (time spent, mean HR, V/S burden per hour, HRV); which of the viewers/plots get action bands is decided after the
+  first week of data (candidates: the hourly burden plot, the beat viewer, the labelling tool as context).
 - [ ] **P5.9 [YOU]** 1–2 weeks of daily use; keep a short note of anything wrong or annoying.
 
 ### Phase 6 — Hardening (ongoing)
