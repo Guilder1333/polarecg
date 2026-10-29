@@ -33,6 +33,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.punkunpun.polarisecg.PolarisApp
 import com.punkunpun.polarisecg.R
+import com.punkunpun.polarisecg.annotations.AnnotationBar
+import com.punkunpun.polarisecg.annotations.AnnotationKind
 import com.punkunpun.polarisecg.diagnostics.formatDuration
 import com.punkunpun.polarisecg.dsp.live.SampleRing
 import com.punkunpun.polarisecg.log.computeGaps
@@ -57,6 +59,8 @@ fun LiveScreen(
     pip: Boolean = false,
     /** Puts the app into a floating window; null hides the button. */
     onEnterPip: (() -> Unit)? = null,
+    /** The "Action" / "Event" buttons: the kind and the time of the press. */
+    onAnnotate: (AnnotationKind, Long) -> Unit = { _, _ -> },
 ) {
     BackHandler(onBack = onBack)
     val connection = app.polarConnection
@@ -156,6 +160,7 @@ fun LiveScreen(
             ),
         )
         Text(stringResource(R.string.live_stored, stored))
+        AnnotationBar(app, onAnnotate)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (option in FPS_OPTIONS) {

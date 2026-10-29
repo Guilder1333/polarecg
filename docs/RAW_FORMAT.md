@@ -111,6 +111,23 @@ and:
 - `recovered`: `true` only when the session was closed by recovery instead of a stop; then
   `endUtc` is the time of the last data found (or of the newest file), not a real stop time.
 
+## `annotations.jsonl`
+
+The owner's actions and events (P5.10), only present if something was marked. UTF-8, one JSON object per line, **append-only**:
+never changed or deleted, so it is safe to copy while the app runs; a kill can at worst leave one damaged last line (readers skip it).
+
+```
+{"id":"<uuid>","kind":"action","name":"Walking","pressedMs":1793300001000,"timeMs":1793300001000,"note":"","recordedMs":1793300001050}
+```
+
+- `kind`: `action` (a state with a duration: lasts from `timeMs` until the next action's `timeMs`, or the session's `endUtc`;
+  `name` null = "no action", it only ends the previous one) or `event` (a moment, with an optional `note`).
+- `pressedMs`: phone UTC ms of the button press, never changed. `timeMs`: when it happened (= `pressedMs` unless corrected).
+  `recordedMs`: when this line was written.
+- **Corrections** are new lines with the same `id`; the newest line of an id wins. Earlier lines stay as the history.
+- `name` is stored in every record (the picker's list of names is app-wide, not in the session), so a folder is complete by itself.
+- Times are UTC ms like everything else; the phone shows JST.
+
 ## `timemap.csv`
 
 Sensor-clock → phone-UTC relation per connection (P1.8, class `TimeMapper` in `:core-dsp`).

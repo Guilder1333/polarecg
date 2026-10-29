@@ -549,6 +549,14 @@ Details in §7.5–7.6.
     session folder** (`annotations.jsonl`, one line per press/correction, JST shown but UTC stored; layout to be added to
     `docs/RAW_FORMAT.md`), so it travels with the export and survives clearing the database; the database tables (`activity_type`,
     `activity`, `event`) are an index of it, rebuilt from the files if needed.
+  - (Built 2026-10-29, **not yet tried on the phone**. `annotations/`: `AnnotationRecords` (line format, newest-wins fold, current
+    action), `AnnotationTypes` (picker names: presets, "New", hide, most recent first; `annotation_types.json`), `AnnotationStore`
+    (append to the open session's `annotations.jsonl` with fsync), `AnnotationScreen` (the picker; `AnnotationBar` = the two buttons +
+    "Now: Walking since 14:05", on the live screen and the main screen; disabled when no session is being recorded). The session zip
+    contains the file because it zips the whole folder; format in `docs/RAW_FORMAT.md`. Unit tests in `AnnotationsTest`. **Not done
+    yet:** a screen to correct a record (the store can: `AnnotationStore.correct`), renaming a name, the database index
+    (`activity`/`event` tables; P5.11 needs it), and an open action is only closed in the data by reading (it ends at the next
+    action or the session's `endUtc`).)
   - **Done when:** a day of use shows correct bands and markers, an action left open at a kill is closed at the next Stop, and the export
     zip contains the annotations.
 - [ ] **P5.11 [AI]** Show actions and events on the phone: bands (actions) and markers (events) on the review screen's timeline and in

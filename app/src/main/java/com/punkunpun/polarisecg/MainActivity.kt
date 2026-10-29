@@ -20,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.punkunpun.polarisecg.annotations.AnnotationKind
+import com.punkunpun.polarisecg.annotations.AnnotationScreen
 import com.punkunpun.polarisecg.diagnostics.DiagnosticsScreen
 import com.punkunpun.polarisecg.live.LiveScreen
 import com.punkunpun.polarisecg.replay.ReplayScreen
@@ -89,6 +91,13 @@ class MainActivity : ComponentActivity() {
                 var showDiagnostics by rememberSaveable { mutableStateOf(false) }
                 var showLive by rememberSaveable { mutableStateOf(false) }
                 var showReplay by rememberSaveable { mutableStateOf(false) }
+                // The picker for an action/event: which kind, and when the button was pressed (null kind = closed).
+                var annotateKind by rememberSaveable { mutableStateOf<String?>(null) }
+                var annotatePressedMs by rememberSaveable { mutableStateOf(0L) }
+                val onAnnotate = { kind: AnnotationKind, pressedMs: Long ->
+                    annotatePressedMs = pressedMs
+                    annotateKind = kind.key
+                }
                 val allGranted = bluetoothGranted && notificationsGranted && batteryGranted
                 val showPairing = bluetoothGranted && (allGranted || permissionsAcknowledged)
 
@@ -97,13 +106,23 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(liveVisible) { setPipAllowed(liveVisible) }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    if (liveVisible) {
+                    val annotating = if (showPairing) annotateKind?.let(AnnotationKind::fromKey) else null
+                    if (annotating != null) {
+                        AnnotationScreen(
+                            app = application as PolarisApp,
+                            kind = annotating,
+                            pressedMs = annotatePressedMs,
+                            onDone = { annotateKind = null },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (liveVisible) {
                         LiveScreen(
                             app = application as PolarisApp,
                             onBack = { showLive = false },
                             // The floating window is small: no system bars padding there.
                             modifier = if (inPip) Modifier else Modifier.padding(innerPadding),
                             pip = inPip,
+                            onAnnotate = onAnnotate,
                             onEnterPip = {
                                 setPipAllowed(true)
                                 enterPictureInPictureMode(
@@ -130,6 +149,7 @@ class MainActivity : ComponentActivity() {
                             onOpenDiagnostics = { showDiagnostics = true },
                             onOpenLive = { showLive = true },
                             onOpenReplay = { showReplay = true },
+                            onAnnotate = onAnnotate,
                             modifier = Modifier.padding(innerPadding),
                         )
                     } else PermissionsScreen(

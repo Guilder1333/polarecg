@@ -3,6 +3,8 @@ package com.punkunpun.polarisecg
 import android.app.Application
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiDefaultImpl
+import com.punkunpun.polarisecg.annotations.AnnotationStore
+import com.punkunpun.polarisecg.annotations.AnnotationTypes
 import com.punkunpun.polarisecg.log.ConnectionLog
 import com.punkunpun.polarisecg.log.LogType
 import com.punkunpun.polarisecg.pairing.DeviceStore
@@ -56,6 +58,9 @@ class PolarisApp : Application() {
 
     /** Beat detection and classification on the live frames (P5.1); the service starts and stops it. */
     val liveProcessor by lazy { LiveProcessor(polarConnection) }
+
+    /** The owner's actions and events (P5.10), written into the running session's folder. */
+    val annotations by lazy { AnnotationStore(sessionsDir, AnnotationTypes(File(filesDir, "annotation_types.json"))) }
 
     /** Derived data: beats now, events, HRV and labels later (plan §8). */
     val database by lazy { PolarisDatabase.open(this) }
