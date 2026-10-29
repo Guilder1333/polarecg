@@ -11,7 +11,8 @@ private const val USAGE = """PolarisECG CLI
 
     <recording-folder>  a session folder (data/sessions/<start>) or a converted reference
                         record (data/reference/<db>/<record>): any folder with ecg*.bin files
-    --out <dir>         where to write beats.csv, windows.csv, events.csv
+    --out <dir>         where to write beats.csv, windows.csv, events.csv, ... (+ activities.csv and
+                        action_summary.csv if the folder has annotations.jsonl)
                         (default: data/analysis/<parent>-<folder>)
 
   live-check <recording-folder>
@@ -67,7 +68,10 @@ private fun analyzeCommand(args: List<String>): Int {
 
     val result = runAnalysis(frames, acc)
     outDir.mkdirs()
-    writeCsvs(result, outDir)
+    val marks = readMarks(folder)
+    val spans = spansFor(result, marks)
+    writeCsvs(result, outDir, spans)
+    writeAnnotationCsvs(result, marks, spans, outDir)
 
     val hours = result.segments.sumOf { it.durationMs } / 3_600_000.0
     println(
@@ -75,6 +79,7 @@ private fun analyzeCommand(args: List<String>): Int {
             hours, result.segments.size, result.beats.size, result.windows.size, result.events.size, outDir,
         ),
     )
+    printActionSummary(result, marks, spans)
     return 0
 }
 

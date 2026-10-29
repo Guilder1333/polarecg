@@ -87,6 +87,7 @@ the last sample.
 | `motionMg` | highest motion of the 1 s bins in the window (mG); empty without ACC data |
 | `goodBeats` | beats of the window with `good` = 1 |
 | `quality` | (`goodBeats` + rescued beats, `qRescue` = 1) / `beats`, 0..1; 0 if the window has no beat. Below 0.5 the window is unusable (red in the viewer, to be left out of burden and HRV) |
+| `action` | the owner's action running at the middle of the window (`annotations.jsonl`, P5.10); empty if none or the folder has no annotations |
 
 ## `motion.csv`
 
@@ -121,3 +122,33 @@ One row per UTC hour with at least one beat.
 | `n`, `s`, `v`, `q` | number of beats of each class |
 | `vDoubt` | of the `v` beats, how many are questionable (`vDoubt` = 1 in beats.csv); the V burden is between `v - vDoubt` and `v` |
 | `vPercent`, `sPercent` | share of V / S among the beats that could be judged (`n + s + v`; `q` is left out); empty if there are none |
+
+## `activities.csv` and `action_summary.csv`
+
+Written only when the session folder has `annotations.jsonl` (the owner's actions and events, P5.10; format in `docs/RAW_FORMAT.md`);
+otherwise any old copy in the output folder is removed. The newest line of an `id` wins, so a corrected time is the one used.
+
+`activities.csv`, one row per action span or event, sorted by time:
+
+| Column | Meaning |
+|---|---|
+| `type` | `action` or `event` |
+| `name` | what the owner chose (an action marked "no action" gives no row, it only ends the previous one) |
+| `startUtcMs`, `startUtc` | start of the action / time of the event |
+| `endUtcMs`, `endUtc`, `durationMs` | actions only: an action lasts until the next action starts; the last one until the end of the analysed data (not the session's `endUtc`) |
+| `note` | events only |
+| `hrBefore5m`, `hrAfter5m` | events only: mean heart rate of the usable windows in the 5 min before / after the event |
+| `ectopicBefore5m`, `ectopicAfter5m` | events only: number of S + V beats in the 5 min before / after |
+
+`action_summary.csv`, one row per action name, biggest first, plus `(none)` for the time when no action was running:
+
+| Column | Meaning |
+|---|---|
+| `totalMin`, `usableMin` | time of the action; and the part of it in usable windows (`quality` >= 0.5) |
+| `meanHrBpm`, `meanMotionMg` | mean of the usable windows' `meanHrBpm` / `motionMg` |
+| `n`, `s`, `v`, `q`, `vDoubt` | beats of the usable windows by class (`vDoubt` of the `v`) |
+| `vPerHour`, `sPerHour` | `v` / `s` per usable hour |
+| `vPercent`, `sPercent` | share among the judged beats (`n + s + v`), in percent |
+
+Each 10 s window belongs to the action running at its middle, so an action change is accurate to about 10 s. HRV per action comes
+with P5.5.

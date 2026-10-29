@@ -2,6 +2,8 @@ package com.punkunpun.polarisecg.cli
 
 import com.punkunpun.polarisecg.dsp.analysis.AnalysisResult
 import com.punkunpun.polarisecg.dsp.analysis.analyzeEcg
+import com.punkunpun.polarisecg.dsp.annotations.ActionSpan
+import com.punkunpun.polarisecg.dsp.annotations.actionAt
 import com.punkunpun.polarisecg.dsp.beat.BeatFeatures
 import com.punkunpun.polarisecg.dsp.raw.RawRecord
 import java.io.File
@@ -29,7 +31,7 @@ private fun featureColumns(f: BeatFeatures?): String {
         "${num(f.shift, 2)},${num(f.qrsWidthMs, 0)},${num(f.widthRatio, 2)},${num(f.ampRatio, 2)},${num(f.areaRatio, 2)},${if (f.polarityFlip) 1 else 0},${num(f.alignMs, 1)},${num(f.driftRatio, 3)}"
 }
 
-fun writeCsvs(result: AnalysisResult, dir: File) {
+fun writeCsvs(result: AnalysisResult, dir: File, spans: List<ActionSpan> = emptyList()) {
     File(dir, "beats.csv").bufferedWriter().use { w ->
         w.write("utcMs,utc,segment,rrMs,class,sqi,good,amplitudeUv,slopeRatio,hfRatio,agreed,motionMg," +
             "rrRefMs,rrSpread,prematurity,shortening,compensation,corr,shift,qrsWidthMs,widthRatio,ampRatio,areaRatio,flip,alignMs,driftRatio,vDoubt,qRescue\n")
@@ -45,12 +47,12 @@ fun writeCsvs(result: AnalysisResult, dir: File) {
         }
     }
     File(dir, "windows.csv").bufferedWriter().use { w ->
-        w.write("startUtcMs,startUtc,durationMs,samples,coverage,beats,meanHrBpm,motionMg,goodBeats,quality\n")
+        w.write("startUtcMs,startUtc,durationMs,samples,coverage,beats,meanHrBpm,motionMg,goodBeats,quality,action\n")
         for (x in result.windows) {
             w.write(
                 "${x.startUtcMs},${iso(x.startUtcMs)},${x.durationMs},${x.samples}," +
                     "${num(x.coverage, 3)},${x.beats},${num(x.meanHrBpm, 1)}," +
-                    "${num(x.motionMg, 1)},${x.goodBeats},${num(x.quality, 3)}\n",
+                    "${num(x.motionMg, 1)},${x.goodBeats},${num(x.quality, 3)},${field(actionAt(spans, x.startUtcMs + x.durationMs / 2) ?: "")}\n",
             )
         }
     }

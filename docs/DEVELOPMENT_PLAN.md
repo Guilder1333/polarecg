@@ -561,9 +561,14 @@ Details in §7.5–7.6.
     zip contains the annotations.
 - [ ] **P5.11 [AI]** Show actions and events on the phone: bands (actions) and markers (events) on the review screen's timeline and in
   the event list; the summary (P5.6) gets "per action" figures (mean HR, V/S per hour, HRV).
-- [ ] **P5.12 [AI]** Desktop: `analyze` reads `annotations.jsonl` and writes `activities.csv`, an `action` column in `windows.csv`, and a
+- [x] **P5.12 [AI]** Desktop: `analyze` reads `annotations.jsonl` and writes `activities.csv`, an `action` column in `windows.csv`, and a
   per-action summary (time spent, mean HR, V/S burden per hour, HRV); which of the viewers/plots get action bands is decided after the
   first week of data (candidates: the hourly burden plot, the beat viewer, the labelling tool as context).
+  (Built 2026-10-29. `:core-dsp` `dsp/annotations/` (`Marks.kt`: reads the log, spans; `ActionStats.kt`: per-action summary from usable
+  windows only, event context = heart rate and S+V beats 5 min before/after); `analyze` writes `activities.csv`, `action_summary.csv`
+  and the `action` column of `windows.csv` (`docs/ANALYSIS_FORMAT.md`); the console prints a short table. Tested with unit tests
+  and on a real night with made-up marks. **Open:** HRV per action (needs P5.5); which viewers get action bands (decide after the
+  first week of data); the plots in `analysis/` do not use the new files yet.)
 - [ ] **P5.9 [YOU]** 1–2 weeks of daily use; keep a short note of anything wrong or annoying.
 
 ### Phase 6 — Hardening (ongoing)

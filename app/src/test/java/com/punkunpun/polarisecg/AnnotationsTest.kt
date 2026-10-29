@@ -39,6 +39,21 @@ class AnnotationsTest {
     }
 
     @Test
+    fun thePcToolReadsWhatThePhoneWrites() {
+        // Two implementations of one format (app: org.json, :core-dsp: a small reader). They must agree, also on awkward text.
+        val tricky = Annotation("id1", AnnotationKind.EVENT, "Dizzy \"a bit\" / caf\u00e9", t0, t0 + 5, note = "back\\slash, comma\nline \u00e9 tab\t")
+        val none = action("id2", null, t0 + 10)
+        val marks = com.punkunpun.polarisecg.dsp.annotations.parseMarks(listOf(tricky, none).map { it.toJsonLine() })
+        assertEquals(tricky.name, marks[0].name)
+        assertEquals(tricky.note, marks[0].note)
+        assertEquals(tricky.timeMs, marks[0].timeMs)
+        assertEquals(tricky.pressedMs, marks[0].pressedMs)
+        assertFalse(marks[0].isAction)
+        assertNull(marks[1].name)
+        assertTrue(marks[1].isAction)
+    }
+
+    @Test
     fun aDamagedLineIsSkipped() {
         val good = action("a", "Walking", t0).toJsonLine()
         val folded = foldAnnotations(listOf(good, "{\"id\":\"b\",\"kind\":\"act")) // cut off by a kill
