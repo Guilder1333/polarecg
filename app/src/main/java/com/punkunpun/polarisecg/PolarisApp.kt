@@ -9,6 +9,8 @@ import com.punkunpun.polarisecg.pairing.DeviceStore
 import com.punkunpun.polarisecg.polar.PolarConnection
 import com.punkunpun.polarisecg.processing.LiveProcessor
 import com.punkunpun.polarisecg.replay.ReplayPlayer
+import com.punkunpun.polarisecg.storage.BeatWriter
+import com.punkunpun.polarisecg.storage.PolarisDatabase
 import java.io.File
 
 /**
@@ -54,6 +56,12 @@ class PolarisApp : Application() {
 
     /** Beat detection and classification on the live frames (P5.1); the service starts and stops it. */
     val liveProcessor by lazy { LiveProcessor(polarConnection) }
+
+    /** Derived data: beats now, events, HRV and labels later (plan §8). */
+    val database by lazy { PolarisDatabase.open(this) }
+
+    /** Saves the live beats into [database] in batches (P5.3); the service starts and finishes it with the pipeline. */
+    val beatWriter by lazy { BeatWriter(database.beatDao()) }
 
     /** Plays a recorded session through the live pipeline (P5.2). */
     val replayPlayer by lazy { ReplayPlayer(polarConnection, liveProcessor) }

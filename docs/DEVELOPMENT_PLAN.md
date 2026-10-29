@@ -490,8 +490,7 @@ Details in §7.5–7.6.
   on one thread (`limitedParallelism(1)`), publishes `beats` and `LiveStats`; started/stopped by `AcquisitionService`; the
   live screen shows the counts. Nothing is stored (P5.3). **Done when:** a night with the phone shows plausible counts in the
   morning (compare with `analyze` of the same session's raw files: should be near-identical), and the CPU use is small (P6.2).
-  Counts are saved in `session.json` as `liveRuns` (a checkpoint every minute and on Stop, one entry per pipeline start, see
-  `docs/RAW_FORMAT.md`); `cli live-check <session>` prints them next to the batch result. **Checked 2026-10-29 (owner):** the night
+  **Checked 2026-10-29 (owner):** the night
   recorded live on the phone gave exactly the `analyze` counts: done. CPU use is still to be measured in P6.2.)
 - [x] **P5.2 [AI]** Replay mode: feed a recorded session through the live pipeline at N× speed —
   lets you debug UI and pipeline at your desk without wearing the strap.
@@ -508,6 +507,15 @@ Details in §7.5–7.6.
   beats were scored without motion (the 3 s "ACC stalled" fallback). Fix: both streams go through one ordered queue in
   `LiveProcessor`; a replay hands its frames over directly, in order, with back-pressure. Repeated on the phone after the fix: Beats 65 545, N 64 607, S 652, V 46 (38), Q 240, exactly `analyze`: done.)
 - [ ] **P5.3 [AI]** Room database (§8), batched writes, retention policy.
+  (Built 2026-10-29, **not yet tried on the phone**. `storage/`: `PolarisDatabase` (Room, `polaris.db`), table `beat` (key = UTC ms;
+  class, quality, a few features: `BeatEntity`), `BeatDao`, `BeatWriter`. The writer subscribes to `LiveProcessor.beats` when the
+  service starts and writes one transaction per 5 s or 500 beats; on stop it waits for the pipeline's last beats. Retention: `beat`
+  rows older than 90 days are deleted at each start. Replay does not write. The database is excluded from cloud backup.
+  Other tables of §8 (`session`, `gap`, `event`, `hrv_window`, `label`...) come with the tasks that need them; `exportSchema` is off
+  and there is no migration yet (the `beat` table can be rebuilt from the raw files; before `label` is added, real migrations are
+  needed). The live screen shows "Saved in the database (last 24 h)". Replaces the short-lived `liveRuns` checkpoints in
+  `session.json`. **Done when:** after a night the number of saved beats equals the live count (and `analyze`); after a kill and
+  restart the earlier beats are still there.)
 - [ ] **P5.4 [AI]** Ring buffer + **event clips**: for each event (V, S, couplet, run, pause…), save
   10 s before + 10 s after. Rate-limit clips (e.g. bigeminy for 1 hour shouldn't save 1800 clips —
   save the first few + one per N minutes).

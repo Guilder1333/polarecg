@@ -87,6 +87,7 @@ class AcquisitionService : Service() {
             recorder = RawRecorder(app.sessionsDir, app.polarConnection, deviceId, appVersion(), app.connectionLog).also { it.start() }
         }
         app.liveProcessor.start() // no-op if already running (START_STICKY restarts call this again)
+        app.beatWriter.start(app.liveProcessor.beats)
         watchStatusForNotification()
 
         // START_STICKY: if Android kills the process, restart the service (intent will be null).
@@ -98,7 +99,7 @@ class AcquisitionService : Service() {
         _running.value = false
         notificationJob?.cancel()
         scope.cancel()
-        app.liveProcessor.stop()
+        app.beatWriter.finish(app.liveProcessor.stop()) // the writer waits for the pipeline's last beats
         app.polarConnection.disconnect()
         // onDestroy also runs when Android itself shuts the service down. Only an explicit stop by
         // the user ends the session; otherwise it stays open and the restart resumes it.

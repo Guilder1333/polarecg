@@ -67,6 +67,7 @@ class LiveProcessor(private val connection: PolarConnection) {
     private var scope: CoroutineScope? = null
     private var collectors: List<Job> = emptyList()
     private var queue: Channel<Input>? = null
+    private var worker: Job? = null
     private var stats = LiveStats()
 
     private val _stats = MutableStateFlow(LiveStats())
@@ -98,7 +99,7 @@ class LiveProcessor(private val connection: PolarConnection) {
             s.launch(start = CoroutineStart.UNDISPATCHED) { connection.ecg.collect { q.trySend(Input.Ecg(it)) } },
             s.launch(start = CoroutineStart.UNDISPATCHED) { connection.acc.collect { q.trySend(Input.Acc(it)) } },
         ) else emptyList()
-        s.launch {
+        worker = s.launch {
             for (input in q) { // ends when the queue is closed and empty, see stop()
                 when (input) {
                     is Input.Ecg -> guarded { pipeline.addEcg(input.frame.sensorTimeNs, input.frame.phoneTimeMs, input.frame.samplesUv) }
@@ -114,14 +115,18 @@ class LiveProcessor(private val connection: PolarConnection) {
     suspend fun submitEcg(frame: EcgFrame) { queue?.send(Input.Ecg(frame)) }
     suspend fun submitAcc(frame: AccFrame) { queue?.send(Input.Acc(frame)) }
 
-    /** Stops taking frames and publishes the beats that were still waiting (after the frames already queued). */
+    /**
+     * Stops taking frames and publishes the beats that were still waiting (after the frames already queued).
+     * Returns the processing job, which ends after the last beat is published (null if not running).
+     */
     @Synchronized
-    fun stop() {
-        if (scope == null) return
+    fun stop(): Job? {
+        if (scope == null) return null
         scope = null
         collectors.forEach { it.cancel() }
         queue?.close() // the processing coroutine drains what is queued, flushes, and ends
         queue = null
+        return worker.also { worker = null }
     }
 
     /** Runs [step] and publishes the beats it returns; an exception costs this frame, not the service. */

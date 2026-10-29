@@ -65,6 +65,8 @@ fun LiveScreen(
     val events by app.connectionLog.events.collectAsState()
     // Only this session: the log file also holds every earlier run.
     val stats by app.liveProcessor.statsFlow.collectAsState()
+    // Beats saved in the database during the last 24 h (P5.3); after a fresh start it equals the count above.
+    val stored by remember { app.database.beatDao().observeCountSince(System.currentTimeMillis() - 86_400_000L) }.collectAsState(0)
     val gaps = remember(events) { computeGaps(eventsOfLatestSession(events)) }
 
     // The ring is a plain object, not Compose state, so writing to it does not redraw anything.
@@ -153,6 +155,7 @@ fun LiveScreen(
                 stats.beats, stats.normal, stats.premature, stats.ventricular, stats.ventricularDoubt, stats.unclassifiable,
             ),
         )
+        Text(stringResource(R.string.live_stored, stored))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (option in FPS_OPTIONS) {
