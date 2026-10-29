@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.time.Instant
 
 private const val TAG = "LiveProcessor"
 
@@ -40,7 +42,21 @@ data class LiveStats(
     val lastBeatUtcMs: Long? = null,
     /** Frames that made the pipeline throw (logged, the frame is skipped). Should stay 0. */
     val errors: Int = 0,
-)
+    /** Phone time of [LiveProcessor.start]. After a kill and resume the counts cover only the time since then. */
+    val startedMs: Long = 0,
+) {
+    /** For `session.json` ("liveStats"): to compare with `analyze` of the same session's raw files (P5.1). */
+    fun toJson(): JSONObject = JSONObject()
+        .put("sinceUtc", Instant.ofEpochMilli(startedMs).toString())
+        .put("lastBeatUtc", lastBeatUtcMs?.let { Instant.ofEpochMilli(it).toString() } ?: JSONObject.NULL)
+        .put("beats", beats)
+        .put("normal", normal)
+        .put("premature", premature)
+        .put("ventricular", ventricular)
+        .put("ventricularDoubt", ventricularDoubt)
+        .put("unclassifiable", unclassifiable)
+        .put("errors", errors)
+}
 
 /**
  * Runs the [LivePipeline] (`:core-dsp`, the same code as the PC tool) on everything [connection] streams (P5.1).
@@ -67,6 +83,7 @@ class LiveProcessor(private val connection: PolarConnection) {
     private var scope: CoroutineScope? = null
     private var collectors: List<Job> = emptyList()
     private var queue: Channel<Input>? = null
+    private var worker: Job? = null
     private var stats = LiveStats()
 
     private val _stats = MutableStateFlow(LiveStats())
@@ -85,9 +102,9 @@ class LiveProcessor(private val connection: PolarConnection) {
     fun start(fromConnection: Boolean = true) {
         if (scope != null) return
         val pipeline = LivePipeline()
-        stats = LiveStats()
+        stats = LiveStats(startedMs = System.currentTimeMillis())
         _stats.value = stats
-        val s = CoroutineScope(SupervisorJob() + dispatcher)
+        val s =CoroutineScope(SupervisorJob() + dispatcher)
         scope = s
         // Real strap: never block the SDK's callbacks, the queue is unbounded (a few frames per second). Replay: bounded.
         val q = Channel<Input>(if (fromConnection) Channel.UNLIMITED else REPLAY_QUEUE)
@@ -98,7 +115,7 @@ class LiveProcessor(private val connection: PolarConnection) {
             s.launch(start = CoroutineStart.UNDISPATCHED) { connection.ecg.collect { q.trySend(Input.Ecg(it)) } },
             s.launch(start = CoroutineStart.UNDISPATCHED) { connection.acc.collect { q.trySend(Input.Acc(it)) } },
         ) else emptyList()
-        s.launch {
+        worker = s.launch {
             for (input in q) { // ends when the queue is closed and empty, see stop()
                 when (input) {
                     is Input.Ecg -> guarded { pipeline.addEcg(input.frame.sensorTimeNs, input.frame.phoneTimeMs, input.frame.samplesUv) }
@@ -114,14 +131,18 @@ class LiveProcessor(private val connection: PolarConnection) {
     suspend fun submitEcg(frame: EcgFrame) { queue?.send(Input.Ecg(frame)) }
     suspend fun submitAcc(frame: AccFrame) { queue?.send(Input.Acc(frame)) }
 
-    /** Stops taking frames and publishes the beats that were still waiting (after the frames already queued). */
+    /**
+     * Stops taking frames and publishes the beats that were still waiting (after the frames already queued).
+     * Returns the processing job: `join()` it to know that [statsFlow] holds the final counts (null if not running).
+     */
     @Synchronized
-    fun stop() {
-        if (scope == null) return
+    fun stop(): Job? {
+        if (scope == null) return null
         scope = null
         collectors.forEach { it.cancel() }
         queue?.close() // the processing coroutine drains what is queued, flushes, and ends
         queue = null
+        return worker.also { worker = null }
     }
 
     /** Runs [step] and publishes the beats it returns; an exception costs this frame, not the service. */

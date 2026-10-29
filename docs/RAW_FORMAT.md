@@ -110,6 +110,11 @@ and:
   "resumedUtc": <when recording resumed> }`. The time between the two is data that does not exist.
 - `recovered`: `true` only when the session was closed by recovery instead of a stop; then
   `endUtc` is the time of the last data found (or of the newest file), not a real stop time.
+- `liveRuns`: the counts of the on-phone pipeline (P5.1), one entry per start of the app's pipeline: a
+  resume after a kill adds an entry, because the pipeline then starts fresh. Entry: `sinceUtc` (pipeline
+  start), `lastBeatUtc`, `beats`, `normal`, `premature`, `ventricular`, `ventricularDoubt`,
+  `unclassifiable`, `errors`. Saved every minute and on stop (so a kill loses at most a minute of counts).
+  Compare with `analyze` of the same folder: the sum of the entries, near-identical except around the restarts.
 
 ## `timemap.csv`
 

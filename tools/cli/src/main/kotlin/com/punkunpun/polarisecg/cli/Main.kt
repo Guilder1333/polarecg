@@ -17,7 +17,8 @@ private const val USAGE = """PolarisECG CLI
   live-check <recording-folder>
 
     Feeds the recording to the live pipeline (the phone's code) in arrival order and compares the
-    beats with `analyze`. Prints both class counts and the beats that differ.
+    beats with `analyze`. Prints both class counts and the beats that differ, and the counts the phone
+    saved in session.json (`liveRuns`) when there are any.
 """
 
 fun main(args: Array<String>) {
