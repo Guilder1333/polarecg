@@ -480,7 +480,7 @@ Details in §7.5–7.6.
 
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 
-- [ ] **P5.1 [AI]** Wire `:core-dsp` into `AcquisitionService` (single ordered processing thread).
+- [x] **P5.1 [AI]** Wire `:core-dsp` into `AcquisitionService` (single ordered processing thread).
   (Built 2026-10-29, **not yet tried on the phone**. `dsp/live/LivePipeline.kt`: the beat pipeline frame by frame (segments,
   quality, motion, features, classes); `analyzeEcg` now runs a whole recording through the same class, so the PC tool and
   the phone cannot disagree. Checked: the CLI output on the 3 labelled nights + MIT-BIH 100/207/228 is cell-for-cell
@@ -489,7 +489,10 @@ Details in §7.5–7.6.
   must be complete, the classifier needs the next beat). App: `processing/LiveProcessor.kt` collects `PolarConnection.ecg/acc`
   on one thread (`limitedParallelism(1)`), publishes `beats` and `LiveStats`; started/stopped by `AcquisitionService`; the
   live screen shows the counts. Nothing is stored (P5.3). **Done when:** a night with the phone shows plausible counts in the
-  morning (compare with `analyze` of the same session's raw files: should be near-identical), and the CPU use is small (P6.2).)
+  morning (compare with `analyze` of the same session's raw files: should be near-identical), and the CPU use is small (P6.2).
+  Counts are saved in `session.json` as `liveRuns` (a checkpoint every minute and on Stop, one entry per pipeline start, see
+  `docs/RAW_FORMAT.md`); `cli live-check <session>` prints them next to the batch result. **Checked 2026-10-29 (owner):** the night
+  recorded live on the phone gave exactly the `analyze` counts: done. CPU use is still to be measured in P6.2.)
 - [x] **P5.2 [AI]** Replay mode: feed a recorded session through the live pipeline at N× speed —
   lets you debug UI and pipeline at your desk without wearing the strap.
   (Built 2026-10-29, **not yet tried on the phone**. `replay/ReplayPlayer.kt` reads a session folder (`readStream`), merges the
