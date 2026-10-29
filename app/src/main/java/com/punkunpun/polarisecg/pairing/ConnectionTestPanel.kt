@@ -78,7 +78,7 @@ fun ConnectionTestPanel(app: PolarisApp, deviceId: String?) {
             scope.launch {
                 // Zipping can take a moment for a night of data, so do it off the UI thread.
                 val zip = withContext(Dispatchers.IO) {
-                    latestSession(app.sessionsDir)?.let { zipSession(context, it, app.database.beatDao()) }
+                    latestSession(app.sessionsDir)?.let { zipSession(context, it, app.database) }
                 }
                 if (zip == null) {
                     Toast.makeText(context, R.string.raw_export_none, Toast.LENGTH_SHORT).show()

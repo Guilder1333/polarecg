@@ -81,6 +81,6 @@
     <string name="live_scale_hint">Last 5 s, vertical lines are 1 s apart. The vertical scale adapts automatically.</string>
 
     <string name="raw_toggle">Record raw data (developer)</string>
-    <string name="raw_export">Export last session</string>
+    <string name="raw_export">Export last session (and clear saved beats)</string>
     <string name="raw_export_none">No recorded session yet.</string>
 </resources>

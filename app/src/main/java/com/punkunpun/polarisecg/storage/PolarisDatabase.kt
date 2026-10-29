@@ -15,7 +15,9 @@ abstract class PolarisDatabase : RoomDatabase() {
     abstract fun beatDao(): BeatDao
 
     companion object {
+        const val FILE_NAME = "polaris.db"
+
         fun open(context: Context): PolarisDatabase =
-            Room.databaseBuilder(context, PolarisDatabase::class.java, "polaris.db").build()
+            Room.databaseBuilder(context, PolarisDatabase::class.java, FILE_NAME).build()
     }
 }

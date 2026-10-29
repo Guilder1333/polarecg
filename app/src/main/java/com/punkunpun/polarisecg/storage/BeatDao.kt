@@ -20,8 +20,12 @@ interface BeatDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(beats: List<BeatEntity>)
 
+    /** Time of the newest saved beat, null if the table is empty. Blocking, like [beatsBetween]. */
+    @Query("SELECT MAX(utcMs) FROM beat")
+    fun latestUtcMs(): Long?
+
     @Query("DELETE FROM beat WHERE utcMs < :beforeUtcMs")
-    suspend fun deleteBefore(beforeUtcMs: Long): Int
+    fun deleteBefore(beforeUtcMs: Long): Int
 
     @Query("SELECT cls, COUNT(*) AS n FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs GROUP BY cls")
     suspend fun countByClass(fromUtcMs: Long, toUtcMs: Long): List<ClassCount>

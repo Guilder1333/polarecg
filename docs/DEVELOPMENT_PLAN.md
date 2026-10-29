@@ -517,6 +517,11 @@ Details in §7.5–7.6.
   first columns named as in `analyze`'s beats.csv, for comparing with it; the database file itself is not exported (P6.3). The live screen shows "Saved in the database (last 24 h)". Replaces the short-lived `liveRuns` checkpoints in
   `session.json`. **Done when:** after a night the number of saved beats equals the live count (and `analyze`); after a kill and
   restart the earlier beats are still there.)
+- [ ] **P5.3b [AI] TODO, remove the clearing after export.** Temporary rule (owner, 2026-10-29): while the raw files are the
+  only thing that matters, **Export last session** puts `polaris.db` and `beats.csv` into the zip and then deletes the exported
+  beats from the database (and VACUUMs it); the button says so. Remove this (the `exportedUpTo` / `deleteBefore` / VACUUM part of
+  `zipSession`, and "and clear saved beats" in `raw_export`) **before** the summary and review screens (P5.6/P5.7) or labels
+  rely on the database, and before P6.3; from then on an export must never delete anything.
 - [ ] **P5.4 [AI]** Ring buffer + **event clips**: for each event (V, S, couplet, run, pause…), save
   10 s before + 10 s after. Rate-limit clips (e.g. bigeminy for 1 hour shouldn't save 1800 clips —
   save the first few + one per N minutes).
