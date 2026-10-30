@@ -1,5 +1,6 @@
 package com.punkunpun.polarisecg.cli
 
+import com.punkunpun.polarisecg.dsp.annotations.renderDayReport
 import com.punkunpun.polarisecg.dsp.raw.RawRecord
 import com.punkunpun.polarisecg.dsp.raw.readStream
 import java.io.File
@@ -72,6 +73,7 @@ private fun analyzeCommand(args: List<String>): Int {
     val spans = spansFor(result, marks)
     writeCsvs(result, outDir, spans)
     writeAnnotationCsvs(result, marks, spans, outDir)
+    File(outDir, "report.md").writeText(renderDayReport(result, marks, spans, folder.name))
 
     val hours = result.segments.sumOf { it.durationMs } / 3_600_000.0
     println(
