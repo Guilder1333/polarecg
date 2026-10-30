@@ -85,7 +85,14 @@ session from `beats.csv` with a fixed random seed and written to `data/labels/<s
 | **GAP items** | up to 100, random | blocked early beats |
 | first/last beat of each pause, couplet, run | all | patterns are what is reported |
 
-About 600-700 items; at 3-5 s each that is **30-45 minutes**, and it can be split over several sittings (the
+The numbers above are the defaults. For a night where more is wanted, give them when the queue is first built:
+`--limit V=all,Q=all,S=500,N=300,EARLY_N=1000,GAP=100` (`all` = every beat of the group). `EARLY_N` is a group
+that is off by default: beats we call **N** that are clean (`good`) and came early (prematurity below 0.85); it is
+taken out of the N group, with its own weight. A missed S beat hides there, and 300 random N beats out of 100 000
+would hardly ever hit one. `--limit` is ignored (with a note) if `queue.csv` already exists; the queue is never rebuilt
+or extended, so the weights of earlier nights stay valid.
+
+With the defaults, about 600-700 items; at 3-5 s each that is **30-45 minutes**, and it can be split over several sittings (the
 queue remembers where it stopped). Items are shown in random order, so the owner cannot guess the group.
 Each queue row stores its group and sampling weight (group size / number taken) so that the results can be
 corrected for the sampling.

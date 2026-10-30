@@ -20,7 +20,9 @@ from pathlib import Path
 import numpy as np
 
 SEED = 20261027
-LIMITS = {"V": 150, "S": 150, "N": 300, "Q": 50, "GAP": 100}   # how many items per group
+LIMITS = {"V": 150, "S": 150, "N": 300, "Q": 50, "GAP": 100, "EARLY_N": 0}   # how many items per group
+EARLY_N_PREMATURITY = 0.85   # EARLY_N: beats we call N that came this early (RR / reference RR) or earlier
+ALL = 10 ** 9                # "take every item of the group"
 GAP_FACTOR = 1.35            # a GAP item: RR at least this many times the reference RR
 PATTERN_TOLERANCE_MS = 60    # an event start/end must lie this close to a detected beat
 
@@ -67,7 +69,7 @@ class QueueItem:
     item: str              # "B<utcMs>" for a beat, "G<utcMs>" for a gap (utcMs = middle of the interval)
     kind: str              # "BEAT" | "GAP"
     utc_ms: int
-    group: str             # V S N Q PATTERN GAP
+    group: str             # V S N Q EARLY_N PATTERN GAP
     weight: float          # group size / number taken: how many beats of the night this item stands for
     our_class: str         # "" for GAP items
 
@@ -122,12 +124,19 @@ def build_queue(beats: list[BeatRow], events: list[dict], seed: int = SEED,
     """The items to label, in random order. Beats are split into strata that do not overlap (pattern
     beats first, then our class); every stratum gets a weight = size / number taken, so that results
     can be corrected for the sampling (docs/LABELING_TOOL.md)."""
-    limits = LIMITS if limits is None else limits
+    limits = LIMITS if limits is None else {**LIMITS, **limits}
     rng = random.Random(seed)
     pattern = pattern_beat_indices(beats, events)
-    strata: dict[str, list[int]] = {"V": [], "S": [], "N": [], "Q": []}
+    strata: dict[str, list[int]] = {"V": [], "S": [], "N": [], "Q": [], "EARLY_N": []}
     for i, b in enumerate(beats):
-        if i not in pattern and b.cls in strata:
+        if i in pattern or b.cls not in strata:
+            continue
+        # EARLY_N: an N that arrived early and is clean: where an S that we missed would hide. Taken out of N, so
+        # the strata still do not overlap.
+        early = _num(b.raw.get("prematurity"))
+        if b.cls == "N" and limits.get("EARLY_N", 0) > 0 and b.good and early is not None and early < EARLY_N_PREMATURITY:
+            strata["EARLY_N"].append(i)
+        else:
             strata[b.cls].append(i)
 
     queue: list[QueueItem] = []
@@ -140,8 +149,8 @@ def build_queue(beats: list[BeatRow], events: list[dict], seed: int = SEED,
             queue.append(QueueItem(f"B{b.utc_ms}", "BEAT", b.utc_ms, group, weight, b.cls))
 
     add_beats("PATTERN", sorted(pattern), len(pattern))
-    for g in ("V", "S", "N", "Q"):
-        add_beats(g, strata[g], limits[g])
+    for g in ("V", "S", "N", "Q", "EARLY_N"):
+        add_beats(g, strata[g], limits.get(g, 0))
 
     gaps = gap_items(beats)
     chosen = spread_sample(gaps, limits["GAP"], rng)
@@ -330,3 +339,15 @@ def append_gallery_answer(path: Path, record: str, utc_ms: int, truth: str, answ
         if new:
             w.writerow(GALLERY_COLUMNS)
         w.writerow([record, utc_ms, truth, answer, _utc_now_text()])
+
+
+def parse_limits(text: str) -> dict[str, int]:
+    """``"V=all,Q=all,S=500,EARLY_N=1000"`` -> {"V": ALL, ...}. Groups not named keep their default."""
+    out: dict[str, int] = {}
+    for part in filter(None, (p.strip() for p in text.split(","))):
+        name, _, value = part.partition("=")
+        name = name.strip().upper()
+        if name not in LIMITS:
+            raise ValueError(f"unknown group {name!r}; choose from {', '.join(LIMITS)}")
+        out[name] = ALL if value.strip().lower() == "all" else int(value)
+    return out

@@ -38,6 +38,25 @@ class QueueTest(unittest.TestCase):
         gaps = ld.gap_items(night())
         self.assertEqual([i for i, _ in gaps], [700])
 
+    def test_early_n_group_takes_early_clean_n_out_of_n(self):
+        beats = night()
+        for i in range(400, 460):
+            beats[i].raw = {"prematurity": "0.7"}
+        beats[400].good = False                           # not clean: stays in N
+        q = ld.build_queue(beats, [], limits={"EARLY_N": ld.ALL, "V": ld.ALL, "Q": ld.ALL})
+        early = [x for x in q if x.group == "EARLY_N"]
+        n_before = sum(1 for b in beats[400:460] if b.cls == "N" and b.good)
+        self.assertEqual(len(early), n_before)
+        self.assertTrue(all(x.weight == 1.0 for x in early))
+        self.assertAlmostEqual(sum(x.weight for x in q if x.kind == "BEAT"), len(beats), places=6)
+        off = ld.build_queue(beats, [])                   # default: group off
+        self.assertEqual(sum(1 for x in off if x.group == "EARLY_N"), 0)
+
+    def test_parse_limits(self):
+        self.assertEqual(ld.parse_limits("V=all, q=ALL,S=500"), {"V": ld.ALL, "Q": ld.ALL, "S": 500})
+        with self.assertRaises(ValueError):
+            ld.parse_limits("X=5")
+
     def test_pattern_beats_are_first_and_last_of_event(self):
         beats = night()
         ev = [{"type": "V_COUPLET", "utcMs": str(beats[50].utc_ms), "durationMs": "800"},

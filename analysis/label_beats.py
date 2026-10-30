@@ -145,7 +145,8 @@ class OwnSession:
     """Labelling your own recording."""
     reveal_after_answer = False
 
-    def __init__(self, recording: Path, analysis: Path, labels_root: Path, review: bool = False):
+    def __init__(self, recording: Path, analysis: Path, labels_root: Path, review: bool = False,
+                 limits: dict | None = None):
         ecg, _ = read_ecg(recording)
         self.segments = build_segments(ecg)
         if not self.segments:
@@ -159,10 +160,12 @@ class OwnSession:
         folder = ld.labels_dir(labels_root, self.name)
         queue_path = folder / "queue.csv"
         if not queue_path.is_file():
-            q = ld.build_queue(self.beats, ld.read_events(analysis))
+            q = ld.build_queue(self.beats, ld.read_events(analysis), limits=limits)
             ld.write_queue(queue_path, q)
-            groups = {g: sum(1 for x in q if x.group == g) for g in ("V", "S", "N", "Q", "PATTERN", "GAP")}
+            groups = {g: sum(1 for x in q if x.group == g) for g in ("V", "S", "N", "Q", "EARLY_N", "PATTERN", "GAP")}
             print(f"built {queue_path}: {len(q)} items {groups}")
+        elif limits:
+            print(f"note: {queue_path} already exists and is never rebuilt, so --limit is ignored")
         self.queue = ld.read_queue(queue_path)
         self.labels_path = folder / "labels.csv"
         self.current = ld.current_labels(ld.read_label_rows(self.labels_path))
@@ -443,6 +446,8 @@ def main(argv=None) -> int:
     ap.add_argument("--index", type=int, help="start at this item (1-based); default: first unlabelled")
     ap.add_argument("--review", action="store_true",
                     help="show only the disagreements and your ? items, with our class revealed")
+    ap.add_argument("--limit", help="only when the queue is first built: items per group, e.g. "
+                    "V=all,Q=all,S=500,N=300,EARLY_N=1000,GAP=100 (EARLY_N = N beats that came early: missed S hide there)")
     ap.add_argument("--save", type=Path, help="write the first strip as a PNG instead of opening a window")
     args = ap.parse_args(argv)
     if args.gallery == (args.recording is not None):
@@ -452,7 +457,7 @@ def main(argv=None) -> int:
         session = GallerySession(args.reference, args.per_class, args.labels, args.hard)
     else:
         session = OwnSession(args.recording, args.analysis or default_analysis_dir(args.recording), args.labels,
-                              review=args.review)
+                              review=args.review, limits=ld.parse_limits(args.limit) if args.limit else None)
     if args.save:
         import matplotlib
         matplotlib.use("Agg")
