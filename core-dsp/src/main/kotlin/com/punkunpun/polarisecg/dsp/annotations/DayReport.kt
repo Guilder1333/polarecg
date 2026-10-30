@@ -17,13 +17,15 @@ import java.util.Locale
 private const val HOUR_MS = 3_600_000L
 
 /** Counts of the beats of one stretch of time; only beats in usable windows are counted (like [summarizeActions]). */
-private class Tally(var usableMs: Long = 0, var n: Int = 0, var s: Int = 0, var v: Int = 0) {
+private class Tally(var usableMs: Long = 0, var n: Int = 0, var s: Int = 0, var v: Int = 0, var hrSum: Double = 0.0, var hrN: Int = 0) {
+    /** Mean of the windows' heart rates (each window counts once). */
+    val meanHr: Double? get() = if (hrN > 0) hrSum / hrN else null
     /** (S + V) among the beats that could be judged (N + S + V), in percent; null if there are none. */
     val burdenPercent: Double? get() = (n + s + v).takeIf { it > 0 }?.let { 100.0 * (s + v) / it }
 }
 
 /** One usable 10 s window with its beat counts, so that any stretch of time can be added up quickly. */
-private class WinCount(val midMs: Long, val n: Int, val s: Int, val v: Int)
+private class WinCount(val midMs: Long, val n: Int, val s: Int, val v: Int, val hrBpm: Double?)
 
 private fun winCounts(result: AnalysisResult): List<WinCount> {
     val index = HashMap<Long, IntArray>() // window start -> n, s, v
@@ -37,7 +39,7 @@ private fun winCounts(result: AnalysisResult): List<WinCount> {
         }
     }
     return result.windows.filter { it.quality >= USABLE_QUALITY }
-        .map { w -> index.getValue(w.startUtcMs).let { WinCount(w.startUtcMs + w.durationMs / 2, it[0], it[1], it[2]) } }
+        .map { w -> index.getValue(w.startUtcMs).let { WinCount(w.startUtcMs + w.durationMs / 2, it[0], it[1], it[2], w.meanHrBpm) } }
 }
 
 /** Each window belongs to the stretch that holds its middle, as in [summarizeActions]. */
@@ -46,11 +48,13 @@ private fun tally(wins: List<WinCount>, fromMs: Long, toMs: Long): Tally {
     for (w in wins) if (w.midMs >= fromMs && w.midMs < toMs) {
         t.usableMs += WINDOW_MS
         t.n += w.n; t.s += w.s; t.v += w.v
+        w.hrBpm?.let { t.hrSum += it; t.hrN++ }
     }
     return t
 }
 
 private fun fmt1(v: Double) = String.format(Locale.ROOT, "%.1f", v)
+private fun hr(t: Tally) = t.meanHr?.let { fmt1(it) } ?: "-"
 private fun percent(t: Tally) = t.burdenPercent?.let { String.format(Locale.ROOT, "%.2f %%", it) } ?: "-"
 private fun minutes(ms: Long) = if (ms <= 0) "-" else "${fmt1(ms / 60_000.0)} min"
 private fun hm(ms: Long) = "%d:%02d".format(ms / HOUR_MS, ms % HOUR_MS / 60_000)
@@ -75,26 +79,26 @@ fun renderDayReport(
     if (spans.isNotEmpty()) {
         sb.append("## Actions, hour by hour\n\n")
         for (span in spans) {
-            sb.append("| ${clock.format(Instant.ofEpochMilli(span.startMs))} | ${span.name} (${hm(span.durationMs)}) | S | V | S+V burden |\n")
-            sb.append("|---|---|---:|---:|---:|\n")
+            sb.append("| ${clock.format(Instant.ofEpochMilli(span.startMs))} | ${span.name} (${hm(span.durationMs)}) | HR | S | V | S+V burden |\n")
+            sb.append("|---|---|---:|---:|---:|---:|\n")
             var from = span.startMs
             while (from < span.endMs) {
                 val to = minOf(from + HOUR_MS, span.endMs)
                 val t = tally(wins, from, to)
-                sb.append("| +${hm(from - span.startMs)} to +${hm(to - span.startMs)} | ${minutes(t.usableMs)} usable | ${t.s} | ${t.v} | ${percent(t)} |\n")
+                sb.append("| +${hm(from - span.startMs)} to +${hm(to - span.startMs)} | ${minutes(t.usableMs)} usable | ${hr(t)} | ${t.s} | ${t.v} | ${percent(t)} |\n")
                 from = to
             }
             val total = tally(wins, span.startMs, span.endMs)
-            sb.append("| total | ${span.name} | ${total.s} | ${total.v} | ${percent(total)} |\n\n")
+            sb.append("| total | ${span.name} | ${hr(total)} | ${total.s} | ${total.v} | ${percent(total)} |\n\n")
         }
 
         sb.append("## Summary per action\n\n")
-        sb.append("| action | stretches | usable | S | V | S+V burden | S per h | V per h |\n|---|---:|---:|---:|---:|---:|---:|---:|\n")
+        sb.append("| action | stretches | usable | HR | S | V | S+V burden | S per h | V per h |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|\n")
         val perName = LinkedHashMap<String, Pair<Tally, Int>>()
         for (span in spans) {
             val t = tally(wins, span.startMs, span.endMs)
             val (acc, count) = perName[span.name] ?: (Tally() to 0)
-            acc.usableMs += t.usableMs; acc.n += t.n; acc.s += t.s; acc.v += t.v
+            acc.usableMs += t.usableMs; acc.n += t.n; acc.s += t.s; acc.v += t.v; acc.hrSum += t.hrSum; acc.hrN += t.hrN
             perName[span.name] = acc to count + 1
         }
         for ((name, pair) in perName.entries.sortedByDescending { it.value.first.usableMs }) {
@@ -102,7 +106,7 @@ fun renderDayReport(
             val hours = t.usableMs / HOUR_MS.toDouble()
             val sPerH = if (hours > 0) fmt1(t.s / hours) else "-"
             val vPerH = if (hours > 0) fmt1(t.v / hours) else "-"
-            sb.append("| $name | $count | ${minutes(t.usableMs)} | ${t.s} | ${t.v} | ${percent(t)} | $sPerH | $vPerH |\n")
+            sb.append("| $name | $count | ${minutes(t.usableMs)} | ${hr(t)} | ${t.s} | ${t.v} | ${percent(t)} | $sPerH | $vPerH |\n")
         }
         sb.append('\n')
     } else {

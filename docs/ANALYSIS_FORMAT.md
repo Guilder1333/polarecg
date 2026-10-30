@@ -162,9 +162,9 @@ means and counts over 5 minutes; they do not say what caused a change. Marks out
 Written by every `analyze` run: a readable day report (layout agreed in `docs/report_example.md`), times in JST.
 
 - **Actions, hour by hour:** one table per stretch of an action. The header row has the start time and the action
-  (with its length, h:mm); then one row per hour since the start (the last one shorter) with usable minutes, S, V and the
+  (with its length, h:mm); then one row per hour since the start (the last one shorter) with usable minutes, mean heart rate (bpm), S, V and the
   S+V burden; then a `total` row. Without `annotations.jsonl` this part is replaced by one sentence.
-- **Summary per action:** all stretches of one action added up: number of stretches, usable time, S, V, burden, S and V per usable hour.
+- **Summary per action:** all stretches of one action added up: number of stretches, usable time, mean heart rate, S, V, burden, S and V per usable hour.
 - **Whole recording:** span, ECG hours, usable share, beats per class, S/V/burden and rates in usable windows, mean heart rate, pattern events found, number of events the owner marked.
 
 Burden = (S + V) / (N + S + V) in percent. Everything but the "Beats" line counts usable windows only (`quality` >= 0.5), like `action_summary.csv`.
