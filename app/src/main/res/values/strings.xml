@@ -56,6 +56,22 @@
     <string name="diag_gap_line">%1$s → %2$s (%3$s) · %4$s</string>
 
     <string name="live_open">Live</string>
+    <string name="sum_open">Summary</string>
+    <string name="sum_title">Summary</string>
+    <string name="sum_24h">Last 24 h</string>
+    <string name="sum_today">Today</string>
+    <string name="sum_night">Last night</string>
+    <string name="sum_empty">Nothing recorded in this period yet.</string>
+    <string name="sum_beats">Beats: %1$d (N %2$d, S %3$d, V %4$d, Q %5$d)</string>
+    <string name="sum_burden">Burden: S %1$s, V %2$s, S+V %3$s</string>
+    <string name="sum_vdoubt">%1$d of the V beats are questionable (likely normal beats on a drifting baseline).</string>
+    <string name="sum_hr">Heart rate: min %1$s, mean %2$s, max %3$s bpm</string>
+    <string name="sum_hrv">HRV: median RMSSD %1$s ms, SDNN %2$s ms (%3$d windows of 5 min)</string>
+    <string name="sum_coverage">Recorded: %1$s %% of the period</string>
+    <string name="sum_chart_burden">S (blue) and V (red) burden per hour, %%</string>
+    <string name="sum_chart_rmssd">RMSSD per hour, ms</string>
+    <string name="sum_not_yet">Longest run and the hour-by-hour view per action come later (events table, P5.4).</string>
+    <string name="sum_back">Back</string>
     <string name="live_title">Live ECG</string>
     <string name="live_hr">%1$d bpm</string>
     <string name="live_hr_none">– bpm</string>

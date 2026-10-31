@@ -176,6 +176,19 @@ long, and within 20 % of the NN interval right before it. So no interval touches
 | `lfMs2`, `hfMs2`, `lfHf` | power in 0.04-0.15 Hz and 0.15-0.40 Hz (Lomb-Scargle on the uneven beat times) and their ratio; only for valid windows with at least 60 intervals |
 | `action` | the owner's action at the middle of the window (as in windows.csv) |
 
+## `minutes.csv`
+
+One row per UTC minute that has a beat: exactly the rows the phone stores in its `minute_summary` table (P5.6), so the two can be compared.
+
+| Column | Meaning |
+|---|---|
+| `startUtcMs`, `startUtc` | start of the minute |
+| `beats`, `n`, `s`, `v`, `q` | beats of the minute by class |
+| `vDoubt` | of the `v` beats, how many are questionable |
+| `hrMeanBpm`, `hrMinBpm`, `hrMaxBpm` | heart rate from the NN intervals of the minute only (60000 / mean NN; the extremes of single NN): an early beat does not make a spike; empty if the minute has no NN interval |
+| `coverage` | share of the minute covered by intervals between consecutive beats (up to 2 s long, same segment), 0..1 |
+| `motionMg` | mean accelerometer motion of the beats, empty without ACC data |
+
 ## `report.md`
 
 Written by every `analyze` run: a readable day report (layout agreed in `docs/report_example.md`), times in JST.

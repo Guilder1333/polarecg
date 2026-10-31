@@ -580,7 +580,7 @@ Details in §7.5–7.6.
   session has no end time (and raw recording is on), the start screen says "Unfinished session from ..., last data around ...", that
   Continue adds to it and does not overwrite it, and the button reads **Continue recording** (`SessionFolders.unfinished`, read-only).
   Still to do for the tick: a night with the fixed build whose saved beats equal `analyze` ("equal" = same beats and classes; times of a segment after a restart may differ by one BLE delay, see above).)
-- [ ] **P5.3b [AI] TODO, remove the clearing after export.** Temporary rule (owner, 2026-10-29): while the raw files are the
+- [x] **P5.3b [AI] Remove the clearing after export.** (Done 2026-10-31: an export now deletes nothing. Note that the zip contains the whole `polaris.db`, about 70 bytes per beat, 7 MB a day, so it grows until the 90-day retention; P6.3 decides what the zip should hold.) Temporary rule (owner, 2026-10-29): while the raw files are the
   only thing that matters, **Export last session** puts `polaris.db` and `beats.csv` into the zip and then deletes the exported
   beats from the database (and VACUUMs it); the button says so. Remove this (the `exportedUpTo` / `deleteBefore` / VACUUM part of
   `zipSession`, and "and clear saved beats" in `raw_export`) **before** the summary and review screens (P5.6/P5.7) or labels
@@ -602,6 +602,19 @@ Details in §7.5–7.6.
   this size (about 25 ms), but not for a very low-variability recording.)
 - [ ] **P5.6 [YOU+AI]** Summary screen: today / last night / last 24 h — beats, V and S burden per
   hour (bar chart), longest run, HR min/avg/max, HRV trend, data coverage.
+  (Built 2026-10-31, **not yet tried on the phone**. Long-term tables from §8, database version 2 with a real migration
+  (`storage/Migrations.kt`, checked against the exported schema `app/schemas/` by `MigrationsTest`): `minute_summary` (one row per
+  UTC minute: beats by class, questionable V, HR min/mean/max from NN intervals, coverage, motion) and `hrv_window` (the rows of
+  `hrv.csv`), kept "forever" while `beat` is pruned after 90 days. `:core-dsp` `dsp/summary/Summary.kt` builds them beat by beat
+  (`SummaryBuilder`, the same code in `analyze`, which writes `minutes.csv`, so phone and PC can be compared), `RangeSummary.kt` sums a
+  range up (tested). `BeatWriter` feeds the builder from the live beats and writes finished minutes and windows in the same coroutine; a
+  normal stop saves the minute and window still open, a kill loses the open one (as the unflushed beats); after Stop and Start within
+  one minute or window the fuller row wins. `summary/SummaryScreen.kt` (button **Summary** on the start screen): ranges Last 24 h /
+  Today / Last night (22:00-08:00 local), beats and S/V burden, questionable V, HR min/mean/max, median RMSSD and SDNN, share of the
+  period recorded, bar charts of S and V burden and of RMSSD per hour. **Not done:** the longest run (needs the `event` table, P5.4),
+  burden per action on the phone, a chart style the owner has looked at. **Done when:** after a recorded day the screen shows
+  numbers that match `report.md` / `minutes.csv` of the same session (counts exactly, HR and burden to rounding), also for "Last 24 h"
+  after more than one session.)
 - [ ] **P5.7 [YOU+AI]** Event list + **review screen**: ECG clip viewer with beat markers and class
   labels; tap a beat to relabel (N/S/V/noise). Labels stored separately from automatic classes:
   a relabel never changes `beat.cls`; it appends a row to `label` (history kept, newest wins), and the screen shows
@@ -624,7 +637,7 @@ Details in §7.5–7.6.
     `docs/RAW_FORMAT.md`), so it travels with the export and survives clearing the database; the database tables (`activity_type`,
     `activity`, `event`) are an index of it, rebuilt from the files if needed.
   - (Built 2026-10-29, **not yet tried on the phone**. `annotations/`: `AnnotationRecords` (line format, newest-wins fold, current
-    action), `AnnotationTypes` (picker names: presets, "New", hide, most recent first; `annotation_types.json`), `AnnotationStore`
+    action), `AnnotationTypes` (picker names: resets, "New", hide, most recent first; `annotation_types.json`), `AnnotationStore`
     (append to the open session's `annotations.jsonl` with fsync), `AnnotationScreen` (the picker; `AnnotationBar` = the two buttons +
     "Now: Walking since 14:05", on the live screen and the main screen; disabled when no session is being recorded). The session zip
     contains the file because it zips the whole folder; format in `docs/RAW_FORMAT.md`. Unit tests in `AnnotationsTest`. **Not done

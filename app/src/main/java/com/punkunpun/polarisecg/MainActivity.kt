@@ -28,6 +28,7 @@ import com.punkunpun.polarisecg.replay.ReplayScreen
 import com.punkunpun.polarisecg.pairing.PairingRoute
 import com.punkunpun.polarisecg.permissions.AppPermissions
 import com.punkunpun.polarisecg.permissions.PermissionsScreen
+import com.punkunpun.polarisecg.summary.SummaryScreen
 import com.punkunpun.polarisecg.ui.theme.PolarisECGTheme
 
 class MainActivity : ComponentActivity() {
@@ -91,6 +92,7 @@ class MainActivity : ComponentActivity() {
                 var showDiagnostics by rememberSaveable { mutableStateOf(false) }
                 var showLive by rememberSaveable { mutableStateOf(false) }
                 var showReplay by rememberSaveable { mutableStateOf(false) }
+                var showSummary by rememberSaveable { mutableStateOf(false) }
                 // The picker for an action/event: which kind, and when the button was pressed (null kind = closed).
                 var annotateKind by rememberSaveable { mutableStateOf<String?>(null) }
                 var annotatePressedMs by rememberSaveable { mutableStateOf(0L) }
@@ -130,6 +132,12 @@ class MainActivity : ComponentActivity() {
                                 )
                             },
                         )
+                    } else if (showPairing && showSummary) {
+                        SummaryScreen(
+                            app = application as PolarisApp,
+                            onBack = { showSummary = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
                     } else if (showPairing && showReplay) {
                         ReplayScreen(
                             app = application as PolarisApp,
@@ -148,6 +156,7 @@ class MainActivity : ComponentActivity() {
                             app = application as PolarisApp,
                             onOpenDiagnostics = { showDiagnostics = true },
                             onOpenLive = { showLive = true },
+                            onOpenSummary = { showSummary = true },
                             onOpenReplay = { showReplay = true },
                             onAnnotate = onAnnotate,
                             modifier = Modifier.padding(innerPadding),
