@@ -5,6 +5,7 @@ import com.punkunpun.polarisecg.dsp.analysis.Beat
 import com.punkunpun.polarisecg.dsp.analysis.Window
 import com.punkunpun.polarisecg.dsp.annotations.actionSpans
 import com.punkunpun.polarisecg.dsp.annotations.parseMarks
+import com.punkunpun.polarisecg.dsp.annotations.parseOwnerLabels
 import com.punkunpun.polarisecg.dsp.annotations.renderDayReport
 import com.punkunpun.polarisecg.dsp.quality.BeatQuality
 import kotlin.test.Test
@@ -44,5 +45,26 @@ class DayReportTest {
         val report = renderDayReport(result(), emptyList(), emptyList(), "test")
         assertTrue("No actions were marked" in report)
         assertTrue("## Whole recording" in report)
+    }
+
+    @Test fun ownerLabelsReplaceTheAutomaticClassAndTheLastRowWins() {
+        val labels = parseOwnerLabels(
+            listOf(
+                "item,utcMs,kind,label,labeledAtUtc,note,bumpUtcMs",
+                "B${t0 + 5_000},${t0 + 5_000},BEAT,S,2026-10-30T13:24:16.607Z,\"odd, note\",",
+                "B${t0 + 5_000},${t0 + 5_000},BEAT,N,2026-10-30T13:25:00.000Z,,", // changed mind: N wins
+                "B${t0 + 3_700_000},${t0 + 3_700_000},BEAT,?,2026-10-30T13:26:00.000Z,,", // unsure: not a class
+                "G${t0 + 9},${t0 + 9},GAP,B,2026-10-30T13:27:00.000Z,,",           // gap item: not a beat
+                "B${t0 + 3_710_000},${t0 + 3_710_000},BEAT,V,2026-10-30T13:28:00.000Z,,",
+                "B${t0 + 3_710_000},${t0 + 3_710_000},BEAT,,2026-10-30T13:29:00.000Z,,",   // undone
+            ),
+        )
+        assertTrue(labels == mapOf(t0 + 5_000 to "N"), labels.toString())
+
+        val res = result() // beats: S at 5 s, V at 3700 s, S at 3710 s, N at 3720 s
+        val marks = parseMarks(listOf(line("1", "Sitting", t0), line("2", "Walking", t0 + 3_600_000)))
+        val fixed = renderDayReport(res, marks, actionSpans(marks, t0 + 7_200_000), "test", labels = mapOf(t0 + 3_700_000 to "N"))
+        assertTrue("| total | Walking | 70.0 | 1 | 0 | 33.33 % |" in fixed, fixed) // the V was a normal beat: S 1, V 0, N 2
+        assertTrue("Corrected with the owner's labels" in fixed, fixed)
     }
 }

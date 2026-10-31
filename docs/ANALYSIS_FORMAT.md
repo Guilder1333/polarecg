@@ -170,3 +170,11 @@ Written by every `analyze` run: a readable day report (layout agreed in `docs/re
 Burden = (S + V) / (N + S + V) in percent. Everything but the "Beats" line counts usable windows only (`quality` >= 0.5), like `action_summary.csv`.
 Not in it yet: HRV (P5.5), the events with their context (see `activities.csv`).
 
+### `report_labelled.md` (with `--labels`)
+
+`analyze <session> --labels data/labels/<session>` also writes `report_labelled.md`: the same report, but every beat the owner labelled
+(`labels.csv` of the labeling tool, last row per item wins; N, S, V, Q count, `?` and gap items do not) takes the owner's class instead of the
+automatic one. Beats nobody labelled keep the automatic class, so the report is only as corrected as the labelling is complete: check the
+queue groups (`queue.csv`) to see which classes were labelled in full. A V the owner confirmed is no longer "questionable".
+`report.md` is never changed by labels. Both reports have a "V questionable" column in the per-action summary (our V with the `vDoubt` flag, P4.7).
+

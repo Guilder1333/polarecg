@@ -1,5 +1,6 @@
 package com.punkunpun.polarisecg.cli
 
+import com.punkunpun.polarisecg.dsp.annotations.parseOwnerLabels
 import com.punkunpun.polarisecg.dsp.annotations.renderDayReport
 import com.punkunpun.polarisecg.dsp.raw.RawRecord
 import com.punkunpun.polarisecg.dsp.raw.readStream
@@ -8,13 +9,15 @@ import kotlin.system.exitProcess
 
 private const val USAGE = """PolarisECG CLI
 
-  analyze <recording-folder> [--out <dir>]
+  analyze <recording-folder> [--out <dir>] [--labels <dir>]
 
     <recording-folder>  a session folder (data/sessions/<start>) or a converted reference
                         record (data/reference/<db>/<record>): any folder with ecg*.bin files
     --out <dir>         where to write beats.csv, windows.csv, events.csv, ... (+ activities.csv and
                         action_summary.csv if the folder has annotations.jsonl)
                         (default: data/analysis/<parent>-<folder>)
+    --labels <dir>      the owner's labels of this session (data/labels/<session>): also writes report_labelled.md,
+                        the day report with the owner's class for every labelled beat (report.md stays automatic)
 
   live-check <recording-folder>
 
@@ -38,10 +41,12 @@ fun main(args: Array<String>) {
 private fun analyzeCommand(args: List<String>): Int {
     var folder: File? = null
     var out: File? = null
+    var labelsDir: File? = null
     var i = 0
     while (i < args.size) {
         when (val a = args[i]) {
             "--out" -> out = args.getOrNull(++i)?.let(::File) ?: return usageError("--out needs a folder")
+            "--labels" -> labelsDir = args.getOrNull(++i)?.let(::File) ?: return usageError("--labels needs a folder")
             else -> {
                 if (a.startsWith("--") || folder != null) return usageError("Unexpected argument '$a'")
                 folder = File(a)
@@ -74,6 +79,13 @@ private fun analyzeCommand(args: List<String>): Int {
     writeCsvs(result, outDir, spans)
     writeAnnotationCsvs(result, marks, spans, outDir)
     File(outDir, "report.md").writeText(renderDayReport(result, marks, spans, folder.name))
+    labelsDir?.let { dir ->
+        val file = File(dir, "labels.csv")
+        if (!file.isFile) return usageError("No labels.csv in $dir")
+        val labels = parseOwnerLabels(file.readLines())
+        File(outDir, "report_labelled.md").writeText(renderDayReport(result, marks, spans, folder.name + " (with the owner's labels)", labels = labels))
+        println("report_labelled.md: ${labels.size} beats take the owner's class")
+    }
 
     val hours = result.segments.sumOf { it.durationMs } / 3_600_000.0
     println(

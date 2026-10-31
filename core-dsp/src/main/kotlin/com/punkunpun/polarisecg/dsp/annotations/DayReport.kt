@@ -17,7 +17,7 @@ import java.util.Locale
 private const val HOUR_MS = 3_600_000L
 
 /** Counts of the beats of one stretch of time; only beats in usable windows are counted (like [summarizeActions]). */
-private class Tally(var usableMs: Long = 0, var n: Int = 0, var s: Int = 0, var v: Int = 0, var hrSum: Double = 0.0, var hrN: Int = 0) {
+private class Tally(var usableMs: Long = 0, var n: Int = 0, var s: Int = 0, var v: Int = 0, var hrSum: Double = 0.0, var hrN: Int = 0, var vDoubt: Int = 0) {
     /** Mean of the windows' heart rates (each window counts once). */
     val meanHr: Double? get() = if (hrN > 0) hrSum / hrN else null
     /** (S + V) among the beats that could be judged (N + S + V), in percent; null if there are none. */
@@ -25,21 +25,22 @@ private class Tally(var usableMs: Long = 0, var n: Int = 0, var s: Int = 0, var 
 }
 
 /** One usable 10 s window with its beat counts, so that any stretch of time can be added up quickly. */
-private class WinCount(val midMs: Long, val n: Int, val s: Int, val v: Int, val hrBpm: Double?)
+private class WinCount(val midMs: Long, val n: Int, val s: Int, val v: Int, val vDoubt: Int, val hrBpm: Double?)
 
-private fun winCounts(result: AnalysisResult): List<WinCount> {
-    val index = HashMap<Long, IntArray>() // window start -> n, s, v
-    for (w in result.windows) if (w.quality >= USABLE_QUALITY) index[w.startUtcMs] = IntArray(3)
+private fun winCounts(result: AnalysisResult, labels: Map<Long, String>): List<WinCount> {
+    val index = HashMap<Long, IntArray>() // window start -> n, s, v, questionable v
+    for (w in result.windows) if (w.quality >= USABLE_QUALITY) index[w.startUtcMs] = IntArray(4)
     for (b in result.beats) {
         val c = index[b.utcMs - Math.floorMod(b.utcMs, WINDOW_MS)] ?: continue
-        when (b.cls) {
+        val label = labels[b.utcMs] // the owner's label replaces our class; a V the owner confirmed is not "questionable"
+        when (label ?: b.cls) {
             "N" -> c[0]++
             "S" -> c[1]++
-            "V" -> c[2]++
+            "V" -> { c[2]++; if (label == null && b.vDoubt) c[3]++ }
         }
     }
     return result.windows.filter { it.quality >= USABLE_QUALITY }
-        .map { w -> index.getValue(w.startUtcMs).let { WinCount(w.startUtcMs + w.durationMs / 2, it[0], it[1], it[2], w.meanHrBpm) } }
+        .map { w -> index.getValue(w.startUtcMs).let { WinCount(w.startUtcMs + w.durationMs / 2, it[0], it[1], it[2], it[3], w.meanHrBpm) } }
 }
 
 /** Each window belongs to the stretch that holds its middle, as in [summarizeActions]. */
@@ -47,7 +48,7 @@ private fun tally(wins: List<WinCount>, fromMs: Long, toMs: Long): Tally {
     val t = Tally()
     for (w in wins) if (w.midMs >= fromMs && w.midMs < toMs) {
         t.usableMs += WINDOW_MS
-        t.n += w.n; t.s += w.s; t.v += w.v
+        t.n += w.n; t.s += w.s; t.v += w.v; t.vDoubt += w.vDoubt
         w.hrBpm?.let { t.hrSum += it; t.hrN++ }
     }
     return t
@@ -69,12 +70,17 @@ fun renderDayReport(
     spans: List<ActionSpan>,
     title: String,
     zone: ZoneId = ZoneId.of("Asia/Tokyo"),
+    labels: Map<Long, String> = emptyMap(),
 ): String {
     val clock = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(zone)
-    val wins = winCounts(result)
+    val wins = winCounts(result, labels)
     val sb = StringBuilder()
     sb.append("# Day report $title\n\n")
     sb.append("Times are ${zone.id}. Burden = (S + V) / (N + S + V) in percent, counted in usable windows only (quality >= 0.5).\n\n")
+    if (labels.isNotEmpty()) {
+        val changed = result.beats.count { b -> labels[b.utcMs]?.let { it != b.cls } == true }
+        sb.append("**Corrected with the owner's labels:** ${labels.size} beats carry the owner's class instead of the automatic one ($changed of them differ); all other beats keep the automatic class.\n\n")
+    }
 
     if (spans.isNotEmpty()) {
         sb.append("## Actions, hour by hour\n\n")
@@ -93,12 +99,12 @@ fun renderDayReport(
         }
 
         sb.append("## Summary per action\n\n")
-        sb.append("| action | stretches | usable | HR | S | V | S+V burden | S per h | V per h |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+        sb.append("| action | stretches | usable | HR | S | V | S+V burden | S per h | V per h | V questionable |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
         val perName = LinkedHashMap<String, Pair<Tally, Int>>()
         for (span in spans) {
             val t = tally(wins, span.startMs, span.endMs)
             val (acc, count) = perName[span.name] ?: (Tally() to 0)
-            acc.usableMs += t.usableMs; acc.n += t.n; acc.s += t.s; acc.v += t.v; acc.hrSum += t.hrSum; acc.hrN += t.hrN
+            acc.usableMs += t.usableMs; acc.n += t.n; acc.s += t.s; acc.v += t.v; acc.hrSum += t.hrSum; acc.hrN += t.hrN; acc.vDoubt += t.vDoubt
             perName[span.name] = acc to count + 1
         }
         for ((name, pair) in perName.entries.sortedByDescending { it.value.first.usableMs }) {
@@ -106,7 +112,7 @@ fun renderDayReport(
             val hours = t.usableMs / HOUR_MS.toDouble()
             val sPerH = if (hours > 0) fmt1(t.s / hours) else "-"
             val vPerH = if (hours > 0) fmt1(t.v / hours) else "-"
-            sb.append("| $name | $count | ${minutes(t.usableMs)} | ${hr(t)} | ${t.s} | ${t.v} | ${percent(t)} | $sPerH | $vPerH |\n")
+            sb.append("| $name | $count | ${minutes(t.usableMs)} | ${hr(t)} | ${t.s} | ${t.v} | ${percent(t)} | $sPerH | $vPerH | ${t.vDoubt} |\n")
         }
         sb.append('\n')
     } else {
@@ -119,7 +125,7 @@ fun renderDayReport(
     val end = dataEndMs(result)
     val usableWindows = result.windows.filter { it.quality >= USABLE_QUALITY }
     val meanHr = usableWindows.mapNotNull { it.meanHrBpm }.takeIf { it.isNotEmpty() }?.average()
-    val classes = result.beats.groupingBy { it.cls }.eachCount()
+    val classes = result.beats.groupingBy { labels[it.utcMs] ?: it.cls }.eachCount()
     sb.append("## Whole recording\n\n")
     if (first != null) {
         sb.append("- Recorded: ${clock.format(Instant.ofEpochMilli(first))} to ${clock.format(Instant.ofEpochMilli(end))} " +
@@ -128,7 +134,7 @@ fun renderDayReport(
     sb.append("- Usable: ${fmt1(total.usableMs / HOUR_MS.toDouble())} h (${result.windows.size.takeIf { it > 0 }?.let { fmt1(100.0 * usableWindows.size / it) } ?: "-"} % of the windows)\n")
     sb.append("- Beats: ${result.beats.size} (N ${classes["N"] ?: 0}, S ${classes["S"] ?: 0}, V ${classes["V"] ?: 0}, Q ${classes["Q"] ?: 0})\n")
     val hours = total.usableMs / HOUR_MS.toDouble()
-    sb.append("- In usable windows: S ${total.s}, V ${total.v}, burden ${percent(total)}" +
+    sb.append("- In usable windows: S ${total.s}, V ${total.v} (questionable: ${total.vDoubt}), burden ${percent(total)}" +
         (if (hours > 0) ", S ${fmt1(total.s / hours)} per h, V ${fmt1(total.v / hours)} per h" else "") + "\n")
     meanHr?.let { sb.append("- Mean heart rate (usable windows): ${fmt1(it)} bpm\n") }
     if (result.events.isNotEmpty()) {
