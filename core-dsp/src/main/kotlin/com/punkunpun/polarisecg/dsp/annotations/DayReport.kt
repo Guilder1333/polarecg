@@ -3,6 +3,10 @@ package com.punkunpun.polarisecg.dsp.annotations
 import com.punkunpun.polarisecg.dsp.analysis.AnalysisResult
 import com.punkunpun.polarisecg.dsp.analysis.USABLE_QUALITY
 import com.punkunpun.polarisecg.dsp.analysis.WINDOW_MS
+import com.punkunpun.polarisecg.dsp.hrv.Nn
+import com.punkunpun.polarisecg.dsp.hrv.hrvWindows
+import com.punkunpun.polarisecg.dsp.hrv.nnIntervals
+import com.punkunpun.polarisecg.dsp.hrv.timeDomain
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -55,6 +59,11 @@ private fun tally(wins: List<WinCount>, fromMs: Long, toMs: Long): Tally {
 }
 
 private fun fmt1(v: Double) = String.format(Locale.ROOT, "%.1f", v)
+/** RMSSD (ms) of the NN intervals ending in [fromMs, toMs); "-" if there is no pair of neighbouring intervals. */
+private fun rmssd(nn: List<Nn>): String = timeDomain(nn).rmssdMs?.let { fmt1(it) } ?: "-"
+
+private fun nnBetween(nn: List<Nn>, fromMs: Long, toMs: Long): List<Nn> = nn.filter { it.endUtcMs >= fromMs && it.endUtcMs < toMs }
+
 private fun hr(t: Tally) = t.meanHr?.let { fmt1(it) } ?: "-"
 private fun percent(t: Tally) = t.burdenPercent?.let { String.format(Locale.ROOT, "%.2f %%", it) } ?: "-"
 private fun minutes(ms: Long) = if (ms <= 0) "-" else "${fmt1(ms / 60_000.0)} min"
@@ -74,6 +83,7 @@ fun renderDayReport(
 ): String {
     val clock = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(zone)
     val wins = winCounts(result, labels)
+    val nn = nnIntervals(result.beats) // for HRV (P5.5): the owner's labels do not change it, only our own N classification does
     val sb = StringBuilder()
     sb.append("# Day report $title\n\n")
     sb.append("Times are ${zone.id}. Burden = (S + V) / (N + S + V) in percent, counted in usable windows only (quality >= 0.5).\n\n")
@@ -85,34 +95,36 @@ fun renderDayReport(
     if (spans.isNotEmpty()) {
         sb.append("## Actions, hour by hour\n\n")
         for (span in spans) {
-            sb.append("| ${clock.format(Instant.ofEpochMilli(span.startMs))} | ${span.name} (${hm(span.durationMs)}) | HR | S | V | S+V burden |\n")
-            sb.append("|---|---|---:|---:|---:|---:|\n")
+            sb.append("| ${clock.format(Instant.ofEpochMilli(span.startMs))} | ${span.name} (${hm(span.durationMs)}) | HR | RMSSD | S | V | S+V burden |\n")
+            sb.append("|---|---|---:|---:|---:|---:|---:|\n")
             var from = span.startMs
             while (from < span.endMs) {
                 val to = minOf(from + HOUR_MS, span.endMs)
                 val t = tally(wins, from, to)
-                sb.append("| +${hm(from - span.startMs)} to +${hm(to - span.startMs)} | ${minutes(t.usableMs)} usable | ${hr(t)} | ${t.s} | ${t.v} | ${percent(t)} |\n")
+                sb.append("| +${hm(from - span.startMs)} to +${hm(to - span.startMs)} | ${minutes(t.usableMs)} usable | ${hr(t)} | ${rmssd(nnBetween(nn, from, to))} | ${t.s} | ${t.v} | ${percent(t)} |\n")
                 from = to
             }
             val total = tally(wins, span.startMs, span.endMs)
-            sb.append("| total | ${span.name} | ${hr(total)} | ${total.s} | ${total.v} | ${percent(total)} |\n\n")
+            sb.append("| total | ${span.name} | ${hr(total)} | ${rmssd(nnBetween(nn, span.startMs, span.endMs))} | ${total.s} | ${total.v} | ${percent(total)} |\n\n")
         }
 
         sb.append("## Summary per action\n\n")
-        sb.append("| action | stretches | usable | HR | S | V | S+V burden | S per h | V per h | V questionable |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+        sb.append("| action | stretches | usable | HR | RMSSD | S | V | S+V burden | S per h | V per h | V questionable |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
         val perName = LinkedHashMap<String, Pair<Tally, Int>>()
+        val nnPerName = HashMap<String, ArrayList<Nn>>() // all stretches of one action pooled
         for (span in spans) {
             val t = tally(wins, span.startMs, span.endMs)
             val (acc, count) = perName[span.name] ?: (Tally() to 0)
             acc.usableMs += t.usableMs; acc.n += t.n; acc.s += t.s; acc.v += t.v; acc.hrSum += t.hrSum; acc.hrN += t.hrN; acc.vDoubt += t.vDoubt
             perName[span.name] = acc to count + 1
+            nnPerName.getOrPut(span.name) { ArrayList() } += nnBetween(nn, span.startMs, span.endMs)
         }
         for ((name, pair) in perName.entries.sortedByDescending { it.value.first.usableMs }) {
             val (t, count) = pair
             val hours = t.usableMs / HOUR_MS.toDouble()
             val sPerH = if (hours > 0) fmt1(t.s / hours) else "-"
             val vPerH = if (hours > 0) fmt1(t.v / hours) else "-"
-            sb.append("| $name | $count | ${minutes(t.usableMs)} | ${hr(t)} | ${t.s} | ${t.v} | ${percent(t)} | $sPerH | $vPerH | ${t.vDoubt} |\n")
+            sb.append("| $name | $count | ${minutes(t.usableMs)} | ${hr(t)} | ${rmssd(nnPerName.getValue(name))} | ${t.s} | ${t.v} | ${percent(t)} | $sPerH | $vPerH | ${t.vDoubt} |\n")
         }
         sb.append('\n')
     } else {
@@ -139,6 +151,15 @@ fun renderDayReport(
     meanHr?.let { sb.append("- Mean heart rate (usable windows): ${fmt1(it)} bpm\n") }
     if (result.events.isNotEmpty()) {
         sb.append("- Events found: " + result.events.groupingBy { it.type }.eachCount().entries.sortedBy { it.key }.joinToString(", ") { "${it.key} ${it.value}" } + "\n")
+    }
+    val validHrv = hrvWindows(nn).filter { it.valid }
+    if (validHrv.isNotEmpty()) {
+        fun median(values: List<Double>) = values.sorted().let { if (it.size % 2 == 1) it[it.size / 2] else (it[it.size / 2 - 1] + it[it.size / 2]) / 2 }
+        val rm = median(validHrv.mapNotNull { it.time.rmssdMs })
+        val sd = median(validHrv.mapNotNull { it.time.sdnnMs })
+        val ratios = validHrv.mapNotNull { it.spectrum?.lfHf }
+        sb.append("- HRV, median of ${validHrv.size} valid 5-minute windows: RMSSD ${fmt1(rm)} ms, SDNN ${fmt1(sd)} ms" +
+            (if (ratios.isNotEmpty()) ", LF/HF ${fmt1(median(ratios))}" else "") + " (hrv.csv)\n")
     }
     val eventMarks = marks.count { !it.isAction }
     if (eventMarks > 0) sb.append("- Events marked by the owner: $eventMarks (see activities.csv)\n")

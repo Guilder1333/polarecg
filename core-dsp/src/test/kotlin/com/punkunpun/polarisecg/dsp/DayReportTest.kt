@@ -34,11 +34,11 @@ class DayReportTest {
         val res = result()
         val marks = parseMarks(listOf(line("1", "Sitting", t0), line("2", "Walking", t0 + 3_600_000)))
         val report = renderDayReport(res, marks, actionSpans(marks, t0 + 7_200_000), "test")
-        assertTrue("| Sitting (1:00) | HR | S | V | S+V burden |" in report, report)
-        assertTrue("| total | Sitting | 70.0 | 1 | 0 | 100.00 % |" in report, report)
-        assertTrue("| total | Walking | 70.0 | 1 | 1 | 66.67 % |" in report, report) // S, V, and an N: the noisy V is left out
+        assertTrue("| Sitting (1:00) | HR | RMSSD | S | V | S+V burden |" in report, report)
+        assertTrue("| total | Sitting | 70.0 | - | 1 | 0 | 100.00 % |" in report, report)
+        assertTrue("| total | Walking | 70.0 | - | 1 | 1 | 66.67 % |" in report, report) // S, V, and an N: the noisy V is left out
         assertTrue("## Summary per action" in report && "## Whole recording" in report, report)
-        assertTrue("| Walking | 1 | 30.0 min | 70.0 | 1 | 1 |" in report, report)
+        assertTrue("| Walking | 1 | 30.0 min | 70.0 | - | 1 | 1 |" in report, report)
     }
 
     @Test fun withoutMarksOnlyTheRecordingStatisticsAreWritten() {
@@ -64,7 +64,7 @@ class DayReportTest {
         val res = result() // beats: S at 5 s, V at 3700 s, S at 3710 s, N at 3720 s
         val marks = parseMarks(listOf(line("1", "Sitting", t0), line("2", "Walking", t0 + 3_600_000)))
         val fixed = renderDayReport(res, marks, actionSpans(marks, t0 + 7_200_000), "test", labels = mapOf(t0 + 3_700_000 to "N"))
-        assertTrue("| total | Walking | 70.0 | 1 | 0 | 33.33 % |" in fixed, fixed) // the V was a normal beat: S 1, V 0, N 2
+        assertTrue("| total | Walking | 70.0 | - | 1 | 0 | 33.33 % |" in fixed, fixed) // the V was a normal beat: S 1, V 0, N 2
         assertTrue("Corrected with the owner's labels" in fixed, fixed)
     }
 }

@@ -78,6 +78,7 @@ private fun analyzeCommand(args: List<String>): Int {
     val spans = spansFor(result, marks)
     writeCsvs(result, outDir, spans)
     writeAnnotationCsvs(result, marks, spans, outDir)
+    writeHrvCsv(result, outDir, spans)
     File(outDir, "report.md").writeText(renderDayReport(result, marks, spans, folder.name))
     labelsDir?.let { dir ->
         val file = File(dir, "labels.csv")

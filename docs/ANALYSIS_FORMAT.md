@@ -157,6 +157,25 @@ Limits: the last action ends at the end of the analysed data, not at the session
 (`usableMin`) gives noisy `vPerHour` / `sPerHour`: check it before comparing actions. The before/after figures of an event are plain
 means and counts over 5 minutes; they do not say what caused a change. Marks outside the recording's time range are ignored.
 
+## `hrv.csv`
+
+One row per 5-minute window (aligned to UTC) that has at least one NN interval (P5.5, plan §7.7). An NN interval is the time between two
+consecutive beats that are both class `N` with a good signal (`good` = 1; rescued beats do not count), in the same segment, 300-2000 ms
+long, and within 20 % of the NN interval right before it. So no interval touches an S, V or Q beat, and ectopic beats do not add to the variability.
+
+| Column | Meaning |
+|---|---|
+| `startUtcMs`, `startUtc` | start of the window |
+| `nn` | number of NN intervals (each belongs to the window of the beat that ends it) |
+| `coverage` | share of the 5 minutes covered by NN intervals (0..1) |
+| `valid` | 1 if `coverage` >= 0.7: show these; the others are there to see why |
+| `meanHrBpm` | 60000 / mean NN |
+| `sdnnMs` | standard deviation of the NN intervals |
+| `rmssdMs` | root mean square of the differences between neighbouring NN intervals (two intervals that share a beat) |
+| `pnn50Percent` | share of those differences over 50 ms |
+| `lfMs2`, `hfMs2`, `lfHf` | power in 0.04-0.15 Hz and 0.15-0.40 Hz (Lomb-Scargle on the uneven beat times) and their ratio; only for valid windows with at least 60 intervals |
+| `action` | the owner's action at the middle of the window (as in windows.csv) |
+
 ## `report.md`
 
 Written by every `analyze` run: a readable day report (layout agreed in `docs/report_example.md`), times in JST.
@@ -168,7 +187,7 @@ Written by every `analyze` run: a readable day report (layout agreed in `docs/re
 - **Whole recording:** span, ECG hours, usable share, beats per class, S/V/burden and rates in usable windows, mean heart rate, pattern events found, number of events the owner marked.
 
 Burden = (S + V) / (N + S + V) in percent. Everything but the "Beats" line counts usable windows only (`quality` >= 0.5), like `action_summary.csv`.
-Not in it yet: HRV (P5.5), the events with their context (see `activities.csv`).
+The tables also have an `RMSSD` column (ms, from the NN intervals of the hour / stretch; stretches of one action pooled in the summary) and the "Whole recording" part a median-HRV line over the valid windows. Not in it yet: the events with their context (see `activities.csv`).
 
 ### `report_labelled.md` (with `--labels`)
 
@@ -176,5 +195,5 @@ Not in it yet: HRV (P5.5), the events with their context (see `activities.csv`).
 (`labels.csv` of the labeling tool, last row per item wins; N, S, V, Q count, `?` and gap items do not) takes the owner's class instead of the
 automatic one. Beats nobody labelled keep the automatic class, so the report is only as corrected as the labelling is complete: check the
 queue groups (`queue.csv`) to see which classes were labelled in full. A V the owner confirmed is no longer "questionable".
-`report.md` is never changed by labels. Both reports have a "V questionable" column in the per-action summary (our V with the `vDoubt` flag, P4.7).
+`report.md` is never changed by labels. Both reports have an RMSSD column (HRV does not use the owner's labels, only the automatic class N) and a "V questionable" column in the per-action summary (our V with the `vDoubt` flag, P4.7).
 

@@ -588,7 +588,18 @@ Details in §7.5–7.6.
 - [ ] **P5.4 [AI]** Ring buffer + **event clips**: for each event (V, S, couplet, run, pause…), save
   10 s before + 10 s after. Rate-limit clips (e.g. bigeminy for 1 hour shouldn't save 1800 clips —
   save the first few + one per N minutes).
-- [ ] **P5.5 [AI]** HRV computation over 5-minute windows on clean NN intervals (§7.7).
+- [x] **P5.5 [AI]** HRV computation over 5-minute windows on clean NN intervals (§7.7).
+  (Built 2026-10-31 in `:core-dsp` `dsp/hrv/Hrv.kt`, tests `HrvTest.kt`; `analyze` writes `hrv.csv`; `report.md` has an RMSSD column and a
+  median-HRV line, columns in docs/ANALYSIS_FORMAT.md. NN interval = two consecutive beats, both class N with a good signal (rescued
+  beats are **not** used: decided, their R position under motion is less certain), same segment, 300-2000 ms, within 20 % of the NN before
+  it; so no interval touches an S, V or Q beat. Per UTC-aligned 5-minute window: mean HR, SDNN, RMSSD, pNN50 and, with a Lomb-Scargle
+  periodogram on the uneven beat times (checked on synthetic oscillations: the band holds amplitude²/2), LF (0.04-0.15 Hz), HF
+  (0.15-0.40 Hz), LF/HF; `coverage` = share of the window covered by NN intervals, `valid` = at least 70 % (spectrum only for those).
+  The H10's own RR stream is not used (§7.3 alignment not built); ECG RR only. On the full day `20261029T143124Z`: 254 of 262 windows
+  valid; median RMSSD 24.7 ms, SDNN 54.7 ms, LF/HF 3.3; by action RMSSD sleeping 26.7, sitting 25.6, walking 17.2, bicycle 13.5, HR the
+  other way, as expected. Not done here: storing HRV on the phone (`hrv_window` table) and showing it: P5.6 (summary screen) needs it;
+  the "night-time RMSSD" number needs a sleep/wake rule (later). HRV from ECG RR at 130 Hz has about 1 ms resolution, fine for RMSSD of
+  this size (about 25 ms), but not for a very low-variability recording.)
 - [ ] **P5.6 [YOU+AI]** Summary screen: today / last night / last 24 h — beats, V and S burden per
   hour (bar chart), longest run, HR min/avg/max, HRV trend, data coverage.
 - [ ] **P5.7 [YOU+AI]** Event list + **review screen**: ECG clip viewer with beat markers and class
