@@ -479,7 +479,7 @@ Details in §7.5–7.6.
   summary/alerts (P5.6).
 
 - [ ] **P4.8 [YOU+AI]** Better S detection (found 2026-10-31 by labelling the full-day recording `20261029T143124Z`; **nothing in the
-  classifier is changed yet**, `sMaxSpread` is still 0.05). The owner has ideas based on the relationship of three consecutive beat
+  classifier is changed yet** except `sMaxSpread`: **0.05 -> 0.10 on 2026-10-31 (owner: accuracy on own data matters more than MIT-BIH precision for now)**). The owner has ideas based on the relationship of three consecutive beat
   intervals (RR before, RR after, and the one before that) and wants to check that such a relationship is not a false correlation
   before a rule is built on it (that is: measure on labelled data first, on more than one night, and against MIT-BIH/INCART).
   *What the labels showed* (2,228 labelled beats of the night; queue built with `--limit V=all,Q=all,S=500,N=300,EARLY_N=1000,GAP=100`;
@@ -508,8 +508,9 @@ Details in §7.5–7.6.
   V and N hardly change. A higher limit costs S precision on MIT-BIH (irregular rhythms are what the gate guards against) and costs
   nothing on the owner's data; the three earlier nights do not change because their queues had no `EARLY_N` group and so cannot show
   missed S. Candidate: 0.08 as a middle ground. Open: (1) the three-interval idea above; (2) label an `EARLY_N` group on one more night
+  (the earlier nights were labelled with the older, less sensitive version of the tool, which had no `EARLY_N` group, so they cannot show missed S)
   before deciding (the earlier nights' queues cannot be extended: `queue.csv` is never rebuilt, so this needs a new night or a new
-  queue folder); (3) decide `sMaxSpread` (0.05 / 0.08 / 0.10) or replace the gate by the new rule; (4) a "confident V only" count in the
+  queue folder); (3) 0.10 is in use (0.08 was the middle ground); revisit when the new rule or the second night's labels exist, or replace the gate by the new rule; the MIT-BIH S precision cost is accepted for now; (4) a "confident V only" count in the
   summary (P5.6).
   *Tools added on the way:* `label_beats.py --limit` and the `EARLY_N` group; `analyze --labels data/labels/<session>` writes
   `report_labelled.md` (owner's class for every labelled beat; docs/ANALYSIS_FORMAT.md); `report.md` (day report per action, P5.12).

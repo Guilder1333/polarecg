@@ -39,7 +39,7 @@ with `TimeMapper`. Code: `dsp/analysis/EcgSegments.kt`.
 | `agreed` | 1 if the second, differently built detector also saw the beat |
 | `motionMg` | accelerometer motion in the second around the beat (highest of the 1 s bins within ±0.5 s), mG; empty without ACC data |
 | `rrRefMs` | reference RR: median of the last 9 normal intervals (between good beats); empty until 3 are known |
-| `rrSpread` | irregularity of the recent normal intervals: median distance from `rrRefMs` as a fraction of it (steady sinus rhythm ~0.02; above 0.05 `S` is not called) |
+| `rrSpread` | irregularity of the recent normal intervals: median distance from `rrRefMs` as a fraction of it (steady sinus rhythm ~0.02; above 0.10 `S` is not called) |
 | `prematurity` | `rrMs / rrRefMs`; below 1 = early (a premature beat is typically below 0.85) |
 | `shortening` | `rrMs` / the interval before it. A premature beat is short against the one before (0.6-0.8); a gradual speed-up of the heart rate is about 0.95 per beat |
 | `compensation` | `(rrPre + rrPost) / (2 · rrRef)`: about 1 after a ventricular beat (full compensatory pause), clearly below 1 for many atrial ones; empty for the last beat of a segment |
@@ -66,7 +66,7 @@ Rules (P4.3, plan §7.6), in this order:
 
 1. `Q` if the beat is poor quality (`good` = 0) or has no `corr` (no template yet, segment edge). **Rescue (P4.7):** a poor beat is judged anyway if `corr` ≥ 0.75, `agreed` = 1, `slopeRatio` ≤ 0.15 and `hfRatio` ≤ 0.05 (`qRescue` = 1); it keeps `good` = 0 for windows, quality and the reference RR.
 2. `V` if the shape is abnormal: `flip` = 1, or `corr` < 0.5, or (`widthRatio` ≥ 1.5 and `corr` < 0.9), or (`areaRatio` > 2 and `corr` < 0.9: the same shape only larger is not a different beat), or the beat is early (`prematurity` < 0.85) and `corr` < 0.72 (looks different AND comes early; P4.7).
-3. `S` if `prematurity` < 0.85, `shortening` ≤ 0.9 (abrupt, not a gradual speed-up) and `rrSpread` ≤ 0.05 (a steady rhythm; in an irregular one "early" says little).
+3. `S` if `prematurity` < 0.85, `shortening` ≤ 0.9 (abrupt, not a gradual speed-up) and `rrSpread` ≤ 0.10 (a steady rhythm; 0.05 before 2026-10-31, see P4.8; in an irregular one "early" says little).
 4. `N` otherwise.
 
 Shape comparisons are done after removing a fitted parabola (baseline wander) from the beat and the template.

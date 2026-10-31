@@ -48,7 +48,7 @@ data class ClassifierConfig(
     /** Timing: a beat with normal shape is premature (S) if its prematurity is below this... */
     val sPrematurity: Double = 0.85,
     /** ...and the rhythm is steady (see `BeatFeatures.rrSpread`): in an irregular rhythm "early" says little. */
-    val sMaxSpread: Double = 0.05,
+    val sMaxSpread: Double = 0.10,
     /** ...and it is this much shorter than the interval before it: a gradual speed-up of the rate is not premature (shortening ~0.95 per beat). */
     val sShortening: Double = 0.9,
     /**
