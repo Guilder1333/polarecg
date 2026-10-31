@@ -553,7 +553,18 @@ Details in §7.5–7.6.
   needed). The session zip (Export button) also contains `beats.csv`: the beats saved for that session's time range, with the
   first columns named as in `analyze`'s beats.csv, for comparing with it; the database file itself is not exported (P6.3). The live screen shows "Saved in the database (last 24 h)". Replaces the short-lived `liveRuns` checkpoints in
   `session.json`. **Done when:** after a night the number of saved beats equals the live count (and `analyze`); after a kill and
-  restart the earlier beats are still there.)
+  restart the earlier beats are still there.
+  **Tried on the phone 2026-10-30/31 (owner):** (1) full day `20261029T143124Z`: 102 699 beats saved against 102 724 from `analyze`
+  (25 normal beats missing, no restart); (2) kill and restart `20261031T100752Z` (killed at 12:12:11 UTC, resumed 18 s later) exported
+  twice. Kill: the beats before the kill are in the database; the last 6 (about 5 s, the unflushed batch) are missing, as designed
+  (the raw files have them). Clearing: the second export held only the 22 beats made after the first export, so the clearing works.
+  After the restart the phone's beat times are all 65 ms later than `analyze`'s (38 of 38 beats; `cli live-check` on the same
+  session matches `analyze` exactly, so it is something in the app: **open, not understood**; the first segment is exact).
+  **Bug found and fixed (2026-10-31):** the isolated missing beats (about one to three an hour) were `BeatWriter` dropping a beat that
+  arrived at the moment a batch timed out (`withTimeoutOrNull` around a channel `receive` can lose the element); now `select` with
+  `onTimeout`. `BeatWriterTest` reproduces it (56 of 60 000 lost with the old code) and passes now. The class differences in
+  the 2-hour session (10 S on `analyze`, N on the phone) were the phone running the build from before `sMaxSpread` 0.10 (P4.8).
+  Still to do for the tick: a night with the fixed build whose saved beats equal `analyze` (the 65 ms shift decides how equal "equal" is).)
 - [ ] **P5.3b [AI] TODO, remove the clearing after export.** Temporary rule (owner, 2026-10-29): while the raw files are the
   only thing that matters, **Export last session** puts `polaris.db` and `beats.csv` into the zip and then deletes the exported
   beats from the database (and VACUUMs it); the button says so. Remove this (the `exportedUpTo` / `deleteBefore` / VACUUM part of

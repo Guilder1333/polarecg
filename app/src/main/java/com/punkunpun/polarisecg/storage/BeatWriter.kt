@@ -8,10 +8,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ChannelResult
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
 
 private const val TAG = "BeatWriter"
 
@@ -32,7 +35,8 @@ const val BEAT_RETENTION_DAYS = 90L
  * nothing waits in memory. If the process is killed, at most the last five seconds of beats are lost (the raw
  * files still have them).
  */
-class BeatWriter(private val dao: BeatDao) {
+@OptIn(ExperimentalCoroutinesApi::class) // select's onTimeout
+class BeatWriter(private val dao: BeatDao, private val flushAfterMs: Long = FLUSH_AFTER_MS) {
     private var scope: CoroutineScope? = null
     private var queue: Channel<Beat>? = null
     private var subscriber: Job? = null
@@ -55,9 +59,18 @@ class BeatWriter(private val dao: BeatDao) {
             while (true) {
                 val first = q.receiveCatching().getOrNull() ?: break // null = closed and empty
                 val batch = arrayListOf(first)
-                // Collect more for up to FLUSH_AFTER_MS; the timeout just ends the waiting, nothing is lost.
-                withTimeoutOrNull(FLUSH_AFTER_MS) {
-                    while (batch.size < MAX_BATCH) batch += q.receiveCatching().getOrNull() ?: break
+                // Collect more for up to flushAfterMs. `select` takes either the next beat or the timeout, never both:
+                // cancelling a plain `receive` with withTimeoutOrNull could drop a beat that arrives at that very moment
+                // (seen on the phone: one or two normal beats an hour missing from the database).
+                val deadline = System.nanoTime() + flushAfterMs * 1_000_000L
+                while (batch.size < MAX_BATCH) {
+                    val leftMs = (deadline - System.nanoTime()) / 1_000_000L
+                    if (leftMs <= 0) break
+                    val next = select<ChannelResult<Beat>?> {
+                        q.onReceiveCatching { it }
+                        onTimeout(leftMs) { null }
+                    } ?: break // timed out
+                    batch += next.getOrNull() ?: break // closed: write what we have, the outer loop then ends
                 }
                 try {
                     dao.insertAll(batch.map { it.toEntity() })
