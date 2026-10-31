@@ -2,6 +2,9 @@ package com.punkunpun.polarisecg.storage
 
 import android.util.Log
 import com.punkunpun.polarisecg.dsp.analysis.Beat
+import com.punkunpun.polarisecg.dsp.hrv.HrvWindow
+import com.punkunpun.polarisecg.dsp.summary.MinuteSummary
+import com.punkunpun.polarisecg.dsp.summary.SummaryBuilder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -36,14 +39,33 @@ const val BEAT_RETENTION_DAYS = 90L
  * files still have them).
  */
 @OptIn(ExperimentalCoroutinesApi::class) // select's onTimeout
-class BeatWriter(private val dao: BeatDao, private val flushAfterMs: Long = FLUSH_AFTER_MS) {
+class BeatWriter(
+    private val dao: BeatDao,
+    private val summaryDao: SummaryDao,
+    private val flushAfterMs: Long = FLUSH_AFTER_MS,
+) {
     private var scope: CoroutineScope? = null
     private var queue: Channel<Beat>? = null
     private var subscriber: Job? = null
 
+    /**
+     * Saves finished minutes and 5-minute windows. A row for the same time may already exist (Stop, then Start within the same
+     * minute or window): the fuller one wins, so a restart never replaces a good row by a stump.
+     */
+    private suspend fun writeSummaries(minutes: List<MinuteSummary>, windows: List<HrvWindow>) {
+        if (minutes.isEmpty() && windows.isEmpty()) return
+        try {
+            summaryDao.insertMinutes(minutes.map { it.toEntity() }.filter { m -> summaryDao.minuteAt(m.minuteUtcMs)?.let { it.beats >= m.beats } != true })
+            summaryDao.insertHrv(windows.map { it.toEntity() }.filter { h -> summaryDao.hrvAt(h.startUtcMs)?.let { it.coverage >= h.coverage } != true })
+        } catch (e: Exception) {
+            Log.e(TAG, "could not write summaries", e)
+        }
+    }
+
     @Synchronized
     fun start(beats: SharedFlow<Beat>) {
         if (scope != null) return
+        val summaries = SummaryBuilder() // one per start, kept by this coroutine only: nothing is carried across a restart
         val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = s
         val q = Channel<Beat>(Channel.UNLIMITED)
@@ -77,7 +99,12 @@ class BeatWriter(private val dao: BeatDao, private val flushAfterMs: Long = FLUS
                 } catch (e: Exception) {
                     Log.e(TAG, "could not write ${batch.size} beats", e)
                 }
+                // The long-term rows (P5.6) are built from the same beats, in order, here in the one writer coroutine.
+                val closed = batch.map { summaries.add(it) }
+                writeSummaries(closed.flatMap { it.minutes }, closed.flatMap { it.hrv })
             }
+            val last = summaries.finish() // a normal stop: the minute and window still open are complete enough to keep
+            writeSummaries(last.minutes, last.hrv)
             s.cancel()
         }
     }

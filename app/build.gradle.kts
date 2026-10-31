@@ -4,6 +4,11 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+ksp {
+    // Room writes the table layout of every database version here (committed: it is what a migration is checked against).
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
     namespace = "com.punkunpun.polarisecg"
     compileSdk {

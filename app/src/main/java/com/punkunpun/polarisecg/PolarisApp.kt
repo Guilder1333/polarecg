@@ -66,7 +66,7 @@ class PolarisApp : Application() {
     val database by lazy { PolarisDatabase.open(this) }
 
     /** Saves the live beats into [database] in batches (P5.3); the service starts and finishes it with the pipeline. */
-    val beatWriter by lazy { BeatWriter(database.beatDao()) }
+    val beatWriter by lazy { BeatWriter(database.beatDao(), database.summaryDao()) }
 
     /** Plays a recorded session through the live pipeline (P5.2). */
     val replayPlayer by lazy { ReplayPlayer(polarConnection, liveProcessor) }

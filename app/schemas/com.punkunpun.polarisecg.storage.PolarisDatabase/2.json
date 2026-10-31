@@ -1,0 +1,248 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "8ab0c14153868343028b2152267eab2b",
+    "entities": [
+      {
+        "tableName": "beat",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`utcMs` INTEGER NOT NULL, `segment` INTEGER NOT NULL, `rrMs` INTEGER, `cls` TEXT NOT NULL, `good` INTEGER NOT NULL, `rescued` INTEGER NOT NULL, `vDoubt` INTEGER NOT NULL, `sqi` REAL NOT NULL, `motionMg` REAL, `prematurity` REAL, `corr` REAL, `qrsWidthMs` REAL, `driftRatio` REAL, PRIMARY KEY(`utcMs`))",
+        "fields": [
+          {
+            "fieldPath": "utcMs",
+            "columnName": "utcMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "segment",
+            "columnName": "segment",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rrMs",
+            "columnName": "rrMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cls",
+            "columnName": "cls",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "good",
+            "columnName": "good",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rescued",
+            "columnName": "rescued",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vDoubt",
+            "columnName": "vDoubt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sqi",
+            "columnName": "sqi",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "motionMg",
+            "columnName": "motionMg",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "prematurity",
+            "columnName": "prematurity",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "corr",
+            "columnName": "corr",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "qrsWidthMs",
+            "columnName": "qrsWidthMs",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "driftRatio",
+            "columnName": "driftRatio",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "utcMs"
+          ]
+        }
+      },
+      {
+        "tableName": "minute_summary",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`minuteUtcMs` INTEGER NOT NULL, `beats` INTEGER NOT NULL, `n` INTEGER NOT NULL, `s` INTEGER NOT NULL, `v` INTEGER NOT NULL, `q` INTEGER NOT NULL, `vDoubt` INTEGER NOT NULL, `hrMeanBpm` REAL, `hrMinBpm` REAL, `hrMaxBpm` REAL, `coverage` REAL NOT NULL, `motionMg` REAL, PRIMARY KEY(`minuteUtcMs`))",
+        "fields": [
+          {
+            "fieldPath": "minuteUtcMs",
+            "columnName": "minuteUtcMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beats",
+            "columnName": "beats",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "n",
+            "columnName": "n",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "s",
+            "columnName": "s",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "v",
+            "columnName": "v",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "q",
+            "columnName": "q",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vDoubt",
+            "columnName": "vDoubt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hrMeanBpm",
+            "columnName": "hrMeanBpm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "hrMinBpm",
+            "columnName": "hrMinBpm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "hrMaxBpm",
+            "columnName": "hrMaxBpm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "coverage",
+            "columnName": "coverage",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "motionMg",
+            "columnName": "motionMg",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "minuteUtcMs"
+          ]
+        }
+      },
+      {
+        "tableName": "hrv_window",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`startUtcMs` INTEGER NOT NULL, `nn` INTEGER NOT NULL, `coverage` REAL NOT NULL, `valid` INTEGER NOT NULL, `meanHrBpm` REAL, `sdnnMs` REAL, `rmssdMs` REAL, `pnn50Percent` REAL, `lfMs2` REAL, `hfMs2` REAL, `lfHf` REAL, PRIMARY KEY(`startUtcMs`))",
+        "fields": [
+          {
+            "fieldPath": "startUtcMs",
+            "columnName": "startUtcMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nn",
+            "columnName": "nn",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coverage",
+            "columnName": "coverage",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "valid",
+            "columnName": "valid",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "meanHrBpm",
+            "columnName": "meanHrBpm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "sdnnMs",
+            "columnName": "sdnnMs",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "rmssdMs",
+            "columnName": "rmssdMs",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "pnn50Percent",
+            "columnName": "pnn50Percent",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "lfMs2",
+            "columnName": "lfMs2",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "hfMs2",
+            "columnName": "hfMs2",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "lfHf",
+            "columnName": "lfHf",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "startUtcMs"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8ab0c14153868343028b2152267eab2b')"
+    ]
+  }
+}
