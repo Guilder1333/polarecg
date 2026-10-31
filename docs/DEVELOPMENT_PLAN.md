@@ -637,7 +637,7 @@ Details in §7.5–7.6.
     `docs/RAW_FORMAT.md`), so it travels with the export and survives clearing the database; the database tables (`activity_type`,
     `activity`, `event`) are an index of it, rebuilt from the files if needed.
   - (Built 2026-10-29, **not yet tried on the phone**. `annotations/`: `AnnotationRecords` (line format, newest-wins fold, current
-    action), `AnnotationTypes` (picker names: resets, "New", hide, most recent first; `annotation_types.json`), `AnnotationStore`
+    action), `AnnotationTypes` (picker names: presets, "New", hide, most recent first; `annotation_types.json`), `AnnotationStore`
     (append to the open session's `annotations.jsonl` with fsync), `AnnotationScreen` (the picker; `AnnotationBar` = the two buttons +
     "Now: Walking since 14:05", on the live screen and the main screen; disabled when no session is being recorded). The session zip
     contains the file because it zips the whole folder; format in `docs/RAW_FORMAT.md`. Unit tests in `AnnotationsTest`. **Not done
