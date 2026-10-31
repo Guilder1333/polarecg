@@ -478,6 +478,42 @@ Details in §7.5–7.6.
   less reliable; default: no); V burden stays "between v - vDoubt and v"; a "confident only" count of V events for the
   summary/alerts (P5.6).
 
+- [ ] **P4.8 [YOU+AI]** Better S detection (found 2026-10-31 by labelling the full-day recording `20261029T143124Z`; **nothing in the
+  classifier is changed yet**, `sMaxSpread` is still 0.05). The owner has ideas based on the relationship of three consecutive beat
+  intervals (RR before, RR after, and the one before that) and wants to check that such a relationship is not a false correlation
+  before a rule is built on it (that is: measure on labelled data first, on more than one night, and against MIT-BIH/INCART).
+  *What the labels showed* (2,228 labelled beats of the night; queue built with `--limit V=all,Q=all,S=500,N=300,EARLY_N=1000,GAP=100`;
+  `EARLY_N` = clean N beats with prematurity < 0.85, taken out of N, see docs/LABELING_TOOL.md; numbers weighted back to the whole night):
+  - **S: our 1509, the owner's about 1637.** About 156 beats we called N are S: very early (median prematurity 0.58, shortening about 0.6),
+    normal shape (corr 0.975), good signal. They are N only because of the steadiness gate `rrSpread <= sMaxSpread (0.05)`: the missed ones
+    have 0.05-0.08. About 44 of our S are N for the owner (16 labelled items). S Se / +P: 90 % / 97 %. The 300 random N items outside the
+    early group contained no S, so most missed S are in the early group, but a few elsewhere cannot be excluded.
+  - **V: our 147, the owner's about 90.** 78 of our V are N (63 of them already carry the "questionable" flag, median sqi 0, noise
+    bursts about 01:00 and 03:00 UTC in sleep and during walking); confident V (`vDoubt` = 0): 63 of 80 were V, questionable V: 1 of 67.
+    So V burden should count confident V, or show both (the reports have a "V questionable" column now). V Se / +P: 70 % / 45 %.
+  - **Q: 269.** 181 are N for the owner (poor quality, median sqi 0.32, includes the first 12 beats before the template exists), 25 are V
+    (very early, low quality), 2 S. Left as is: Q is the cautious class; about 27 ectopic beats leak through it.
+  - **S+V burden hardly moves** (1.62 % automatic, 1.68 % with the owner's labels) because the extra S and the removed V cancel; per
+    action it moves a lot (walking V per hour 11.5 -> 0.7, sitting 4.3 -> 1.4: that was motion noise; V is in sleep and lying down).
+  *Experiment on `sMaxSpread`* (tried, not applied; one night of labels plus the reference sets; S Se / +P):
+
+  | | 0.05 (now) | 0.08 | 0.10 |
+  |---|---|---|---|
+  | own night 29/30 | 90.2 / 96.9 | 98.2 / 96.4 | 99.3 / 96.3 |
+  | 4 labelled nights pooled | 93.2 / 95.8 | 97.6 / 95.6 | 98.3 / 95.6 |
+  | INCART | 45.2 / 45.0 | 65.7 / 47.5 | 75.6 / 48.4 |
+  | MIT-BIH DS1 | 34.3 / 65.1 | 35.9 / 46.1 | 36.9 / 40.5 |
+  | MIT-BIH DS2 | 7.5 / 24.8 | 10.0 / 20.1 | 10.5 / 18.4 |
+
+  V and N hardly change. A higher limit costs S precision on MIT-BIH (irregular rhythms are what the gate guards against) and costs
+  nothing on the owner's data; the three earlier nights do not change because their queues had no `EARLY_N` group and so cannot show
+  missed S. Candidate: 0.08 as a middle ground. Open: (1) the three-interval idea above; (2) label an `EARLY_N` group on one more night
+  before deciding (the earlier nights' queues cannot be extended: `queue.csv` is never rebuilt, so this needs a new night or a new
+  queue folder); (3) decide `sMaxSpread` (0.05 / 0.08 / 0.10) or replace the gate by the new rule; (4) a "confident V only" count in the
+  summary (P5.6).
+  *Tools added on the way:* `label_beats.py --limit` and the `EARLY_N` group; `analyze --labels data/labels/<session>` writes
+  `report_labelled.md` (owner's class for every labelled beat; docs/ANALYSIS_FORMAT.md); `report.md` (day report per action, P5.12).
+
 ### Phase 5 — On-device real-time pipeline, storage & UI (≈ 2 weeks)
 
 - [x] **P5.1 [AI]** Wire `:core-dsp` into `AcquisitionService` (single ordered processing thread).
