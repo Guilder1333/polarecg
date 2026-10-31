@@ -559,7 +559,18 @@ Details in §7.5–7.6.
   twice. Kill: the beats before the kill are in the database; the last 6 (about 5 s, the unflushed batch) are missing, as designed
   (the raw files have them). Clearing: the second export held only the 22 beats made after the first export, so the clearing works.
   After the restart the phone's beat times are all 65 ms later than `analyze`'s (38 of 38 beats; `cli live-check` on the same
-  session matches `analyze` exactly, so it is something in the app: **open, not understood**; the first segment is exact).
+  session matches `analyze` exactly, so it is something in the app; the first segment is exact). **Explained 2026-10-31:** not a bug, a
+  difference in history. A segment's place on the calendar is fixed at its first frame, from `TimeMapper`'s offset estimate (phone time
+  minus sensor time, the minimum over the last 60 s, because BLE only ever delays a frame). The strap's clock kept running across the
+  restart (the sensor time of the first new frame is 31.1 s after the last old one, the phone clock says 31.1 s), so `analyze` never
+  calls `startConnection()` and still has the old connection's minimum (offset ...463859, the best estimate); the restarted app has a
+  fresh mapper and only the first frame's own offset (...463924), which is 65 ms bigger, i.e. one ordinary BLE delay. Hence every beat of
+  the new segment is 65 ms later on the phone (`timemap.csv`, rows `periodic` and `start` of connection 1). RR intervals are not
+  affected (the shift is constant inside a segment), and `analyze` is the more accurate of the two. The same error (the delay of the
+  first frame, typically tens of ms) is in the first segment of every session, on the phone and in `analyze`. Accepted: beat times of a
+  segment that starts after a restart may differ from `analyze` by about one BLE delay (up to a few hundred ms in a bad case); compare
+  counts and classes, not exact times, for such segments. Not worth fixing now; a possible later fix is to correct the segment start
+  once its first minute is known (offline, in `analyze`).
   **Bug found and fixed (2026-10-31):** the isolated missing beats (about one to three an hour) were `BeatWriter` dropping a beat that
   arrived at the moment a batch timed out (`withTimeoutOrNull` around a channel `receive` can lose the element); now `select` with
   `onTimeout`. `BeatWriterTest` reproduces it (56 of 60 000 lost with the old code) and passes now. The class differences in
@@ -568,7 +579,7 @@ Details in §7.5–7.6.
   service; `START_STICKY` only helps when the system kills the process), and the screen looked like a fresh start. Now, if the newest
   session has no end time (and raw recording is on), the start screen says "Unfinished session from ..., last data around ...", that
   Continue adds to it and does not overwrite it, and the button reads **Continue recording** (`SessionFolders.unfinished`, read-only).
-  Still to do for the tick: a night with the fixed build whose saved beats equal `analyze` (the 65 ms shift decides how equal "equal" is).)
+  Still to do for the tick: a night with the fixed build whose saved beats equal `analyze` ("equal" = same beats and classes; times of a segment after a restart may differ by one BLE delay, see above).)
 - [ ] **P5.3b [AI] TODO, remove the clearing after export.** Temporary rule (owner, 2026-10-29): while the raw files are the
   only thing that matters, **Export last session** puts `polaris.db` and `beats.csv` into the zip and then deletes the exported
   beats from the database (and VACUUMs it); the button says so. Remove this (the `exportedUpTo` / `deleteBefore` / VACUUM part of
