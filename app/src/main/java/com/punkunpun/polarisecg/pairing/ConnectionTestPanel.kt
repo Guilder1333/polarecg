@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import com.punkunpun.polarisecg.PolarisApp
 import com.punkunpun.polarisecg.R
 import com.punkunpun.polarisecg.polar.ConnectionState
+import com.punkunpun.polarisecg.log.formatJst
+import com.punkunpun.polarisecg.recorder.SessionFolders
+import com.punkunpun.polarisecg.recorder.UnfinishedSession
 import com.punkunpun.polarisecg.recorder.latestSession
 import com.punkunpun.polarisecg.recorder.shareZip
 import com.punkunpun.polarisecg.recorder.zipSession
@@ -73,6 +76,19 @@ fun ConnectionTestPanel(app: PolarisApp, deviceId: String?) {
             )
             Text(stringResource(R.string.raw_toggle))
         }
+        // An open session (the app was killed or force-stopped) is continued by the next start: say so, so that nobody wonders
+        // whether recording is on or whether Start begins something new. Only meaningful if raw recording is on (it makes the sessions).
+        var unfinished by remember { mutableStateOf<UnfinishedSession?>(null) }
+        LaunchedEffect(running, rawOn, deviceId) {
+            unfinished = if (running || !rawOn || deviceId == null) null
+            else withContext(Dispatchers.IO) { SessionFolders.unfinished(app.sessionsDir, deviceId) }
+        }
+        unfinished?.let {
+            Text(
+                stringResource(R.string.conn_unfinished, formatJst(it.startMs).substring(5, 16), formatJst(it.lastActivityMs).substring(11, 16)),
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         val scope = rememberCoroutineScope()
         OutlinedButton(onClick = {
             scope.launch {
@@ -91,7 +107,7 @@ fun ConnectionTestPanel(app: PolarisApp, deviceId: String?) {
             // The service owns connect/disconnect now, so it keeps running with the screen off.
             if (!running) {
                 Button(onClick = { AcquisitionService.start(context) }, enabled = deviceId != null) {
-                    Text(stringResource(R.string.conn_connect))
+                    Text(stringResource(if (unfinished != null) R.string.conn_continue else R.string.conn_connect))
                 }
             } else {
                 Button(onClick = { AcquisitionService.stop(context) }) {

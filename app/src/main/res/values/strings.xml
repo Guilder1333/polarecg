@@ -36,6 +36,8 @@
 
     <string name="conn_title">Recording</string>
     <string name="conn_connect">Start recording</string>
+    <string name="conn_continue">Continue recording</string>
+    <string name="conn_unfinished">Unfinished session from %1$s, last data around %2$s. Continue will add to it; it is not overwritten. Only Stop recording ends it.</string>
     <string name="conn_disconnect">Stop recording</string>
     <string name="conn_state_disconnected">Disconnected</string>
     <string name="conn_state_connecting">Connecting…</string>

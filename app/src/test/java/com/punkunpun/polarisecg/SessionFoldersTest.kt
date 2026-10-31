@@ -140,4 +140,20 @@ class SessionFoldersTest {
         assertEquals(2, SessionFolders.readMeta(first.dir)!!.getJSONArray("interruptions").length())
         assertNull(first.dir.list()!!.firstOrNull { it == "ecg.bin" })
     }
+
+    @Test
+    fun unfinishedShowsWhatTheNextStartWouldResumeAndChangesNothing() {
+        val root = root()
+        assertNull(SessionFolders.unfinished(root, dev)) // nothing yet: the next start is a new session
+        val s = SessionFolders.open(root, dev, t0, meta())
+        val before = s.dir.listFiles()!!.map { it.name to it.length() }.sortedBy { it.first }
+        val info = SessionFolders.unfinished(root, dev)!!
+        assertEquals(s.dir, info.dir)
+        assertEquals(t0, info.startMs)
+        assertEquals(before, s.dir.listFiles()!!.map { it.name to it.length() }.sortedBy { it.first }) // read-only
+        assertNull(SessionFolders.unfinished(root, "OTHER")) // another strap: a new session would start
+
+        SessionFolders.end(s, t0 + 60_000)
+        assertNull(SessionFolders.unfinished(root, dev)) // stopped by the user: the next start is new
+    }
 }

@@ -24,6 +24,9 @@ internal const val LAYOUT_VERSION = 2
  * [timeMapConnectionBase] is the number the first connection of this run gets in timemap.csv, so
  * connection numbers keep increasing across a resume instead of starting from 0 again.
  */
+/** A session that was never stopped by the user (see [SessionFolders.unfinished]); [lastActivityMs] = newest file change. */
+class UnfinishedSession(val dir: File, val startMs: Long, val lastActivityMs: Long)
+
 class OpenedSession(
     val dir: File,
     val startMs: Long,
@@ -81,6 +84,20 @@ object SessionFolders {
         val meta = newMeta(nowMs).put("layout", LAYOUT_VERSION).put("interruptions", JSONArray())
         writeMeta(dir, meta)
         return OpenedSession(dir, nowMs, false, meta, 0)
+    }
+
+    /**
+     * What [open] would resume, without touching anything: the newest folder if it was never stopped properly, has the
+     * current layout and belongs to this strap. For the start screen ("Continue"), so the owner can see that the next
+     * start continues a session instead of beginning a new one. Null if the next start would be a new session.
+     */
+    fun unfinished(sessionsDir: File, deviceId: String): UnfinishedSession? {
+        val dir = sessionsDir.listFiles { f -> f.isDirectory }?.maxByOrNull { it.name } ?: return null
+        val meta = readMeta(dir) ?: return null
+        if (!meta.isNull("endUtc") || meta.optInt("layout", 1) != LAYOUT_VERSION || meta.optString("deviceId") != deviceId) return null
+        val lastFileMs = dir.listFiles()?.maxOfOrNull { it.lastModified() }?.takeIf { it > 0 }
+        val startMs = parseStart(meta, dir, lastFileMs ?: 0L)
+        return UnfinishedSession(dir, startMs, lastFileMs ?: startMs)
     }
 
     /** The user pressed stop: record the end time. The session is finished and will not be resumed. */

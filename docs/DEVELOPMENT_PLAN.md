@@ -564,6 +564,10 @@ Details in §7.5–7.6.
   arrived at the moment a batch timed out (`withTimeoutOrNull` around a channel `receive` can lose the element); now `select` with
   `onTimeout`. `BeatWriterTest` reproduces it (56 of 60 000 lost with the old code) and passes now. The class differences in
   the 2-hour session (10 S on `analyze`, N on the phone) were the phone running the build from before `sMaxSpread` 0.10 (P4.8).
+  **Start screen (2026-10-31):** after a force stop nothing records until Start is pressed (Android does not restart a force-stopped
+  service; `START_STICKY` only helps when the system kills the process), and the screen looked like a fresh start. Now, if the newest
+  session has no end time (and raw recording is on), the start screen says "Unfinished session from ..., last data around ...", that
+  Continue adds to it and does not overwrite it, and the button reads **Continue recording** (`SessionFolders.unfinished`, read-only).
   Still to do for the tick: a night with the fixed build whose saved beats equal `analyze` (the 65 ms shift decides how equal "equal" is).)
 - [ ] **P5.3b [AI] TODO, remove the clearing after export.** Temporary rule (owner, 2026-10-29): while the raw files are the
   only thing that matters, **Export last session** puts `polaris.db` and `beats.csv` into the zip and then deletes the exported
