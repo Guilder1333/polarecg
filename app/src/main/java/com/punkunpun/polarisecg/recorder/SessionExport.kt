@@ -21,15 +21,12 @@ fun latestSession(sessionsDir: File): File? =
  * Zips one session folder into the cache directory and returns the zip. Blocking: call off the UI thread.
  *
  * With [database] the zip also gets `polaris.db` (a copy of the whole database) and `beats.csv` (the beats saved for the
- * session's time range, to compare with `analyze` of the same raw files, P5.3). **Once the zip is complete, the exported
- * beats are deleted from the database**: the owner exports everything, so the database does not need to keep it.
- * Only beats up to the moment of the copy are deleted; beats that arrive while exporting stay. The raw files are never touched.
+ * session's time range, to compare with `analyze` of the same raw files, P5.3). Nothing is deleted by an export (P5.3b).
  */
 fun zipSession(context: Context, session: File, database: PolarisDatabase? = null): File {
     val dir = File(context.cacheDir, "exports").apply { mkdirs() }
     dir.listFiles()?.forEach { it.delete() } // keep only the latest export
     val zip = File(dir, "${session.name}.zip")
-    var exportedUpTo: Long? = null
     ZipOutputStream(zip.outputStream().buffered()).use { out ->
         session.listFiles()?.sortedBy { it.name }?.forEach { f ->
             out.putNextEntry(ZipEntry("${session.name}/${f.name}"))
@@ -38,7 +35,6 @@ fun zipSession(context: Context, session: File, database: PolarisDatabase? = nul
         }
         if (database != null) {
             val dao = database.beatDao()
-            exportedUpTo = dao.latestUtcMs()
             out.putNextEntry(ZipEntry("${session.name}/beats.csv"))
             writeBeatsCsv(out, sessionBeats(session, dao))
             out.closeEntry()
@@ -48,13 +44,6 @@ fun zipSession(context: Context, session: File, database: PolarisDatabase? = nul
             context.getDatabasePath(PolarisDatabase.FILE_NAME).inputStream().use { it.copyTo(out) }
             out.closeEntry()
         }
-    }
-    // TODO(P5.3b): temporary. Remove this clearing (and "and clear saved beats" on the button) once the database is the
-    // main store (summary, review, labels): then the export must not delete anything. See the plan, P5.3b.
-    // Here the zip is closed and complete. Only now is anything deleted.
-    if (database != null && exportedUpTo != null && zip.length() > 0) {
-        database.beatDao().deleteBefore(exportedUpTo + 1)
-        database.openHelper.writableDatabase.execSQL("VACUUM") // give the space back to the file system
     }
     return zip
 }
