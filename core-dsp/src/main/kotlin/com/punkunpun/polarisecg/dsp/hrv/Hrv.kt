@@ -36,23 +36,31 @@ data class Nn(val startUtcMs: Long, val endUtcMs: Long) {
 }
 
 /**
- * The NN series of a recording, in time order. An interval counts if both beats are class N with a good signal
- * (rescued beats are not `good`, so their less certain R positions stay out), in the same gap-free segment, 300-2000 ms
- * long, and within 20 % of the NN right before it when that one ends where this one starts.
+ * Finds the NN intervals beat by beat (the live pipeline gives beats one at a time). An interval counts if both beats are
+ * class N with a good signal (rescued beats are not `good`, so their less certain R positions stay out), in the same gap-free
+ * segment, 300-2000 ms long, and within 20 % of the NN right before it when that one ends where this one starts.
  */
-fun nnIntervals(beats: List<Beat>): List<Nn> {
-    val out = ArrayList<Nn>()
-    for (i in 1 until beats.size) {
-        val a = beats[i - 1]
-        val b = beats[i]
-        if (a.segment != b.segment || a.cls != "N" || b.cls != "N" || !a.good || !b.good) continue
+class NnTracker {
+    private var previousBeat: Beat? = null
+    private var lastNn: Nn? = null
+
+    /** Feeds the next beat (in time order); returns the NN interval that ends at it, or null if there is none. */
+    fun add(b: Beat): Nn? {
+        val a = previousBeat
+        previousBeat = b
+        if (a == null || a.segment != b.segment || a.cls != "N" || b.cls != "N" || !a.good || !b.good) return null
         val ms = b.utcMs - a.utcMs
-        if (ms < NN_MIN_MS || ms > NN_MAX_MS) continue
-        val previous = out.lastOrNull()
-        if (previous != null && previous.endUtcMs == a.utcMs && abs(ms - previous.ms) > NN_MAX_JUMP * previous.ms) continue
-        out += Nn(a.utcMs, b.utcMs)
+        if (ms < NN_MIN_MS || ms > NN_MAX_MS) return null
+        val previous = lastNn
+        if (previous != null && previous.endUtcMs == a.utcMs && abs(ms - previous.ms) > NN_MAX_JUMP * previous.ms) return null
+        return Nn(a.utcMs, b.utcMs).also { lastNn = it }
     }
-    return out
+}
+
+/** The NN series of a recording, in time order (see [NnTracker]). */
+fun nnIntervals(beats: List<Beat>): List<Nn> {
+    val tracker = NnTracker()
+    return beats.mapNotNull { tracker.add(it) }
 }
 
 /** The time-domain figures of a set of NN intervals; successive differences only between intervals that share a beat. */
