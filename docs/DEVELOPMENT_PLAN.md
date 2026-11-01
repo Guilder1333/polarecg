@@ -512,6 +512,10 @@ Details in §7.5–7.6.
   before deciding (the earlier nights' queues cannot be extended: `queue.csv` is never rebuilt, so this needs a new night or a new
   queue folder); (3) 0.10 is in use (0.08 was the middle ground); revisit when the new rule or the second night's labels exist, or replace the gate by the new rule; the MIT-BIH S precision cost is accepted for now; (4) a "confident V only" count in the
   summary (P5.6).
+  *Second night, 2026-11-01 (`20261031T160814Z`, 8.9 h, phone build with `sMaxSpread` 0.10, queue with `EARLY_N` 319 = all of them):* S Se 97.4 % /
+  +P 91.1 % (230 items labelled S); only 2 normal-called beats were S for the owner (the first night had about 156 before the change), so
+  the 0.10 gate holds on a second night. V Se 78 % / +P 59 %: 18 of our V are N, 9 more are Q for the owner. Q: 47 of our Q are N, 12 of
+  them the first beats of the recording (no template yet). Corrected burden 0.75 % (automatic 0.85 %), V 37 against our 57.
   *Tools added on the way:* `label_beats.py --limit` and the `EARLY_N` group; `analyze --labels data/labels/<session>` writes
   `report_labelled.md` (owner's class for every labelled beat; docs/ANALYSIS_FORMAT.md); `report.md` (day report per action, P5.12).
 
