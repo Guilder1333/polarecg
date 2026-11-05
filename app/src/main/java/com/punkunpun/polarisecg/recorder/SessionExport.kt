@@ -5,7 +5,10 @@ import android.content.Intent
 import androidx.core.content.FileProvider
 import com.punkunpun.polarisecg.storage.BeatDao
 import com.punkunpun.polarisecg.storage.BeatEntity
+import com.punkunpun.polarisecg.storage.EventDao
+import com.punkunpun.polarisecg.storage.EventEntity
 import com.punkunpun.polarisecg.storage.PolarisDatabase
+import com.punkunpun.polarisecg.storage.clipsDir
 import java.io.File
 import java.io.OutputStream
 import java.time.Instant
@@ -21,7 +24,8 @@ fun latestSession(sessionsDir: File): File? =
  * Zips one session folder into the cache directory and returns the zip. Blocking: call off the UI thread.
  *
  * With [database] the zip also gets `polaris.db` (a copy of the whole database) and `beats.csv` (the beats saved for the
- * session's time range, to compare with `analyze` of the same raw files, P5.3). Nothing is deleted by an export (P5.3b).
+ * session's time range, to compare with `analyze` of the same raw files, P5.3), `events.csv` and the ECG clips of the session's
+ * events in `clips/` (P5.4; read them with `cli`'s clip format, docs/RAW_FORMAT.md). Nothing is deleted by an export (P5.3b).
  */
 fun zipSession(context: Context, session: File, database: PolarisDatabase? = null): File {
     val dir = File(context.cacheDir, "exports").apply { mkdirs() }
@@ -38,6 +42,16 @@ fun zipSession(context: Context, session: File, database: PolarisDatabase? = nul
             out.putNextEntry(ZipEntry("${session.name}/beats.csv"))
             writeBeatsCsv(out, sessionBeats(session, dao))
             out.closeEntry()
+            val events = sessionEvents(session, database.eventDao())
+            out.putNextEntry(ZipEntry("${session.name}/events.csv"))
+            writeEventsCsv(out, events)
+            out.closeEntry()
+            for (name in events.mapNotNull { it.clipFile }) {
+                val file = File(clipsDir(context), name).takeIf { it.isFile } ?: continue // pruned, or never written
+                out.putNextEntry(ZipEntry("${session.name}/clips/$name"))
+                file.inputStream().use { it.copyTo(out) }
+                out.closeEntry()
+            }
             // Room keeps recent writes in a side file (-wal); a checkpoint moves them into polaris.db before it is copied.
             database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").close()
             out.putNextEntry(ZipEntry("${session.name}/polaris.db"))
@@ -48,13 +62,37 @@ fun zipSession(context: Context, session: File, database: PolarisDatabase? = nul
     return zip
 }
 
-/** The beats saved between the session's start and its end (or now, if it was not stopped properly or is running). */
-private fun sessionBeats(session: File, dao: BeatDao): List<BeatEntity> {
+/** The session's start and end (or now, if it was not stopped properly or is running), plus a minute of slack: the last beats come out after the stop. */
+private fun sessionRange(session: File): Pair<Long, Long> {
     val meta = SessionFolders.readMeta(session)
     val start = meta?.optString("startUtc")?.takeIf { it.isNotEmpty() }?.let { Instant.parse(it).toEpochMilli() } ?: 0L
     val end = meta?.optString("endUtc")?.takeIf { it.isNotEmpty() && it != "null" }?.let { Instant.parse(it).toEpochMilli() }
         ?: System.currentTimeMillis()
-    return dao.beatsBetween(start, end + 60_000L) // a minute of slack: the last beats come out after the stop
+    return start to end + 60_000L
+}
+
+/** The beats saved in the session's time range. */
+private fun sessionBeats(session: File, dao: BeatDao): List<BeatEntity> =
+    sessionRange(session).let { (from, to) -> dao.beatsBetween(from, to) }
+
+/** The events saved in the session's time range. */
+private fun sessionEvents(session: File, dao: EventDao): List<EventEntity> =
+    sessionRange(session).let { (from, to) -> dao.eventsBetween(from, to) }
+
+/** Like `events.csv` of `analyze` (utc, type, duration, detail) plus the database id, the beat count and the clip file. */
+private fun writeEventsCsv(out: OutputStream, events: List<EventEntity>) {
+    val w = out.bufferedWriter() // not closed: closing would close the zip; flush at the end
+    w.write("id,startUtcMs,startUtc,type,durationMs,beats,detail,clipFile\n")
+    for (e in events) {
+        w.write(
+            listOf(
+                e.id, e.startUtcMs, Instant.ofEpochMilli(e.startUtcMs), e.type, e.endUtcMs - e.startUtcMs, e.beatCount,
+                "\"" + e.detail.replace("\"", "'") + "\"", e.clipFile ?: "",
+            ).joinToString(","),
+        )
+        w.write("\n")
+    }
+    w.flush()
 }
 
 /** Same column names and order as the first columns of `analyze`'s beats.csv (docs/ANALYSIS_FORMAT.md), then the extras. */

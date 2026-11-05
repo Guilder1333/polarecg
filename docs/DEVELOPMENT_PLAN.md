@@ -592,6 +592,27 @@ Details in §7.5–7.6.
 - [ ] **P5.4 [AI]** Ring buffer + **event clips**: for each event (V, S, couplet, run, pause…), save
   10 s before + 10 s after. Rate-limit clips (e.g. bigeminy for 1 hour shouldn't save 1800 clips —
   save the first few + one per N minutes).
+  (Built 2026-11-05, **not yet tried on the phone**. `:core-dsp`: `live/EcgHistory` = the ring buffer, the last 30 minutes of ECG (about
+  1 MB) kept per gap-free segment with the segment's own `SegmentClock`, so a beat's time and the sample under it are the same clock
+  (checked: the marker of a beat lies on the R peak of the clip, `EventRecorderTest`); the live pipeline owns it (`pipeline.history`),
+  nothing changes in the beats. `event/LiveEventDetector` runs the existing `detectPatterns` on the last 1 200 beats (so phone and
+  `analyze` cannot disagree) and reports an event once, **when it is over** (4 beats after its last beat; a couplet may still become a
+  triplet). Longer than the window (a bigeminy of an hour) comes out in pieces, never doubled. `event/ClipPolicy`: per event type the
+  first 3 clips in an hour, then one per 10 minutes, at most 200 clips a day; every event is listed, an event without a clip has an empty
+  `clipFile`. `event/EventRecorder` joins the two: the clip (10 s before the start to 10 s after the end, the event part at most 20 s)
+  is **cut later**, when the beats have passed its end, because the ECG after the event has not arrived when it is final.
+  `event/ClipFormat`: the file (`docs/RAW_FORMAT.md`, "Event clips"): ECG in µV **and the beats with their classes**, so a clip still
+  has its markers after the `beat` rows are pruned at 90 days (P5.7 reads it with `ClipFormat.decode`). `cli clips <session>`: the same
+  chain on a recording, writes `events.csv` and the clip files and compares the events with `analyze` (tried on a synthetic session: the
+  same 5 pauses, 3 clips, the 4th and 5th held back by the limit; real nights not tried, there was no recording at hand).
+  App: Room **version 3**, table `event` (`EventEntity`, `EventDao`, `MIGRATION_2_3`, checked against the exported
+  `app/schemas/.../3.json`, which is now committed); `EventWriter` saves the row, then `files/clips/<id>.bin` (temporary name, then
+  moved; never overwrites), then writes the name into the row; `LiveProcessor.events` is the flow, the service starts and finishes the
+  writer like the beat writer; replay does not write. Export (zip) now also holds `events.csv` and the session's `clips/`.
+  Not done: **pruning of old clips** (all kept for now, at most 2.4 MB a day), the clips in the backup (P6.3), a count of events on the live screen,
+  GAP events (they come from `analyze` only). **Done when:** after a night with the phone, `events.csv` in the exported zip lists
+  the same events as `cli clips` / `analyze` of the same session (same type and start; `analyze` may show a few more at the very end of a
+  stretch), every event in the first hour of a type has a clip that opens (`cli`/P5.7), and the clips of a bigeminy night are few, not hundreds.)
 - [x] **P5.5 [AI]** HRV computation over 5-minute windows on clean NN intervals (§7.7).
   (Built 2026-10-31 in `:core-dsp` `dsp/hrv/Hrv.kt`, tests `HrvTest.kt`; `analyze` writes `hrv.csv`; `report.md` has an RMSSD column and a
   median-HRV line, columns in docs/ANALYSIS_FORMAT.md. NN interval = two consecutive beats, both class N with a good signal (rescued
@@ -827,7 +848,7 @@ the Diagnostics screen.
 | `beat` | time (UTC µs), rrPre, cls (N/S/V/Q), sqi, corr | ~100 000 | e.g. 90 days |
 | `minute_summary` | minute, beats, hrMean, hrMin, hrMax, nS, nV, nQ, coverage, accActivity | 1 440 | forever |
 | `hrv_window` | start (5 min), meanHr, rmssd, sdnn, pnn50, lf, hf, coverage | 288 | forever |
-| `event` | id, start, end, type (V, S, couplet, run, bigeminy, pause…), beatCount, clipFile | varies | forever (clips may be pruned) |
+| `event` | id, start, end, type (V, S, couplet, run, bigeminy, pause…), beatCount, detail, clipFile | varies | forever (clips may be pruned) |
 | `label` | beatTime, userClass, note, createdAt | as you label | forever |
 
 **Labels never touch the automatic result (decided with the owner, 2026-10-29).** The `beat.cls` written by the pipeline is
@@ -838,7 +859,7 @@ a beat is its newest row. Screens show the automatic class and the owner's label
 (CSV): both columns, plus the history. Labels are the one thing that cannot be rebuilt from the raw files, so `label` needs real
 migrations and must be part of the backup (P6.3).
 
-Clips: `files/clips/<eventId>.bin` (20 s × 130 Hz ≈ 10 KB each).
+Clips: `files/clips/<eventId>.bin` (20 s × 130 Hz ≈ 10 KB each, plus the beats; format in `docs/RAW_FORMAT.md`).
 
 **Privacy:** data stays in app-private storage. Exports only on explicit user action. Consider
 disabling Android auto-backup to the cloud for the DB (`backup_rules.xml`) since it's health data.
