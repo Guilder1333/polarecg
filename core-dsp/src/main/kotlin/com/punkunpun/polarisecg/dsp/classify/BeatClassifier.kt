@@ -47,10 +47,19 @@ data class ClassifierConfig(
     val rescueMaxHf: Double = 0.05,
     /** Timing: a beat with normal shape is premature (S) if its prematurity is below this... */
     val sPrematurity: Double = 0.85,
-    /** ...and the rhythm is steady (see `BeatFeatures.rrSpread`): in an irregular rhythm "early" says little. */
-    val sMaxSpread: Double = 0.10,
-    /** ...and it is this much shorter than the interval before it: a gradual speed-up of the rate is not premature (shortening ~0.95 per beat). */
-    val sShortening: Double = 0.9,
+    /**
+     * ...and the rhythm is steady (see `BeatFeatures.rrSpread`): in an irregular rhythm "early" says little. Loosened 0.10 -> 0.15
+     * together with [sNextRatio] (P4.8): the next-interval test now carries part of what the steadiness gate did.
+     */
+    val sMaxSpread: Double = 0.15,
+    /** ...and it is this much shorter than the interval before it: a gradual speed-up of the rate is not premature (shortening ~0.95 per beat). 0.9 -> 0.85 (P4.8). */
+    val sShortening: Double = 0.85,
+    /**
+     * ...and it is this much shorter than the interval AFTER it (rrPre / rrPost): a premature beat is followed by a pause, a
+     * beat that is only a bit early in a fast stretch is not (P4.8). Measured on 6 labelled nights: S median 0.49, N 1.00; on INCART 0.47 / 1.01.
+     * Needs the next beat: without it (end of a segment) the beat is N.
+     */
+    val sNextRatio: Double = 0.75,
     /**
      * A V that rests only on the drift-sensitive shape rules (correlation, area) is "questionable" when
      * the baseline wanders this much around it (`BeatFeatures.driftRatio`, P4.7). Still a V; the flag only
@@ -66,7 +75,7 @@ data class ClassifierConfig(
  * poor signal, or no template yet                          -> Q
  * shape abnormal (low correlation, wide, big, upside down) -> V   (early or not)
  * early and clearly different (correlation < 0.72)         -> V   (P4.7)
- * early (prematurity < 0.85) in a steady rhythm             -> S
+ * early (prematurity < 0.85), shorter than the interval before AND after it (<= 0.85 / <= 0.75), steady rhythm (spread <= 0.15) -> S
  * otherwise                                                -> N
  * ```
  *
@@ -111,6 +120,8 @@ class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) 
         }
         val steady = f.rrSpread?.let { it <= config.sMaxSpread } == true
         val abrupt = f.shortening?.let { it <= config.sShortening } == true
-        return if (early && steady && abrupt) BeatClass.PREMATURE else BeatClass.NORMAL
+        // Followed by a pause: rrPre / rrPost (both exist or the beat cannot be called S).
+        val pause = f.rrPreMs != null && f.rrPostMs != null && f.rrPostMs > 0 && f.rrPreMs / f.rrPostMs <= config.sNextRatio
+        return if (early && steady && abrupt && pause) BeatClass.PREMATURE else BeatClass.NORMAL
     }
 }

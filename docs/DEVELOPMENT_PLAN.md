@@ -516,6 +516,14 @@ Details in §7.5–7.6.
   +P 91.1 % (230 items labelled S); only 2 normal-called beats were S for the owner (the first night had about 156 before the change), so
   the 0.10 gate holds on a second night. V Se 78 % / +P 59 %: 18 of our V are N, 9 more are Q for the owner. Q: 47 of our Q are N, 12 of
   them the first beats of the recording (no template yet). Corrected burden 0.75 % (automatic 0.85 %), V 37 against our 57.
+  *Three-interval rule, 2026-11-06 (owner's idea; built, **not yet tried on the phone**):* S also needs the interval AFTER the beat. Measured on 6
+  labelled nights (829 S, 2,931 N) `rrPre/rrPost` has median 0.49 for S and 1.00 for N (AUC 0.99; INCART 0.47 / 1.01 and AUC 0.98; MIT-BIH only 0.95 / 1.01,
+  AUC 0.74, because most MIT-BIH S are not early). `BeatClassifier` S rule is now: prematurity < 0.85, `shortening <= 0.85` (was 0.9), `rrPre/rrPost <= 0.75` (new, `sNextRatio`;
+  no next beat = N), `rrSpread <= 0.15` (was 0.10). The shape rules (V, Q) are untouched. S Se / +P, old gate -> new rule (CLI, same data):
+  own 6 nights 98.2 / 94.2 -> 97.5 / 99.2 (false S 62 -> 8, nearly all N for the owner); INCART (33 records) 83 / 60 -> 85 / 75; MIT-BIH DS1 36 / 62 (nights-era files) -> 31 / 42,
+  DS2 8 / 26 -> 9 / 25 (the two MIT-BIH rows compare different generations of `data/analysis`; the simulation on identical features gave DS1 39.5 / 38.9 -> 30.9 / 38.4,
+  DS2 12.5 / 19.6 -> 11.3 / 26.1). Whole nights: 20261029 S 1682 -> 1619, 20261031T16 247 -> 220. Outliers looked at: the few N with ratio < 0.8 are mostly noise (RR unreliable),
+  S above 0.66 are mild real prematurity. Open: run on the phone and relabel a night to see the missed S; V is still the same timing as S, so shape alone separates them.
   *Tools added on the way:* `label_beats.py --limit` and the `EARLY_N` group; `analyze --labels data/labels/<session>` writes
   `report_labelled.md` (owner's class for every labelled beat; docs/ANALYSIS_FORMAT.md); `report.md` (day report per action, P5.12).
 
