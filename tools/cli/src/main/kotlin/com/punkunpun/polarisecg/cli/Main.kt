@@ -23,12 +23,19 @@ private const val USAGE = """PolarisECG CLI
 
     Feeds the recording to the live pipeline (the phone's code) in arrival order and compares the
     beats with `analyze`. Prints both class counts and the beats that differ.
+
+  clips <recording-folder> [--out <dir>]
+
+    What the phone saves for events (P5.4): runs the live pipeline and the event recorder over the recording
+    and writes events.csv and the ECG clips (phone clip format) to <dir> (default: data/clips/<parent>-<folder>).
+    Prints how many events and clips there are per type, and compares the events with `analyze`.
 """
 
 fun main(args: Array<String>) {
     when (args.firstOrNull()) {
         "analyze" -> exitProcess(analyzeCommand(args.drop(1)))
         "live-check" -> exitProcess(args.getOrNull(1)?.let { liveCheckCommand(File(it)) } ?: usageError("Missing <recording-folder>"))
+        "clips" -> exitProcess(clipsCommand(args.drop(1)))
         null, "-h", "--help", "help" -> print(USAGE)
         else -> {
             System.err.println("Unknown command '${args.first()}'.\n")
@@ -36,6 +43,22 @@ fun main(args: Array<String>) {
             exitProcess(2)
         }
     }
+}
+
+private fun clipsCommand(args: List<String>): Int {
+    val folder = args.firstOrNull()?.takeUnless { it.startsWith("--") }?.let(::File) ?: return usageError("Missing <recording-folder>")
+    if (!folder.isDirectory) return usageError("Not a folder: $folder")
+    var out: File? = null
+    var i = 1
+    while (i < args.size) {
+        if (args[i] == "--out") out = args.getOrNull(++i)?.let(::File) ?: return usageError("--out needs a folder")
+        else return usageError("Unexpected argument '${args[i]}'")
+        i++
+    }
+    val outDir = out ?: File("data/clips").resolve(
+        listOfNotNull(folder.absoluteFile.parentFile?.name, folder.absoluteFile.name).joinToString("-"),
+    )
+    return clipsCommand(folder, outDir)
 }
 
 private fun analyzeCommand(args: List<String>): Int {

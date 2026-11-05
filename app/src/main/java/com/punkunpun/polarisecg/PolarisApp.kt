@@ -12,6 +12,8 @@ import com.punkunpun.polarisecg.polar.PolarConnection
 import com.punkunpun.polarisecg.processing.LiveProcessor
 import com.punkunpun.polarisecg.replay.ReplayPlayer
 import com.punkunpun.polarisecg.storage.BeatWriter
+import com.punkunpun.polarisecg.storage.EventWriter
+import com.punkunpun.polarisecg.storage.clipsDir
 import com.punkunpun.polarisecg.storage.PolarisDatabase
 import java.io.File
 
@@ -67,6 +69,9 @@ class PolarisApp : Application() {
 
     /** Saves the live beats into [database] in batches (P5.3); the service starts and finishes it with the pipeline. */
     val beatWriter by lazy { BeatWriter(database.beatDao(), database.summaryDao()) }
+
+    /** Saves the events and their ECG clips (P5.4); started and finished by the service like [beatWriter]. */
+    val eventWriter by lazy { EventWriter(database.eventDao(), clipsDir(this)) }
 
     /** Plays a recorded session through the live pipeline (P5.2). */
     val replayPlayer by lazy { ReplayPlayer(polarConnection, liveProcessor) }

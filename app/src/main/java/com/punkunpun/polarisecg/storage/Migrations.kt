@@ -25,3 +25,19 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         MIGRATION_1_2_SQL.forEach { db.execSQL(it) }
     }
 }
+
+/**
+ * Version 3 adds the `event` table and its index (P5.4). Written exactly as Room writes them (see `MigrationsTest`, which compares
+ * with the schema Room exported to `app/schemas/.../3.json` at build time).
+ */
+internal val MIGRATION_2_3_SQL = listOf(
+    "CREATE TABLE IF NOT EXISTS `event` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `startUtcMs` INTEGER NOT NULL, " +
+        "`endUtcMs` INTEGER NOT NULL, `type` TEXT NOT NULL, `beatCount` INTEGER NOT NULL, `detail` TEXT NOT NULL, `clipFile` TEXT)",
+    "CREATE INDEX IF NOT EXISTS `index_event_startUtcMs` ON `event` (`startUtcMs`)",
+)
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        MIGRATION_2_3_SQL.forEach { db.execSQL(it) }
+    }
+}

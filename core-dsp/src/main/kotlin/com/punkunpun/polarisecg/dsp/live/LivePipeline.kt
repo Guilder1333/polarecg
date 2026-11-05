@@ -47,6 +47,9 @@ class LivePipeline(
     private val extractor = BeatFeatureExtractor()
     private val classifier = BeatClassifier()
 
+    /** The last minutes of raw ECG, on the same clock as the beat times (for event clips, P5.4). */
+    val history = EcgHistory()
+
     private var segment = -1
     private var clock: SegmentClock? = null
     private var stream: EcgBeatStream? = null
@@ -79,10 +82,12 @@ class LivePipeline(
             segment++
             clock = SegmentClock(tracker.segmentStartUtcMs)
             stream = EcgBeatStream(qualityConfig) // detectors never run across a gap
+            history.startSegment(clock!!)
             samplesInSegment = 0
             previousBeatUtc = null
         }
         clock!!.addFrame(samplesInSegment, sensorTimeNs)
+        history.add(samplesUv)
         samplesInSegment += samplesUv.size
         enqueue(stream!!.process(samplesUv))
         release(out, final = false)

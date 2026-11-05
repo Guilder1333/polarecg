@@ -3,6 +3,8 @@ package com.punkunpun.polarisecg.processing
 import android.util.Log
 import com.punkunpun.polarisecg.dsp.analysis.Beat
 import com.punkunpun.polarisecg.dsp.classify.BeatClass
+import com.punkunpun.polarisecg.dsp.event.EventRecorder
+import com.punkunpun.polarisecg.dsp.event.RecordedEvent
 import com.punkunpun.polarisecg.dsp.live.LivePipeline
 import com.punkunpun.polarisecg.polar.AccFrame
 import com.punkunpun.polarisecg.polar.EcgFrame
@@ -52,7 +54,8 @@ data class LiveStats(
  * Each frame takes a few milliseconds (it is half a second of data).
  *
  * [start] begins with a fresh pipeline (template, quality history), [stop] flushes the last beats.
- * Nothing is stored yet (Room comes in P5.3); finished beats go to [beats] and into [stats].
+ * Finished beats go to [beats] (the database writer, P5.3) and into [stats]; the events found in them (couplets, runs,
+ * pauses...) with their ECG clips go to [events] (P5.4). Both come from the one processing coroutine, in order.
  */
 class LiveProcessor(private val connection: PolarConnection) {
     private sealed interface Input {
@@ -77,6 +80,10 @@ class LiveProcessor(private val connection: PolarConnection) {
     private val _beats = MutableSharedFlow<Beat>(extraBufferCapacity = 1024)
     val beats: SharedFlow<Beat> = _beats.asSharedFlow()
 
+    /** Events that are over, with their clip when one was cut (P5.4). Rare: a few an hour. */
+    private val _events = MutableSharedFlow<RecordedEvent>(extraBufferCapacity = 256)
+    val events: SharedFlow<RecordedEvent> = _events.asSharedFlow()
+
     /**
      * Starts with a fresh pipeline. With [fromConnection] (a real session) the frames of [connection] are
      * processed; without it (replay, P5.2) the caller hands them over with [submitEcg] / [submitAcc], in order
@@ -86,6 +93,7 @@ class LiveProcessor(private val connection: PolarConnection) {
     fun start(fromConnection: Boolean = true) {
         if (scope != null) return
         val pipeline = LivePipeline()
+        val recorder = EventRecorder(pipeline.history) // looks at the pipeline's beats and its last minutes of ECG
         stats = LiveStats()
         _stats.value = stats
         val s = CoroutineScope(SupervisorJob() + dispatcher)
@@ -102,11 +110,12 @@ class LiveProcessor(private val connection: PolarConnection) {
         worker = s.launch {
             for (input in q) { // ends when the queue is closed and empty, see stop()
                 when (input) {
-                    is Input.Ecg -> guarded { pipeline.addEcg(input.frame.sensorTimeNs, input.frame.phoneTimeMs, input.frame.samplesUv) }
-                    is Input.Acc -> input.frame.let { f -> guarded { pipeline.addAcc(f.sensorTimeNs, f.phoneTimeMs, f.xMg, f.yMg, f.zMg) } }
+                    is Input.Ecg -> guarded(recorder) { pipeline.addEcg(input.frame.sensorTimeNs, input.frame.phoneTimeMs, input.frame.samplesUv) }
+                    is Input.Acc -> input.frame.let { f -> guarded(recorder) { pipeline.addAcc(f.sensorTimeNs, f.phoneTimeMs, f.xMg, f.yMg, f.zMg) } }
                 }
             }
-            guarded { pipeline.finish() } // after the last frame: the beats that were still waiting
+            guarded(recorder) { pipeline.finish() } // after the last frame: the beats that were still waiting
+            record { recorder.finish() } // and the events that were still open
             s.cancel()
         }
     }
@@ -129,15 +138,34 @@ class LiveProcessor(private val connection: PolarConnection) {
         return worker.also { worker = null }
     }
 
-    /** Runs [step] and publishes the beats it returns; an exception costs this frame, not the service. */
-    private fun guarded(step: () -> List<Beat>) {
-        try {
-            for (b in step()) publish(b)
+    /**
+     * Runs [step] and publishes the beats it returns, then lets the [recorder] see them (it also checks, after every frame,
+     * whether a clip is complete). An exception costs this frame, not the service.
+     */
+    private fun guarded(recorder: EventRecorder, step: () -> List<Beat>) {
+        val beats = try {
+            step().also { for (b in it) publish(b) }
         } catch (e: Exception) {
             Log.e(TAG, "pipeline failed on a frame", e)
-            stats = stats.copy(errors = stats.errors + 1)
-            _stats.value = stats
+            countError()
+            return
         }
+        record { recorder.add(beats) }
+    }
+
+    /** Runs [step] and publishes the events it returns; a failure here must not touch the beats. */
+    private fun record(step: () -> List<RecordedEvent>) {
+        try {
+            for (e in step()) _events.tryEmit(e)
+        } catch (e: Exception) {
+            Log.e(TAG, "event recorder failed", e)
+            countError()
+        }
+    }
+
+    private fun countError() {
+        stats = stats.copy(errors = stats.errors + 1)
+        _stats.value = stats
     }
 
     private fun publish(b: Beat) {

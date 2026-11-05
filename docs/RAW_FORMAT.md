@@ -159,6 +159,35 @@ adb push data/sessions/<session> /sdcard/Android/data/com.punkunpun.polarisecg/f
 
 Pauses longer than 3 s in the recording are shortened to 3 s; speeds are 1×, 10×, 60× and "Max".
 
+## Event clips (`files/clips/<eventId>.bin`)
+
+Not part of a session folder: the app saves a short ECG clip for each event it finds (P5.4), in `files/clips/`, named by
+the event's id in the `event` table (`<id>.bin`; if that name is taken, `<id>_1.bin`: a clip file is never overwritten). The
+table row has the type, times and the file name; the clip file holds the ECG and the beats so that it can be read alone,
+also after the `beat` rows are pruned (90 days). In the session zip (Export) they are in `clips/`, with `events.csv`.
+
+Little-endian. Written by `ClipFormat` in `:core-dsp` (`dsp/event/ClipFormat.kt`), which also reads it.
+
+| Offset | Size | Type | Content |
+|---|---|---|---|
+| 0 | 4 | ASCII | `PCLP` |
+| 4 | 2 | uint16 | version = 1 |
+| 6 | 2 | | reserved = 0 |
+| 8 | 8 | int64 | `startUtcMs`: phone UTC of the first sample |
+| 16 | 8 | float64 | `msPerSample`: about 7.675 (the H10 runs 0.2 % faster than 130 Hz; sample *i* is at `startUtcMs + round(i × msPerSample)`) |
+| 24 | 8 | int64 | `eventStartUtcMs` |
+| 32 | 8 | int64 | `eventEndUtcMs` |
+| 40 | 4 | int32 | sample count *n* |
+| 44 | 4 | int32 | beat count *m* |
+| 48 | 4 × *n* | int32 | ECG samples in µV |
+| | 8 × *m* | | beats: int32 ms after `startUtcMs`; uint8 class letter (`N` `S` `V` `Q`); uint8 flags (1 good signal, 2 questionable V, 4 rescued); 2 spare bytes |
+
+What a clip contains: from 10 s before the event's start to 10 s after its end (the event part is at most 20 s, so a
+clip is at most 40 s), cut down to the ECG that exists in one gap-free stretch. A normal 1-2 s event gives 21-22 s, about
+12 KB. **Which events get a clip:** all events are listed, but clips are rate-limited **per event type**: the first 3 in an
+hour, then at most one per 10 minutes, and at most 200 clips a day (`ClipPolicy`); an event without a clip has an empty
+`clipFile`. On the PC: `cli clips <session>` does the same over a recording and writes the files and `events.csv`.
+
 ## Size
 
-ECG ≈ 520 B/s, ACC ≈ 300 B/s, HR ≈ 30 B/s → roughly 3 MB per hour, ≈ 30 MB per night.
+ECG ≈ 520 B/s, ACC ≈ 300 B/s, HR ≈ 30 B/s → roughly 3 MB per hour, ≈ 30 MB per night. Event clips: ≈ 12 KB each, at most 200 a day (2.4 MB).
