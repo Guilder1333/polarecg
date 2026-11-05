@@ -2,6 +2,8 @@ package com.punkunpun.polarisecg.pairing
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.punkunpun.polarisecg.R
 
 /** Stateless pairing UI: shows the scan result and reports taps. See PairingRoute for the logic. */
+@OptIn(ExperimentalLayoutApi::class) // FlowRow is still marked experimental
 @Composable
 fun PairingScreen(
     devices: List<FoundDevice>,
@@ -54,7 +57,8 @@ fun PairingScreen(
 
         if (selectedDeviceId != null) connectionPanel()
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // FlowRow: four buttons do not fit in one line; a plain Row squeezed the last one until its text went vertical.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onOpenLive) {
                 Text(stringResource(R.string.live_open))
             }
