@@ -38,6 +38,8 @@ class EventWriterTest {
         override suspend fun between(fromUtcMs: Long, toUtcMs: Long): List<EventEntity> = emptyList()
         override fun eventsBetween(fromUtcMs: Long, toUtcMs: Long): List<EventEntity> = emptyList()
         override fun observeCountSince(fromUtcMs: Long): Flow<Int> = emptyFlow()
+        override fun observeRecent(limit: Int): Flow<List<EventEntity>> = emptyFlow()
+        override suspend fun byId(id: Long): EventEntity? = rows[id]
     }
 
     private val t0 = 1_791_843_330_000L

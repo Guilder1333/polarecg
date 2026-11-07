@@ -41,3 +41,19 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         MIGRATION_2_3_SQL.forEach { db.execSQL(it) }
     }
 }
+
+/**
+ * Version 4 adds the `label` table and its index (P5.7), the one table that cannot be rebuilt from the raw files. Written exactly
+ * as Room writes them (see `MigrationsTest`, which compares with `4.json`).
+ */
+internal val MIGRATION_3_4_SQL = listOf(
+    "CREATE TABLE IF NOT EXISTS `label` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `beatUtcMs` INTEGER NOT NULL, " +
+        "`label` TEXT NOT NULL, `note` TEXT NOT NULL, `createdAtUtcMs` INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS `index_label_beatUtcMs` ON `label` (`beatUtcMs`)",
+)
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        MIGRATION_3_4_SQL.forEach { db.execSQL(it) }
+    }
+}

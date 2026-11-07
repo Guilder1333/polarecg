@@ -57,6 +57,18 @@
 
     <string name="live_open">Live</string>
     <string name="sum_open">Summary</string>
+    <string name="ev_open">Events</string>
+    <string name="ev_title">Events</string>
+    <string name="ev_empty">No events yet. Couplets, runs, bigeminy and pauses show up here while recording.</string>
+    <string name="ev_no_clip">no ECG saved</string>
+    <string name="ev_clip_missing">The ECG clip of this event is missing or cannot be read.</string>
+    <string name="ev_back">Back</string>
+    <string name="ev_hint">Tap a beat to select it. The letter above a beat is the automatic class; your label appears next to it.</string>
+    <string name="ev_auto">Automatic: %1$s</string>
+    <string name="ev_yours">Your label: %1$s</string>
+    <string name="ev_not_labelled">not labelled</string>
+    <string name="ev_history">History</string>
+    <string name="ev_select_beat">Select a beat on the trace.</string>
     <string name="sum_title">Summary</string>
     <string name="sum_24h">Last 24 h</string>
     <string name="sum_today">Today</string>

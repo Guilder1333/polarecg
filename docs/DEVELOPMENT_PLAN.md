@@ -652,6 +652,14 @@ Details in §7.5–7.6.
   labels; tap a beat to relabel (N/S/V/noise). Labels stored separately from automatic classes:
   a relabel never changes `beat.cls`; it appends a row to `label` (history kept, newest wins), and the screen shows
   the automatic class next to the owner's label (rule in §8).
+  (Part 1, label storage, built 2026-11-07, **not yet tried on the phone**: Room version 4 adds the append-only `label` table (`LabelEntity`, `LabelDao`:
+  insert only, no update/delete; newest row = highest id wins; no foreign key to `beat`, which is pruned after 90 days). Labels are the PC tool's:
+  N, S, V, Q, "?" (unsure), "" (undone). Pure rules in `:core-dsp` (`dsp/annotations/LabelHistory.kt`, same result as `parseOwnerLabels`).
+  Migration 3->4 is checked against `4.json` by `MigrationsTest`.
+  Part 2, event list and clip viewer, built 2026-11-07, **not yet tried on the phone**: an "Events" button on the first screen opens the list (newest first, from the
+  `event` table); a tap opens the review screen (`events/ReviewScreen.kt`): the saved clip as a strip you swipe sideways (110 dp per second), the automatic class above every
+  beat, your label below it (blue); tap a beat, then N / S / V / Q / ? / Undo adds a `label` row (history shown). Pure helpers `nearestBeat`, `eventTitle` in `:core-dsp`.
+  Still to do: a browse of beats near a time (for S and early-N), and `labels.csv` in the session zip in the PC format, so `analyze --labels` reads phone labels.)
 - [ ] **P5.8 [AI]** Settings: raw recording toggle, ACC rate, classifier sensitivity presets,
   optional alerts (off by default), data export (CSV) and delete.
 - [ ] **P5.10 [YOU+AI]** **Actions and events** (idea from the owner, 2026-10-29: see why the per-hour numbers change, e.g. during a

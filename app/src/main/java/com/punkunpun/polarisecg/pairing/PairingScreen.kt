@@ -37,6 +37,7 @@ fun PairingScreen(
     onOpenDiagnostics: () -> Unit,
     onOpenLive: () -> Unit,
     onOpenSummary: () -> Unit,
+    onOpenEvents: () -> Unit,
     onOpenReplay: () -> Unit,
     connectionPanel: @Composable () -> Unit,
     modifier: Modifier = Modifier,
@@ -64,6 +65,9 @@ fun PairingScreen(
             }
             OutlinedButton(onClick = onOpenSummary) {
                 Text(stringResource(R.string.sum_open))
+            }
+            OutlinedButton(onClick = onOpenEvents) {
+                Text(stringResource(R.string.ev_open))
             }
             OutlinedButton(onClick = onOpenDiagnostics) {
                 Text(stringResource(R.string.diag_open))

@@ -2,6 +2,7 @@ package com.punkunpun.polarisecg
 
 import com.punkunpun.polarisecg.storage.MIGRATION_1_2_SQL
 import com.punkunpun.polarisecg.storage.MIGRATION_2_3_SQL
+import com.punkunpun.polarisecg.storage.MIGRATION_3_4_SQL
 import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -30,6 +31,12 @@ class MigrationsTest {
             return List(indices.length()) { indices.getJSONObject(it).getString("createSql").replace("\${TABLE_NAME}", table) }
         }
         error("no table $table in $file")
+    }
+
+    @Test
+    fun theVersion4MigrationCreatesExactlyWhatRoomExpects() {
+        // 4.json is written by Room when the app is built (exportSchema); commit it with the change.
+        assertEquals(listOf(roomSql(4, "label")) + roomIndexSql(4, "label"), MIGRATION_3_4_SQL)
     }
 
     @Test
