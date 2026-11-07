@@ -659,7 +659,13 @@ Details in §7.5–7.6.
   Part 2, event list and clip viewer, built 2026-11-07, **not yet tried on the phone**: an "Events" button on the first screen opens the list (newest first, from the
   `event` table); a tap opens the review screen (`events/ReviewScreen.kt`): the saved clip as a strip you swipe sideways (110 dp per second), the automatic class above every
   beat, your label below it (blue); tap a beat, then N / S / V / Q / ? / Undo adds a `label` row (history shown). Pure helpers `nearestBeat`, `eventTitle` in `:core-dsp`.
-  Still to do: a browse of beats near a time (for S and early-N), and `labels.csv` in the session zip in the PC format, so `analyze --labels` reads phone labels.)
+  Part 3, browse of beats near a time, built 2026-11-07, **not yet tried on the phone**: "Browse beats" on the event list opens a day view (arrows for the previous/next day; it
+  starts on the day of the newest saved beat) with chips S / Early N / V / Q and "Unlabelled only"; rows show the local time, the class, the prematurity and your label (up to
+  3 000 a day). "Early N" = class N, good signal, prematurity below the S gate (0.85): the group that may really be S. A tap cuts +-10 s of ECG **from the raw files**
+  (`events/RawWindowLoader.kt`; `:core-dsp` `event/RawWindow.kt`: `ecgFilesFor` picks the hourly files, `cutWindow` cuts inside the gap-free stretch, never across a hole, tested)
+  and shows it in the same strip and label buttons as an event (`ClipReviewBody`, shared with the event review). It only works while the raw files are on the phone; the
+  screen says so otherwise. Not done: jump to an exact time of day (only day + scrolling), previous/next beat buttons in the window.
+  Still to do: `labels.csv` in the session zip in the PC format, so `analyze --labels` reads phone labels.)
 - [ ] **P5.8 [AI]** Settings: raw recording toggle, ACC rate, classifier sensitivity presets,
   optional alerts (off by default), data export (CSV) and delete.
 - [ ] **P5.10 [YOU+AI]** **Actions and events** (idea from the owner, 2026-10-29: see why the per-hour numbers change, e.g. during a

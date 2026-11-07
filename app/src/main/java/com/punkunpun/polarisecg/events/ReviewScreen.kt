@@ -93,13 +93,10 @@ private fun autoText(b: ClipBeat): String {
 fun ReviewScreen(app: PolarisApp, eventId: Long, onBack: () -> Unit, modifier: Modifier = Modifier) {
     BackHandler(onBack = onBack)
     val eventDao = app.database.eventDao()
-    val labelDao = app.database.labelDao()
-    val scope = rememberCoroutineScope()
 
     var event by remember { mutableStateOf<EventEntity?>(null) }
     var clip by remember { mutableStateOf<EventClip?>(null) }
     var loaded by remember { mutableStateOf(false) }
-    var selectedBeatMs by rememberSaveable { mutableLongStateOf(0L) } // 0 = none selected
 
     LaunchedEffect(eventId) {
         withContext(Dispatchers.IO) {
@@ -132,56 +129,69 @@ fun ReviewScreen(app: PolarisApp, eventId: Long, onBack: () -> Unit, modifier: M
             return@Column // leaves this Column block; nothing below is drawn
         }
 
-        // Current label of every beat in the clip; the Flow re-runs when a row is added.
-        val labelRows by remember(c) { labelDao.observeCurrentBetween(c.ecg.startUtcMs, c.ecg.endUtcMs + 1) }
-            .collectAsState(initial = emptyList())
-        val labelByBeat = remember(labelRows) { labelRows.associateBy { it.beatUtcMs } }
+        ClipReviewBody(app, c, initialBeatMs = 0L)
+    }
+}
 
-        Text(stringResource(R.string.ev_hint), style = MaterialTheme.typography.bodySmall)
-        ClipTrace(
-            clip = c,
-            labels = labelByBeat,
-            selectedBeatMs = selectedBeatMs,
-            onTap = { utcMs -> selectedBeatMs = nearestBeat(c.beats, utcMs, TAP_RANGE_MS)?.utcMs ?: 0L },
+/**
+ * The trace of [clip] with the beat details and the label buttons below it: shared by the event review and the beat browse.
+ * [initialBeatMs] is the beat selected at first (0 = none). Emits its children into the caller's Column.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ClipReviewBody(app: PolarisApp, c: EventClip, initialBeatMs: Long) {
+    val labelDao = app.database.labelDao()
+    val scope = rememberCoroutineScope()
+    var selectedBeatMs by rememberSaveable(c.ecg.startUtcMs) { mutableLongStateOf(initialBeatMs) } // 0 = none selected
+    // Current label of every beat in the clip; the Flow re-runs when a row is added.
+    val labelRows by remember(c) { labelDao.observeCurrentBetween(c.ecg.startUtcMs, c.ecg.endUtcMs + 1) }
+        .collectAsState(initial = emptyList())
+    val labelByBeat = remember(labelRows) { labelRows.associateBy { it.beatUtcMs } }
+
+    Text(stringResource(R.string.ev_hint), style = MaterialTheme.typography.bodySmall)
+    ClipTrace(
+        clip = c,
+        labels = labelByBeat,
+        selectedBeatMs = selectedBeatMs,
+        onTap = { utcMs -> selectedBeatMs = nearestBeat(c.beats, utcMs, TAP_RANGE_MS)?.utcMs ?: 0L },
+    )
+
+    val beat = c.beats.firstOrNull { it.utcMs == selectedBeatMs }
+    if (beat == null) {
+        Text(stringResource(R.string.ev_select_beat))
+    } else {
+        val current = labelByBeat[beat.utcMs]
+        var history by remember(beat.utcMs) { mutableStateOf(emptyList<LabelEntity>()) }
+        LaunchedEffect(beat.utcMs, current?.id) { history = withContext(Dispatchers.IO) { labelDao.historyOf(beat.utcMs) } }
+
+        Text(localTimeMs(beat.utcMs), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.ev_auto, autoText(beat)))
+        Text(
+            stringResource(
+                R.string.ev_yours,
+                ownerMark(current) ?: stringResource(R.string.ev_not_labelled),
+            ),
         )
-
-        val beat = c.beats.firstOrNull { it.utcMs == selectedBeatMs }
-        if (beat == null) {
-            Text(stringResource(R.string.ev_select_beat))
-        } else {
-            val current = labelByBeat[beat.utcMs]
-            var history by remember(beat.utcMs) { mutableStateOf(emptyList<LabelEntity>()) }
-            LaunchedEffect(beat.utcMs, current?.id) { history = withContext(Dispatchers.IO) { labelDao.historyOf(beat.utcMs) } }
-
-            Text(localTimeMs(beat.utcMs), style = MaterialTheme.typography.titleSmall)
-            Text(stringResource(R.string.ev_auto, autoText(beat)))
-            Text(
-                stringResource(
-                    R.string.ev_yours,
-                    ownerMark(current) ?: stringResource(R.string.ev_not_labelled),
-                ),
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (choice in OwnerLabel.CHOICES) {
-                    val chosen = choice.isNotEmpty() && current?.label == choice
-                    val onClick = {
-                        // Room needs a background thread; the row is added, never changed (see LabelDao).
-                        scope.launch(Dispatchers.IO) {
-                            labelDao.insert(
-                                LabelEntity(beatUtcMs = beat.utcMs, label = choice, note = "", createdAtUtcMs = System.currentTimeMillis()),
-                            )
-                        }
-                        Unit
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (choice in OwnerLabel.CHOICES) {
+                val chosen = choice.isNotEmpty() && current?.label == choice
+                val onClick = {
+                    // Room needs a background thread; the row is added, never changed (see LabelDao).
+                    scope.launch(Dispatchers.IO) {
+                        labelDao.insert(
+                            LabelEntity(beatUtcMs = beat.utcMs, label = choice, note = "", createdAtUtcMs = System.currentTimeMillis()),
+                        )
                     }
-                    val text = if (choice.isEmpty()) "Undo" else choice
-                    if (chosen) Button(onClick = onClick) { Text(text) } else FilledTonalButton(onClick = onClick) { Text(text) }
+                    Unit
                 }
+                val text = if (choice.isEmpty()) "Undo" else choice
+                if (chosen) Button(onClick = onClick) { Text(text) } else FilledTonalButton(onClick = onClick) { Text(text) }
             }
-            if (history.isNotEmpty()) {
-                Text(stringResource(R.string.ev_history), style = MaterialTheme.typography.titleSmall)
-                for (row in history.asReversed()) {
-                    Text("${localTimeMs(row.createdAtUtcMs)}  ${labelText(row.label)}", style = MaterialTheme.typography.bodySmall)
-                }
+        }
+        if (history.isNotEmpty()) {
+            Text(stringResource(R.string.ev_history), style = MaterialTheme.typography.titleSmall)
+            for (row in history.asReversed()) {
+                Text("${localTimeMs(row.createdAtUtcMs)}  ${labelText(row.label)}", style = MaterialTheme.typography.bodySmall)
             }
         }
     }

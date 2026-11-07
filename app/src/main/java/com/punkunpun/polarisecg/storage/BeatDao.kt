@@ -36,4 +36,15 @@ interface BeatDao {
 
     @Query("SELECT COUNT(*) FROM beat WHERE utcMs >= :fromUtcMs")
     fun observeCountSince(fromUtcMs: Long): Flow<Int>
+
+    /** Beats of one automatic class in a time range, oldest first (the beat browse, P5.7). Blocking: called off the UI thread. */
+    @Query("SELECT * FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs AND cls = :cls ORDER BY utcMs LIMIT :limit")
+    fun byClass(fromUtcMs: Long, toUtcMs: Long, cls: String, limit: Int): List<BeatEntity>
+
+    /** Normal beats with a good signal that came early (prematurity below [maxPrematurity]): the ones that may really be S. */
+    @Query(
+        "SELECT * FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs AND cls = 'N' AND good = 1 " +
+            "AND prematurity IS NOT NULL AND prematurity < :maxPrematurity ORDER BY utcMs LIMIT :limit",
+    )
+    fun earlyNormals(fromUtcMs: Long, toUtcMs: Long, maxPrematurity: Double, limit: Int): List<BeatEntity>
 }

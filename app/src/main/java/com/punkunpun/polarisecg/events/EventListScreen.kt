@@ -36,7 +36,7 @@ internal fun localTime(utcMs: Long): String = dateTime.format(Instant.ofEpochMil
 
 /** The events the live pipeline found (V couplets, runs, bigeminy, pauses...), newest first. A tap opens the review screen. */
 @Composable
-fun EventListScreen(app: PolarisApp, onOpen: (Long) -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun EventListScreen(app: PolarisApp, onOpen: (Long) -> Unit, onBrowse: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
     BackHandler(onBack = onBack)
     // A Flow from Room: the list redraws by itself when a new event is saved.
     val events by app.database.eventDao().observeRecent(LIST_LIMIT).collectAsState(initial = emptyList())
@@ -45,6 +45,8 @@ fun EventListScreen(app: PolarisApp, onOpen: (Long) -> Unit, onBack: () -> Unit,
             OutlinedButton(onClick = onBack) { Text(stringResource(R.string.ev_back)) }
             Text(stringResource(R.string.ev_title), style = MaterialTheme.typography.titleLarge)
         }
+        // beats that are not events (S, early normals...): listed by day, the ECG is cut from the raw files
+        OutlinedButton(onClick = onBrowse) { Text(stringResource(R.string.br_open)) }
         if (events.isEmpty()) {
             Text(stringResource(R.string.ev_empty))
         } else {
