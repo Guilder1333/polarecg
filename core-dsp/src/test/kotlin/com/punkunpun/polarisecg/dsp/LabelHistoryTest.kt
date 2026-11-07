@@ -55,9 +55,7 @@ class LabelHistoryTest {
             LabelRecord(1_792_618_194_790, OwnerLabel.UNDONE, "", 1_793_000_003_000),
             LabelRecord(5, OwnerLabel.UNSURE, "", 1_793_000_004_000),
         )
-        val lines = labelsCsv(history).trimEnd('
-').split('
-')
+        val lines = labelsCsv(history).trimEnd('\n').split('\n')
         assertEquals("item,utcMs,kind,label,labeledAtUtc,note,bumpUtcMs", lines.first())
         assertEquals("B1792615494444,1792615494444,BEAT,N,2026-10-26T07:33:20.123Z,,", lines[1])
         assertEquals(history.size + 1, lines.size) // every press is a row, nothing is merged

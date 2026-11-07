@@ -31,6 +31,8 @@ class BeatWriterTest {
         override suspend fun countByClass(fromUtcMs: Long, toUtcMs: Long): List<ClassCount> = emptyList()
         override fun beatsBetween(fromUtcMs: Long, toUtcMs: Long): List<BeatEntity> = emptyList()
         override fun observeCountSince(fromUtcMs: Long): Flow<Int> = emptyFlow()
+        override fun byClass(fromUtcMs: Long, toUtcMs: Long, cls: String, limit: Int): List<BeatEntity> = emptyList()
+        override fun earlyNormals(fromUtcMs: Long, toUtcMs: Long, maxPrematurity: Double, limit: Int): List<BeatEntity> = emptyList()
     }
 
     private class FakeSummaryDao : SummaryDao {
