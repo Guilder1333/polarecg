@@ -105,6 +105,8 @@
     <string name="sum_hrv">HRV: median RMSSD %1$s ms, SDNN %2$s ms (%3$d windows of 5 min)</string>
     <string name="sum_coverage">Recorded: %1$s %% of the period</string>
     <string name="sum_chart_burden">S (blue) and V (red) burden per hour, %%</string>
+    <string name="sum_chart_hr">Heart rate per hour (mean and window), bpm</string>
+    <string name="sum_hr_legend">Pale bar: lowest to highest of the hour. Tick: mean.</string>
     <string name="sum_chart_rmssd">RMSSD per hour, ms</string>
     <string name="sum_not_yet">Longest run and the hour-by-hour view per action come later (events table, P5.4).</string>
     <string name="sum_back">Back</string>

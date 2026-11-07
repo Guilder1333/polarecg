@@ -26,6 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.punkunpun.polarecg.PolarApp
@@ -34,10 +38,13 @@ import com.punkunpun.polarecg.dsp.summary.HourBucket
 import com.punkunpun.polarecg.dsp.summary.HrvPoint
 import com.punkunpun.polarecg.dsp.summary.MinuteSummary
 import com.punkunpun.polarecg.dsp.summary.RangeSummary
+import com.punkunpun.polarecg.dsp.summary.niceTicks
 import com.punkunpun.polarecg.dsp.summary.summarizeRange
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -113,6 +120,8 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
 
             Text(stringResource(R.string.sum_chart_burden), style = MaterialTheme.typography.titleSmall)
             HourBars(s.hours, { it.sPercent }, { it.vPercent })
+            Text(stringResource(R.string.sum_chart_hr), style = MaterialTheme.typography.titleSmall)
+            HrBars(s.hours)
             Text(stringResource(R.string.sum_chart_rmssd), style = MaterialTheme.typography.titleSmall)
             HourBars(s.hours, { it.rmssdMs }, { null }, singleColor = MaterialTheme.colorScheme.tertiary)
             Text(stringResource(R.string.sum_not_yet), style = MaterialTheme.typography.bodySmall)
@@ -121,9 +130,53 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
     }
 }
 
+/** Width left of the bars for the value labels. */
+private val GUTTER = 36.dp
+
+/**
+ * The frame every chart shares: a grid with the values at round numbers ([niceTicks] between [lo] and [hi]), the labels in a
+ * gutter on the left, and the hour labels below. [bars] draws the bars of one chart; it gets the x of the plot's left edge, the
+ * width of one hour's slot, a function from a value to its y on the canvas, and the start of the first hour.
+ */
+@Composable
+private fun HourChart(
+    hours: List<HourBucket>,
+    lo: Double,
+    hi: Double,
+    height: Dp,
+    bars: DrawScope.(plotLeft: Float, slot: Float, y: (Double) -> Float, firstHourMs: Long) -> Unit,
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val axisColor = MaterialTheme.colorScheme.onSurface
+    val ticks = niceTicks(lo, hi)
+    Canvas(modifier = Modifier.fillMaxWidth().height(height)) {
+        if (hours.isEmpty()) return@Canvas
+        val left = GUTTER.toPx()
+        val first0 = hours.first().startUtcMs
+        val span = ((hours.last().startUtcMs - first0) / 3_600_000L).toInt() + 1 // hours from the first to the last, gaps included
+        val slot = (size.width - left) / span
+        val y = { v: Double -> size.height - ((v - lo) / (hi - lo)).toFloat() * size.height }
+        for (t in ticks) {
+            val ty = y(t)
+            drawLine(gridColor, Offset(left, ty), Offset(size.width, ty), strokeWidth = 1f)
+            val text = textMeasurer.measure(tickText(t), labelStyle)
+            // keep the label inside the canvas: the top and bottom lines are at its edges
+            val labelY = (ty - text.size.height / 2f).coerceIn(0f, size.height - text.size.height)
+            drawText(text, topLeft = Offset(left - 4.dp.toPx() - text.size.width, labelY))
+        }
+        bars(left, slot, y, first0)
+        drawLine(axisColor, Offset(left, size.height), Offset(size.width, size.height), strokeWidth = 1f)
+    }
+    HourLabels(hours)
+}
+
+private fun tickText(v: Double) = if (v == Math.rint(v)) String.format(Locale.ROOT, "%.0f", v) else String.format(Locale.ROOT, "%.1f", v)
+
 /**
  * One bar per hour: [first] is drawn from the bottom, [second] stacked on top of it (S then V for the burden chart). A missing
- * hour is a gap. The labels are the hour of the day in the phone time zone, every third bar.
+ * hour is a gap. The scale runs from 0 to the tallest bar.
  */
 @Composable
 private fun HourBars(
@@ -134,30 +187,47 @@ private fun HourBars(
 ) {
     val firstColor = singleColor ?: MaterialTheme.colorScheme.primary
     val secondColor = MaterialTheme.colorScheme.error
-    val textColor = MaterialTheme.colorScheme.onSurface
-    val zone = ZoneId.systemDefault()
     val maxValue = (hours.maxOfOrNull { (first(it) ?: 0.0) + (second(it) ?: 0.0) } ?: 0.0).coerceAtLeast(1.0)
-    Canvas(modifier = Modifier.fillMaxWidth().height(120.dp)) {
-        if (hours.isEmpty()) return@Canvas
-        val first0 = hours.first().startUtcMs
-        val span = ((hours.last().startUtcMs - first0) / 3_600_000L).toInt() + 1 // hours from the first to the last, gaps included
-        val slot = size.width / span
-        val chartHeight = size.height
+    HourChart(hours, 0.0, maxValue, 120.dp) { left, slot, y, first0 ->
         for (h in hours) {
-            val index = ((h.startUtcMs - first0) / 3_600_000L).toInt()
-            val a = (first(h) ?: 0.0).toFloat() / maxValue.toFloat() * chartHeight
-            val b = (second(h) ?: 0.0).toFloat() / maxValue.toFloat() * chartHeight
-            val x = index * slot + slot * 0.1f
-            drawRect(firstColor, topLeft = Offset(x, chartHeight - a), size = Size(slot * 0.8f, a))
-            drawRect(secondColor, topLeft = Offset(x, chartHeight - a - b), size = Size(slot * 0.8f, b))
+            val x = left + ((h.startUtcMs - first0) / 3_600_000L).toInt() * slot + slot * 0.1f
+            val a = first(h) ?: 0.0
+            val b = second(h) ?: 0.0
+            drawRect(firstColor, topLeft = Offset(x, y(a)), size = Size(slot * 0.8f, y(0.0) - y(a)))
+            drawRect(secondColor, topLeft = Offset(x, y(a + b)), size = Size(slot * 0.8f, y(a) - y(a + b)))
         }
-        drawLine(textColor, Offset(0f, chartHeight), Offset(size.width, chartHeight), strokeWidth = 1f)
     }
-    // hour labels as text under the canvas: the first hour, then every third one
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+}
+
+/** Hour labels under a chart: the hour of the day in the phone time zone, for the first hour and then every third one. */
+@Composable
+private fun HourLabels(hours: List<HourBucket>) {
+    val zone = ZoneId.systemDefault()
+    Row(modifier = Modifier.fillMaxWidth().padding(start = GUTTER), horizontalArrangement = Arrangement.SpaceBetween) {
         for (h in hours.filterIndexed { i, _ -> i % 3 == 0 }) {
             Text(String.format(Locale.ROOT, "%02d", Instant.ofEpochMilli(h.startUtcMs).atZone(zone).hour), style = MaterialTheme.typography.labelSmall)
         }
     }
-    Text(String.format(Locale.ROOT, "scale: up to %.1f", maxValue), style = MaterialTheme.typography.labelSmall)
+}
+
+/**
+ * Heart rate per hour in one chart: a pale bar from the hour's lowest to its highest value (the window) and a solid tick at its
+ * mean. The scale runs from the lowest to the highest value of the range, rounded to 10 bpm. An hour without HR is a gap.
+ */
+@Composable
+private fun HrBars(hours: List<HourBucket>) {
+    val color = MaterialTheme.colorScheme.primary
+    val withHr = hours.filter { it.hrMeanBpm != null && it.hrMinBpm != null && it.hrMaxBpm != null }
+    if (withHr.isEmpty()) return
+    val lo = floor(withHr.minOf { it.hrMinBpm!! } / 10) * 10
+    val hi = (ceil(withHr.maxOf { it.hrMaxBpm!! } / 10) * 10).coerceAtLeast(lo + 10)
+    HourChart(hours, lo, hi, 140.dp) { left, slot, y, first0 ->
+        for (h in withHr) {
+            val x = left + ((h.startUtcMs - first0) / 3_600_000L).toInt() * slot + slot * 0.1f
+            val top = y(h.hrMaxBpm!!)
+            drawRect(color.copy(alpha = 0.3f), topLeft = Offset(x, top), size = Size(slot * 0.8f, (y(h.hrMinBpm!!) - top).coerceAtLeast(2f)))
+            drawRect(color, topLeft = Offset(x, y(h.hrMeanBpm!!) - 2.dp.toPx()), size = Size(slot * 0.8f, 4.dp.toPx()))
+        }
+    }
+    Text(stringResource(R.string.sum_hr_legend), style = MaterialTheme.typography.labelSmall)
 }

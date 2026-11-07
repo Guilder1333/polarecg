@@ -46,6 +46,21 @@ class RangeSummaryTest {
         assertEquals(120 * 70 + 60, r.beats)
     }
 
+    @Test fun eachHourHasItsMeanAndTheWindowOfItsHeartRate() {
+        // hour 0: minutes at 60 (50..70) and 80 (55..95) bpm, the faster one with three times the beats; hour 1: no HR at all
+        val minutes = listOf(
+            minute(0, n = 20, hr = 60.0, min = 50.0, max = 70.0), minute(1, n = 60, hr = 80.0, min = 55.0, max = 95.0),
+            minute(60, hr = null, min = null, max = null),
+        )
+        val r = summarizeRange(minutes, emptyList(), h0, h0 + 120 * 60_000L)
+        assertEquals(75.0, r.hours[0].hrMeanBpm!!, 1e-9) // (60*20 + 80*60) / 80
+        assertEquals(50.0, r.hours[0].hrMinBpm!!, 1e-9)
+        assertEquals(95.0, r.hours[0].hrMaxBpm!!, 1e-9)
+        assertNull(r.hours[1].hrMeanBpm)
+        assertNull(r.hours[1].hrMinBpm)
+        assertNull(r.hours[1].hrMaxBpm)
+    }
+
     @Test fun hrvIsTheMedianOfTheValidWindowsOnly() {
         val hrv = listOf(
             HrvPoint(h0, true, 20.0, 40.0), HrvPoint(h0 + 300_000, true, 30.0, 50.0), HrvPoint(h0 + 600_000, true, 40.0, 60.0),

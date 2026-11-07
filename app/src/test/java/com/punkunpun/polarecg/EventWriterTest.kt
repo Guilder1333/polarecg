@@ -66,6 +66,8 @@ class EventWriterTest {
         writer.start(events)
         events.emit(recorded("V_COUPLET", t0, withClip = true))
         events.emit(recorded("S_RUN", t0 + 60_000, withClip = false)) // refused by the clip limit: a row, no file
+        // finish() cancels the listener: let it take both events first (otherwise the test races the writer's own thread)
+        waitFor { dao.rows.size == 2 }
         writer.finish(Job().apply { complete() })
         waitFor { dao.rows.size == 2 && dao.rows[1]?.clipFile != null }
 
@@ -89,6 +91,7 @@ class EventWriterTest {
         val events = MutableSharedFlow<RecordedEvent>(extraBufferCapacity = 16)
         writer.start(events)
         events.emit(recorded("V_TRIPLET", t0, withClip = true))
+        waitFor { dao.rows.size == 1 } // the listener has the event before finish() cancels it
         writer.finish(Job().apply { complete() })
         waitFor { dao.rows[1]?.clipFile != null }
 

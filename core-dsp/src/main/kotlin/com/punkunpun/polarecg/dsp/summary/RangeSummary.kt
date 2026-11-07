@@ -24,6 +24,10 @@ class HourBucket(
     val coverage: Double,
     /** Median RMSSD of the valid HRV windows that start in this hour, null if there are none. */
     val rmssdMs: Double?,
+    /** Heart rate of the hour: the mean (weighted by the beats of each minute) and the lowest and highest minute value. Null without HR. */
+    val hrMeanBpm: Double? = null,
+    val hrMinBpm: Double? = null,
+    val hrMaxBpm: Double? = null,
 ) {
     private val judged: Int get() = n + s + v
     val sPercent: Double? get() = if (judged > 0) 100.0 * s / judged else null
@@ -59,6 +63,13 @@ class RangeSummary(
 private fun median(values: List<Double>): Double? =
     values.takeIf { it.isNotEmpty() }?.sorted()?.let { if (it.size % 2 == 1) it[it.size / 2] else (it[it.size / 2 - 1] + it[it.size / 2]) / 2 }
 
+/** Mean heart rate of [rows], each minute counting by its normal beats; null if no minute has one. */
+private fun weightedHrMean(rows: List<MinuteSummary>): Double? {
+    val withHr = rows.filter { it.hrMeanBpm != null }
+    val weight = withHr.sumOf { it.n }.toDouble()
+    return if (weight > 0) withHr.sumOf { it.hrMeanBpm!! * it.n } / weight else null
+}
+
 /**
  * Sums up [minutes] and [hrv] inside [fromUtcMs, toUtcMs). [toUtcMs] should be "now" for a range that is still running, so the
  * coverage is not diluted by the future. Burden = (S + V) / (N + S + V), counting every beat of the minute rows (the beats the
@@ -70,9 +81,7 @@ fun summarizeRange(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, fromUtcMs:
 
     val rangeMinutes = ((toUtcMs - fromUtcMs) / MINUTE_MS).coerceAtLeast(1)
     val covered = inRange.sumOf { it.coverage }
-    val beatsWithHr = inRange.filter { it.hrMeanBpm != null }
-    val hrWeight = beatsWithHr.sumOf { it.n }.toDouble()
-    val hrMean = if (hrWeight > 0) beatsWithHr.sumOf { it.hrMeanBpm!! * it.n } / hrWeight else null
+    val hrMean = weightedHrMean(inRange)
 
     val buckets = LinkedHashMap<Long, MutableList<MinuteSummary>>()
     for (m in inRange) buckets.getOrPut(Math.floorDiv(m.startUtcMs, HOUR_MS) * HOUR_MS) { ArrayList() } += m
@@ -81,6 +90,7 @@ fun summarizeRange(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, fromUtcMs:
             start, rows.sumOf { it.n }, rows.sumOf { it.s }, rows.sumOf { it.v }, rows.sumOf { it.q }, rows.sumOf { it.vDoubt },
             (rows.sumOf { it.coverage } / 60.0).coerceAtMost(1.0),
             median(validHrv.filter { it.startUtcMs >= start && it.startUtcMs < start + HOUR_MS }.mapNotNull { it.rmssdMs }),
+            weightedHrMean(rows), rows.mapNotNull { it.hrMinBpm }.minOrNull(), rows.mapNotNull { it.hrMaxBpm }.maxOrNull(),
         )
     }.sortedBy { it.startUtcMs }
 
