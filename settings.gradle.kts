@@ -24,7 +24,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PolarisECG"
+rootProject.name = "PolarECG"
 include(":app")
 include(":core-dsp")
 include(":tools:cli")

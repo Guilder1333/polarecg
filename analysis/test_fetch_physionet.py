@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 import fetch_physionet as fp  # noqa: E402
-import polaris_raw as pr  # noqa: E402
+import polar_raw as pr  # noqa: E402
 
 
 class ConversionTest(unittest.TestCase):

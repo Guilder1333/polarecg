@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from polaris_raw import read_ecg, write_ecg_file  # noqa: E402
-from polaris_segments import build_segments  # noqa: E402
+from polar_raw import read_ecg, write_ecg_file  # noqa: E402
+from polar_segments import build_segments  # noqa: E402
 import view_ecg  # noqa: E402
 
 START = 1_577_836_800_000  # 2020-01-01T00:00:00Z

@@ -2,7 +2,7 @@
 
 Written by the phone (`RawRecorder` in `:app`), read by `:core-dsp`
 (`readRawFile` in `dsp/raw/RawFormat.kt`, whole sessions via `readStream` in `dsp/raw/RawSession.kt`;
-the byte layout below must match those files) and by the Python reader `analysis/polaris_raw.py`.
+the byte layout below must match those files) and by the Python reader `analysis/polar_raw.py`.
 Never commit recordings: copy exported sessions into `data/sessions/` (git-ignored).
 
 ## Folder layout
@@ -150,11 +150,11 @@ It is not raw data: compare it with `analyze` output, and do not rely on it as t
 ## Replaying a session on the phone
 
 The **Replay** screen (P5.2) plays a session folder through the live pipeline without the strap. It lists
-the app's own sessions and the folders in `Android/data/com.punkunpun.polarisecg/files/replay/` (open the
+the app's own sessions and the folders in `Android/data/com.punkunpun.polarecg/files/replay/` (open the
 Replay screen once, so the folder exists). To replay a night from the PC:
 
 ```
-adb push data/sessions/<session> /sdcard/Android/data/com.punkunpun.polarisecg/files/replay/
+adb push data/sessions/<session> /sdcard/Android/data/com.punkunpun.polarecg/files/replay/
 ```
 
 Pauses longer than 3 s in the recording are shortened to 3 s; speeds are 1×, 10×, 60× and "Max".

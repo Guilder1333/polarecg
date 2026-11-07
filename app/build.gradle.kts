@@ -10,13 +10,13 @@ ksp {
 }
 
 android {
-    namespace = "com.punkunpun.polarisecg"
+    namespace = "com.punkunpun.polarecg"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.punkunpun.polarisecg"
+        applicationId = "com.punkunpun.polarecg"
         minSdk = 36
         targetSdk = 37
         versionCode = 1

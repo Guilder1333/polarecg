@@ -1,4 +1,4 @@
-# PolarisECG — Development Plan
+# PolarECG — Development Plan
 
 Personal Android app for **continuous, real-time, on-device ECG monitoring** with a **Polar H10**
 chest strap. Main goal: detect and quantify **premature beats (PVCs / PACs)** live, and compute
@@ -265,7 +265,7 @@ data, and logs every gap. Everything else depends on this.
 ### Phase 2 — PC analysis toolchain (≈ 3–5 days)
 
 - [x] **P2.1 [AI]** Raw file reader in `:core-dsp` (or `:tools:cli`) + Python reader in `analysis/`.
-  (`dsp/raw/RawSession.kt`: `readStream`; `analysis/polaris_raw.py`: `read_session`.)
+  (`dsp/raw/RawSession.kt`: `readStream`; `analysis/polar_raw.py`: `read_session`.)
 - [x] **P2.2 [AI]** `analysis/` setup: `requirements.txt` (`numpy`, `scipy`, `matplotlib`, `pandas`,
   `wfdb`), README with step-by-step setup on Windows.
 - [x] **P2.3 [AI]** Script to download **MIT-BIH Arrhythmia DB**, **INCART** and **MIT-BIH Noise
@@ -277,7 +277,7 @@ data, and logs every gap. Everything else depends on this.
   `U`, events only `GAP` until P4.)
 - [x] **P2.5 [AI]** Python viewer: plot ECG with detected beats colored by class, quality shaded,
   zoomable; jump to a timestamp or event.
-  (`analysis/view_ecg.py`; segment/time logic mirrored in `analysis/polaris_segments.py`. Shades
+  (`analysis/view_ecg.py`; segment/time logic mirrored in `analysis/polar_segments.py`. Shades
   gaps and low-coverage windows now, and the `quality` column once P3.4 adds it.)
 - [x] **P2.6 [AI]** Python scorer: compare detections to reference annotations (beat matching within
   ±150 ms), output sensitivity / positive predictivity per class (AAMI-style, §9).
@@ -337,7 +337,7 @@ Details in §7.1–7.4.
   99-99.8 % of intervals pair up; on good pairs median |difference| 0 ms, p99 2 ms, 99.6-99.9 % within 5 ms,
   also in strong motion. **Found on the way:** the H10 samples at ~130.27 Hz, not 130 (from its own
   timestamps, identical in both sessions); with sample times at 130 Hz our time axis drifted 13 s in 2 h and
-  every RR was 1-2 ms long. Segment time now follows the sensor clock (`EcgSegment`, `polaris_segments.py`).
+  every RR was 1-2 ms long. Segment time now follows the sensor clock (`EcgSegment`, `polar_segments.py`).
   Largest remaining disagreements (25-77 ms, a few per hour) are around single beats, probably premature
   beats whose R peak the strap places differently: look at them in P4.
 - [x] **P3.7 [AI]** Noise robustness on MIT-BIH NSTDB: confirm low-quality segments are flagged
@@ -556,7 +556,7 @@ Details in §7.5–7.6.
   beats were scored without motion (the 3 s "ACC stalled" fallback). Fix: both streams go through one ordered queue in
   `LiveProcessor`; a replay hands its frames over directly, in order, with back-pressure. Repeated on the phone after the fix: Beats 65 545, N 64 607, S 652, V 46 (38), Q 240, exactly `analyze`: done.)
 - [ ] **P5.3 [AI]** Room database (§8), batched writes, retention policy.
-  (Built 2026-10-29, **not yet tried on the phone**. `storage/`: `PolarisDatabase` (Room, `polaris.db`), table `beat` (key = UTC ms;
+  (Built 2026-10-29, **not yet tried on the phone**. `storage/`: `PolarDatabase` (Room, `polar.db`), table `beat` (key = UTC ms;
   class, quality, a few features: `BeatEntity`), `BeatDao`, `BeatWriter`. The writer subscribes to `LiveProcessor.beats` when the
   service starts and writes one transaction per 5 s or 500 beats; on stop it waits for the pipeline's last beats. Retention: `beat`
   rows older than 90 days are deleted at each start. Replay does not write. The database is excluded from cloud backup.
@@ -592,8 +592,8 @@ Details in §7.5–7.6.
   session has no end time (and raw recording is on), the start screen says "Unfinished session from ..., last data around ...", that
   Continue adds to it and does not overwrite it, and the button reads **Continue recording** (`SessionFolders.unfinished`, read-only).
   Still to do for the tick: a night with the fixed build whose saved beats equal `analyze` ("equal" = same beats and classes; times of a segment after a restart may differ by one BLE delay, see above).)
-- [x] **P5.3b [AI] Remove the clearing after export.** (Done 2026-10-31: an export now deletes nothing. Note that the zip contains the whole `polaris.db`, about 70 bytes per beat, 7 MB a day, so it grows until the 90-day retention; P6.3 decides what the zip should hold.) Temporary rule (owner, 2026-10-29): while the raw files are the
-  only thing that matters, **Export last session** puts `polaris.db` and `beats.csv` into the zip and then deletes the exported
+- [x] **P5.3b [AI] Remove the clearing after export.** (Done 2026-10-31: an export now deletes nothing. Note that the zip contains the whole `polar.db`, about 70 bytes per beat, 7 MB a day, so it grows until the 90-day retention; P6.3 decides what the zip should hold.) Temporary rule (owner, 2026-10-29): while the raw files are the
+  only thing that matters, **Export last session** puts `polar.db` and `beats.csv` into the zip and then deletes the exported
   beats from the database (and VACUUMs it); the button says so. Remove this (the `exportedUpTo` / `deleteBefore` / VACUUM part of
   `zipSession`, and "and clear saved beats" in `raw_export`) **before** the summary and review screens (P5.6/P5.7) or labels
   rely on the database, and before P6.3; from then on an export must never delete anything.

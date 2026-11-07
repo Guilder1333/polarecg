@@ -14,7 +14,7 @@ import numpy as np  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import label_beats as lb  # noqa: E402
 import label_data as ld  # noqa: E402
-from polaris_raw import write_ecg_file  # noqa: E402
+from polar_raw import write_ecg_file  # noqa: E402
 
 START = 1_577_836_800_000  # 2020-01-01T00:00:00Z
 RATE = 130

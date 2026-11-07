@@ -27,8 +27,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eval_labels  # noqa: E402
 import label_data as ld  # noqa: E402
-from polaris_raw import ECG_RATE_HZ, read_ecg  # noqa: E402
-from polaris_segments import Segment, build_segments  # noqa: E402
+from polar_raw import ECG_RATE_HZ, read_ecg  # noqa: E402
+from polar_segments import Segment, build_segments  # noqa: E402
 from view_ecg import _fmt_time, default_analysis_dir  # noqa: E402
 
 HALF_WINDOW_MS = 3000          # the strip shows about 6 s centred on the item

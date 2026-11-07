@@ -1,0 +1,219 @@
+package com.punkunpun.polarecg
+
+import android.app.PictureInPictureParams
+import android.content.res.Configuration
+import android.os.Bundle
+import android.util.Rational
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import com.punkunpun.polarecg.annotations.AnnotationKind
+import com.punkunpun.polarecg.annotations.AnnotationScreen
+import com.punkunpun.polarecg.diagnostics.DiagnosticsScreen
+import com.punkunpun.polarecg.events.BrowseRoute
+import com.punkunpun.polarecg.pairing.ConnectionRoute
+import com.punkunpun.polarecg.events.EventsRoute
+import com.punkunpun.polarecg.live.LiveScreen
+import com.punkunpun.polarecg.replay.ReplayScreen
+import com.punkunpun.polarecg.pairing.PairingRoute
+import com.punkunpun.polarecg.permissions.AppPermissions
+import com.punkunpun.polarecg.permissions.PermissionsScreen
+import com.punkunpun.polarecg.summary.SummaryScreen
+import com.punkunpun.polarecg.ui.theme.PolarECGTheme
+
+class MainActivity : ComponentActivity() {
+
+    // Compose re-draws when a "state" value changes. Bumping this counter in onResume() lets the
+    // screen re-check permissions after the user returns from a system dialog or settings page.
+    // `by` delegates the property to the state object, so we read/write it like a plain Int.
+    private var resumeCount by mutableIntStateOf(0)
+
+    // True while the app is the small floating window (Picture-in-Picture): the screen then shows
+    // only the live trace. Set by the system callback onPictureInPictureModeChanged below.
+    private var inPip by mutableStateOf(false)
+
+    /**
+     * Allowed to turn itself into a floating window when the user swipes up to Home. Only offered while
+     * the live screen is visible: elsewhere a floating window would show nothing useful.
+     */
+    private fun setPipAllowed(allowed: Boolean) {
+        setPictureInPictureParams(
+            PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .setAutoEnterEnabled(allowed)
+                .setSeamlessResizeEnabled(false) // the trace is redrawn, not scaled: no blurry cross-fade
+                .build(),
+        )
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            PolarECGTheme {
+                var bluetoothGranted by remember { mutableStateOf(AppPermissions.hasBluetooth(this)) }
+                var notificationsGranted by remember {
+                    mutableStateOf(AppPermissions.hasNotifications(this))
+                }
+                var batteryGranted by remember {
+                    mutableStateOf(AppPermissions.isIgnoringBatteryOptimizations(this))
+                }
+
+                // Launchers must be created during composition; they hand the result to the lambda.
+                val bluetoothLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestMultiplePermissions(),
+                ) { bluetoothGranted = AppPermissions.hasBluetooth(this) }
+                val notificationsLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) { notificationsGranted = it }
+                val batteryLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult(),
+                ) { batteryGranted = AppPermissions.isIgnoringBatteryOptimizations(this) }
+
+                // Runs again whenever resumeCount changes, i.e. each time the app returns to the foreground.
+                LaunchedEffect(resumeCount) {
+                    bluetoothGranted = AppPermissions.hasBluetooth(this@MainActivity)
+                    notificationsGranted = AppPermissions.hasNotifications(this@MainActivity)
+                    batteryGranted = AppPermissions.isIgnoringBatteryOptimizations(this@MainActivity)
+                }
+
+                // rememberSaveable survives screen rotation, plain remember does not.
+                var permissionsAcknowledged by rememberSaveable { mutableStateOf(false) }
+                var showDiagnostics by rememberSaveable { mutableStateOf(false) }
+                var showLive by rememberSaveable { mutableStateOf(false) }
+                var showReplay by rememberSaveable { mutableStateOf(false) }
+                var showSummary by rememberSaveable { mutableStateOf(false) }
+                var showEvents by rememberSaveable { mutableStateOf(false) }
+                var showBrowse by rememberSaveable { mutableStateOf(false) }
+                var showConnection by rememberSaveable { mutableStateOf(false) }
+                // The picker for an action/event: which kind, and when the button was pressed (null kind = closed).
+                var annotateKind by rememberSaveable { mutableStateOf<String?>(null) }
+                var annotatePressedMs by rememberSaveable { mutableStateOf(0L) }
+                val onAnnotate = { kind: AnnotationKind, pressedMs: Long ->
+                    annotatePressedMs = pressedMs
+                    annotateKind = kind.key
+                }
+                val allGranted = bluetoothGranted && notificationsGranted && batteryGranted
+                val showPairing = bluetoothGranted && (allGranted || permissionsAcknowledged)
+
+                // The live screen is the only one that may float. Re-evaluated when it opens or closes.
+                val liveVisible = showPairing && showLive
+                LaunchedEffect(liveVisible) { setPipAllowed(liveVisible) }
+
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    val annotating = if (showPairing) annotateKind?.let(AnnotationKind::fromKey) else null
+                    if (annotating != null) {
+                        AnnotationScreen(
+                            app = application as PolarApp,
+                            kind = annotating,
+                            pressedMs = annotatePressedMs,
+                            onDone = { annotateKind = null },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (liveVisible) {
+                        LiveScreen(
+                            app = application as PolarApp,
+                            onBack = { showLive = false },
+                            // The floating window is small: no system bars padding there.
+                            modifier = if (inPip) Modifier else Modifier.padding(innerPadding),
+                            pip = inPip,
+                            onAnnotate = onAnnotate,
+                            onEnterPip = {
+                                setPipAllowed(true)
+                                enterPictureInPictureMode(
+                                    PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build(),
+                                )
+                            },
+                        )
+                    } else if (showPairing && showEvents) {
+                        EventsRoute(
+                            app = application as PolarApp,
+                            onBack = { showEvents = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (showPairing && showConnection) {
+                        ConnectionRoute(
+                            app = application as PolarApp,
+                            onBack = { showConnection = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (showPairing && showBrowse) {
+                        BrowseRoute(
+                            app = application as PolarApp,
+                            onBack = { showBrowse = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (showPairing && showSummary) {
+                        SummaryScreen(
+                            app = application as PolarApp,
+                            onBack = { showSummary = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (showPairing && showReplay) {
+                        ReplayScreen(
+                            app = application as PolarApp,
+                            onBack = { showReplay = false },
+                            onOpenLive = { showLive = true },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (showPairing && showDiagnostics) {
+                        DiagnosticsScreen(
+                            log = (application as PolarApp).connectionLog,
+                            onBack = { showDiagnostics = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else if (showPairing) {
+                        PairingRoute(
+                            app = application as PolarApp,
+                            onOpenConnection = { showConnection = true },
+                            onOpenDiagnostics = { showDiagnostics = true },
+                            onOpenLive = { showLive = true },
+                            onOpenSummary = { showSummary = true },
+                            onOpenEvents = { showEvents = true },
+                            onOpenBrowse = { showBrowse = true },
+                            onOpenReplay = { showReplay = true },
+                            onAnnotate = onAnnotate,
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else PermissionsScreen(
+                        bluetoothGranted = bluetoothGranted,
+                        notificationsGranted = notificationsGranted,
+                        batteryGranted = batteryGranted,
+                        onRequestBluetooth = { bluetoothLauncher.launch(AppPermissions.bluetooth) },
+                        onRequestNotifications = {
+                            notificationsLauncher.launch(AppPermissions.NOTIFICATIONS)
+                        },
+                        onRequestBattery = {
+                            batteryLauncher.launch(AppPermissions.batteryOptimizationIntent(this))
+                        },
+                        onContinue = { permissionsAcknowledged = true },
+                        modifier = Modifier.padding(innerPadding),
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPip = isInPictureInPictureMode
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumeCount++
+    }
+}

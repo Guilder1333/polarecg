@@ -49,8 +49,8 @@ import pandas as pd
 from scipy.signal import butter, sosfiltfilt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from polaris_raw import ECG_RATE_HZ, read_ecg  # noqa: E402
-from polaris_segments import build_segments  # noqa: E402
+from polar_raw import ECG_RATE_HZ, read_ecg  # noqa: E402
+from polar_segments import build_segments  # noqa: E402
 
 # Shape window around the R peak (samples at 130 Hz): QRS and the start of ST, not P or T, so a
 # PAC's different P wave does not make it look abnormal.

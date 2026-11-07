@@ -1,4 +1,4 @@
-# PolarisECG
+# PolarECG
 
 Android app (Kotlin, Jetpack Compose) for real-time on-device ECG monitoring with a Polar H10:
 premature beat (PVC/PAC) detection and HRV. Everything runs on the phone; no cloud.

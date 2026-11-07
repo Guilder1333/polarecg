@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">PolarisECG</string>
+    <string name="app_name">PolarECG</string>
 
     <string name="perm_title">Permissions</string>
-    <string name="perm_intro">PolarisECG needs a few permissions to record your ECG reliably, even overnight with the screen off. Nothing leaves your phone.</string>
+    <string name="perm_intro">PolarECG needs a few permissions to record your ECG reliably, even overnight with the screen off. Nothing leaves your phone.</string>
     <string name="perm_bluetooth_title">Bluetooth</string>
     <string name="perm_bluetooth_why">Needed to find your Polar H10 strap and connect to it. It is not used to determine your location.</string>
     <string name="perm_notifications_title">Notifications</string>
@@ -13,7 +13,7 @@
     <string name="perm_grant">Grant</string>
     <string name="perm_continue">Continue</string>
 
-    <string name="main_title">PolarisECG</string>
+    <string name="main_title">PolarECG</string>
     <string name="main_no_device">No H10 selected</string>
     <string name="conn_open">H10 connection</string>
     <string name="conn_back">Back</string>
@@ -139,7 +139,7 @@
     <string name="replay_title">Replay a session</string>
     <string name="replay_hint">Plays a recorded session through the same pipeline as a live one, without the strap. Nothing is recorded. Watch it on the Live screen; the counts here must match `analyze` of the same session.</string>
     <string name="replay_session_running">A recording session is running: stop it first.</string>
-    <string name="replay_none">No sessions found. Record one, or copy a session folder to Android/data/com.punkunpun.polarisecg/files/replay/.</string>
+    <string name="replay_none">No sessions found. Record one, or copy a session folder to Android/data/com.punkunpun.polarecg/files/replay/.</string>
     <string name="replay_pick">Session:</string>
     <string name="replay_speed">Speed:</string>
     <string name="replay_max">Max</string>

@@ -1,4 +1,4 @@
-# Python tools for PolarisECG (see README.md). Lower bounds only: any newer release should work.
+# Python tools for PolarECG (see README.md). Lower bounds only: any newer release should work.
 numpy>=1.26
 scipy>=1.11
 matplotlib>=3.8

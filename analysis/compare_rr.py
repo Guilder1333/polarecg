@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
-from polaris_raw import read_session  # noqa: E402
+from polar_raw import read_session  # noqa: E402
 
 # Strap intervals considered for our interval ending at t: those that arrived in this window
 # around t (ms, phone clock). Notifications come ~1 s after the beat, sometimes batched later.

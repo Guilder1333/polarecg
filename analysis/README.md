@@ -1,20 +1,20 @@
 # analysis/ — Python tools
 
-PC-side tools for PolarisECG: read recordings, download reference databases, view ECG, score
+PC-side tools for PolarECG: read recordings, download reference databases, view ECG, score
 detections. Everything here runs on your PC; nothing is sent anywhere.
 
 Contents now:
 
 | File | What |
 |---|---|
-| `polaris_raw.py` | Reader for raw recordings (`read_session(folder)`), see `docs/RAW_FORMAT.md` |
-| `test_polaris_raw.py` | Tests of the reader |
+| `polar_raw.py` | Reader for raw recordings (`read_session(folder)`), see `docs/RAW_FORMAT.md` |
+| `test_polar_raw.py` | Tests of the reader |
 | `fetch_physionet.py` | Downloads MIT-BIH / INCART / NSTDB and converts them (see below) |
 | `test_fetch_physionet.py` | Offline tests of the conversion |
 | `eval_features.py` | How well the beat features (P4.1/P4.2) separate the MIT-BIH classes: percentiles per class and AUC |
 | `eval_patterns.py` | Counts V patterns (couplets, runs, bigeminy...) in the MIT-BIH annotations and compares them with ours |
 | `view_ecg.py` | Interactive ECG viewer for a recording + its `analyze` output (see below) |
-| `polaris_segments.py` | Gap-free segments with UTC time; mirrors the Kotlin `EcgSegments`/`TimeMapper` |
+| `polar_segments.py` | Gap-free segments with UTC time; mirrors the Kotlin `EcgSegments`/`TimeMapper` |
 | `test_view_ecg.py` | Offline tests of the viewer's data side |
 | `label_beats.py` | Label your own beats (or practise on MIT-BIH with `--gallery`), see below |
 | `label_data.py`, `eval_labels.py` | Queue / label files of the labeling tool; our class against your labels |
@@ -38,7 +38,7 @@ If that fails, install Python from <https://www.python.org/downloads/> and tick
 > Use `py` (the Python launcher) instead, or turn the stub off in
 > *Settings → Apps → Advanced app settings → App execution aliases*.
 
-From the repository root (`C:\workspace\polarisecg`):
+From the repository root (`C:\workspace\polarecg`):
 
 ```powershell
 py -m venv analysis\.venv
@@ -106,7 +106,7 @@ Copy an exported session into `data/sessions/` (git-ignored; never commit health
 
 ```python
 import sys; sys.path.insert(0, "analysis")
-from polaris_raw import read_session
+from polar_raw import read_session
 
 s = read_session("data/sessions/20261012T221530Z")
 print(len(s.ecg.samples_uv) / 130, "seconds of ECG")

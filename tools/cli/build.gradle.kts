@@ -22,7 +22,7 @@ dependencies {
 }
 
 application {
-    mainClass = "com.punkunpun.polarisecg.cli.MainKt"
+    mainClass = "com.punkunpun.polarecg.cli.MainKt"
 }
 
 // `./gradlew :tools:cli:run` starts in tools/cli by default; relative data/ paths must mean the

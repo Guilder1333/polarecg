@@ -28,8 +28,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from polaris_raw import ECG_RATE_HZ, read_ecg  # noqa: E402
-from polaris_segments import Segment, build_segments  # noqa: E402
+from polar_raw import ECG_RATE_HZ, read_ecg  # noqa: E402
+from polar_segments import Segment, build_segments  # noqa: E402
 
 # Colours chosen to differ also for colour-blind eyes; U = not classified yet.
 CLASS_COLORS = {"N": "#2a9d3f", "S": "#e08a00", "V": "#d62728", "F": "#9467bd", "Q": "#7f7f7f", "U": "#1f77b4"}

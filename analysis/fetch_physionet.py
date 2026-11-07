@@ -1,4 +1,4 @@
-"""Download reference ECG databases from PhysioNet and convert them to PolarisECG's raw format.
+"""Download reference ECG databases from PhysioNet and convert them to PolarECG's raw format.
 
     python analysis/fetch_physionet.py                       # all three databases (slow, large)
     python analysis/fetch_physionet.py --db mitdb --records 100 101
@@ -32,7 +32,7 @@ import numpy as np
 from scipy.signal import resample_poly
 
 sys.path.insert(0, str(Path(__file__).parent))
-from polaris_raw import ECG_RATE_HZ, write_ecg_file  # noqa: E402
+from polar_raw import ECG_RATE_HZ, write_ecg_file  # noqa: E402
 
 # Fake start time of every converted record (their real dates are unknown or anonymised).
 START_PHONE_MS = 1_577_836_800_000  # 2020-01-01T00:00:00Z
