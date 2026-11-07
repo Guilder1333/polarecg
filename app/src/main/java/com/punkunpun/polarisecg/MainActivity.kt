@@ -24,6 +24,7 @@ import com.punkunpun.polarisecg.annotations.AnnotationKind
 import com.punkunpun.polarisecg.annotations.AnnotationScreen
 import com.punkunpun.polarisecg.diagnostics.DiagnosticsScreen
 import com.punkunpun.polarisecg.events.BrowseRoute
+import com.punkunpun.polarisecg.pairing.ConnectionRoute
 import com.punkunpun.polarisecg.events.EventsRoute
 import com.punkunpun.polarisecg.live.LiveScreen
 import com.punkunpun.polarisecg.replay.ReplayScreen
@@ -97,6 +98,7 @@ class MainActivity : ComponentActivity() {
                 var showSummary by rememberSaveable { mutableStateOf(false) }
                 var showEvents by rememberSaveable { mutableStateOf(false) }
                 var showBrowse by rememberSaveable { mutableStateOf(false) }
+                var showConnection by rememberSaveable { mutableStateOf(false) }
                 // The picker for an action/event: which kind, and when the button was pressed (null kind = closed).
                 var annotateKind by rememberSaveable { mutableStateOf<String?>(null) }
                 var annotatePressedMs by rememberSaveable { mutableStateOf(0L) }
@@ -142,6 +144,12 @@ class MainActivity : ComponentActivity() {
                             onBack = { showEvents = false },
                             modifier = Modifier.padding(innerPadding),
                         )
+                    } else if (showPairing && showConnection) {
+                        ConnectionRoute(
+                            app = application as PolarisApp,
+                            onBack = { showConnection = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
                     } else if (showPairing && showBrowse) {
                         BrowseRoute(
                             app = application as PolarisApp,
@@ -170,6 +178,7 @@ class MainActivity : ComponentActivity() {
                     } else if (showPairing) {
                         PairingRoute(
                             app = application as PolarisApp,
+                            onOpenConnection = { showConnection = true },
                             onOpenDiagnostics = { showDiagnostics = true },
                             onOpenLive = { showLive = true },
                             onOpenSummary = { showSummary = true },

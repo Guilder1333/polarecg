@@ -13,7 +13,11 @@
     <string name="perm_grant">Grant</string>
     <string name="perm_continue">Continue</string>
 
-    <string name="pair_title">Choose your H10</string>
+    <string name="main_title">PolarisECG</string>
+    <string name="main_no_device">No H10 selected</string>
+    <string name="conn_open">H10 connection</string>
+    <string name="conn_back">Back</string>
+    <string name="pair_title">H10 connection</string>
     <string name="pair_hint">Wear the strap with moist electrodes so it wakes up, and close Polar Flow / Polar Beat first.</string>
     <string name="pair_selected">Selected: %1$s</string>
     <string name="pair_scan">Scan again</string>

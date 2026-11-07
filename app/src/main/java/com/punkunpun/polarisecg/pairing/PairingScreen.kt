@@ -5,15 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -24,42 +16,41 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.punkunpun.polarisecg.R
 
-/** Stateless pairing UI: shows the scan result and reports taps. See PairingRoute for the logic. */
+/**
+ * The main screen: the current H10 and the buttons to the other screens. Choosing the strap (scan, instructions) is on the
+ * connection screen, see [ConnectionScreen]. Stateless; see PairingRoute.
+ */
 @OptIn(ExperimentalLayoutApi::class) // FlowRow is still marked experimental
 @Composable
 fun PairingScreen(
-    devices: List<FoundDevice>,
-    scanning: Boolean,
-    errorMessage: String?,
     selectedDeviceId: String?,
-    onRescan: () -> Unit,
-    onSelect: (FoundDevice) -> Unit,
+    onOpenConnection: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenLive: () -> Unit,
     onOpenSummary: () -> Unit,
     onOpenEvents: () -> Unit,
     onOpenBrowse: () -> Unit,
     onOpenReplay: () -> Unit,
-    connectionPanel: @Composable () -> Unit,
+    annotationPanel: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(stringResource(R.string.pair_title), style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.main_title), style = MaterialTheme.typography.headlineMedium)
 
-        if (selectedDeviceId != null) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                stringResource(R.string.pair_selected, selectedDeviceId),
+                if (selectedDeviceId != null) stringResource(R.string.pair_selected, selectedDeviceId) else stringResource(R.string.main_no_device),
                 style = MaterialTheme.typography.titleMedium,
             )
+            OutlinedButton(onClick = onOpenConnection) { Text(stringResource(R.string.conn_open)) }
         }
-        Text(stringResource(R.string.pair_hint))
 
-        if (selectedDeviceId != null) connectionPanel()
+        annotationPanel()
 
-        // FlowRow: four buttons do not fit in one line; a plain Row squeezed the last one until its text went vertical.
+        // FlowRow: the buttons do not fit in one line; a plain Row squeezed the last one until its text went vertical.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onOpenLive) {
                 Text(stringResource(R.string.live_open))
@@ -78,59 +69,6 @@ fun PairingScreen(
             }
             OutlinedButton(onClick = onOpenReplay) {
                 Text(stringResource(R.string.replay_open))
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onRescan, enabled = !scanning) {
-                Text(stringResource(R.string.pair_scan))
-            }
-            if (scanning) {
-                // Fixed size: without it the spinner grabs whatever width is left and spins off-centre.
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                Text(stringResource(R.string.pair_scanning))
-            }
-        }
-
-        if (errorMessage != null) {
-            Text(errorMessage, color = MaterialTheme.colorScheme.error)
-        }
-        if (!scanning && devices.isEmpty() && errorMessage == null) {
-            Text(stringResource(R.string.pair_none_found))
-        }
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(devices, key = { it.deviceId }) { device ->
-                val isSelected = device.deviceId == selectedDeviceId
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = if (isSelected) {
-                        CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                    } else {
-                        CardDefaults.cardColors()
-                    },
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
-                            Text(device.name, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                stringResource(R.string.pair_device_details, device.deviceId, device.rssi),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                        if (isSelected) {
-                            Text(stringResource(R.string.pair_in_use))
-                        } else {
-                            Button(onClick = { onSelect(device) }) {
-                                Text(stringResource(R.string.pair_use))
-                            }
-                        }
-                    }
-                }
             }
         }
     }
