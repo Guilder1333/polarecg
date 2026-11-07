@@ -79,12 +79,12 @@ class RawWindowTest {
         val c = ecgFileStampMs("ecg_20261105T120000Z.bin")!!
         val files = listOf("ecg_20261105T120000Z.bin", "ecg_20261105T100000Z.bin", "ecg_20261105T110000Z.bin", "acc_20261105T100000Z.bin", "ecg.bin").map(::File)
         fun names(center: Long) = ecgFilesFor(files, center, 10_000).map { it.name }
-        // in the middle of the second file: it and the one before (the window could reach back), no current file (a later one exists)
+        // in the middle of the second file: it and every file before it (the clock starts at the first one), no current file (a later one exists)
         assertEquals(listOf("ecg_20261105T100000Z.bin", "ecg_20261105T110000Z.bin"), names(b + 1_800_000))
         // just before the third file starts: the window reaches into it, so the third file is read too
-        assertEquals(listOf("ecg_20261105T110000Z.bin", "ecg_20261105T120000Z.bin"), names(c - 5_000))
+        assertEquals(listOf("ecg_20261105T100000Z.bin", "ecg_20261105T110000Z.bin", "ecg_20261105T120000Z.bin"), names(c - 5_000))
         // after the last finished file: the current file holds the newest data
-        assertEquals(listOf("ecg_20261105T110000Z.bin", "ecg_20261105T120000Z.bin", "ecg.bin"), names(c + 1_000_000))
+        assertEquals(listOf("ecg_20261105T100000Z.bin", "ecg_20261105T110000Z.bin", "ecg_20261105T120000Z.bin", "ecg.bin"), names(c + 1_000_000))
         assertTrue(a < b && b < c)
     }
 }

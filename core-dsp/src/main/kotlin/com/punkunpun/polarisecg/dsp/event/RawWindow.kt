@@ -26,13 +26,18 @@ fun ecgFileStampMs(name: String): Long? {
 }
 
 /**
- * Which ECG files of one session may hold the window `center ± halfWidthMs`: the last two finished files that start before the
- * window's end (the window may straddle an hourly rotation), and the current `ecg.bin` when no finished file starts after the
- * center (then the current file is the newest data). Oldest first, as [buildSegments] wants the frames in arrival order.
+ * Which ECG files of one session are needed for the window `center +- halfWidthMs`: **every** finished file that starts before the
+ * window's end, and the current `ecg.bin` when no finished file starts after the center (then it is the newest data). Oldest first,
+ * as [buildSegments] wants the frames in arrival order.
+ *
+ * Why not only the file around the center: the time of a sample is the start time of its gap-free stretch plus the sensor clock
+ * since then, and the beats of the phone were timed that way from the stretch's very first frame, up to many hours earlier. The
+ * strap's clock drifts against the phone's (about 25 ppm, 1.6 s in 18 hours), so a stretch started at a later file would put the
+ * ECG seconds away from the saved beat markers. Reading from the first file reproduces the beats' clock exactly.
  */
 fun ecgFilesFor(files: List<File>, centerUtcMs: Long, halfWidthMs: Long): List<File> {
     val finished = files.mapNotNull { f -> ecgFileStampMs(f.name)?.let { it to f } }.sortedBy { it.first }
-    val before = finished.filter { it.first <= centerUtcMs + halfWidthMs }.takeLast(2).map { it.second }
+    val before = finished.filter { it.first <= centerUtcMs + halfWidthMs }.map { it.second }
     val current = files.firstOrNull { it.name == "ecg.bin" }
     val laterFinished = finished.any { it.first > centerUtcMs }
     return if (current != null && !laterFinished) before + current else before
