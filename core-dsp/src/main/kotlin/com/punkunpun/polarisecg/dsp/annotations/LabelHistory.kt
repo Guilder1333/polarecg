@@ -43,3 +43,24 @@ fun currentLabelRows(history: List<LabelRecord>): Map<Long, LabelRecord> {
 /** Only the beats whose current label is a class (N, S, V, Q): beat time -> label. Same result as `parseOwnerLabels`. */
 fun currentClassLabels(history: List<LabelRecord>): Map<Long, String> =
     currentLabelRows(history).mapValues { it.value.label }.filterValues { it in OwnerLabel.CLASSES }
+
+private val LABEL_TIME = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(java.time.ZoneOffset.UTC)
+
+/** The header of `labels.csv`, as written by the PC tool (`analysis/label_beats.py`). */
+const val LABELS_CSV_HEADER = "item,utcMs,kind,label,labeledAtUtc,note,bumpUtcMs"
+
+/** A CSV field: in quotes (inner quotes doubled) only if it needs them; the reader is `splitCsvLine`. */
+private fun csvField(s: String) = if (s.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
+
+/**
+ * The phone's label history as the PC tool's `labels.csv`, so `analyze --labels` and `eval_labels.py` read it unchanged
+ * (docs/LABELING_TOOL.md): one row per label press in [history]'s order (the order of writing), `item` = "B" + beat time,
+ * `kind` always BEAT, the last row per item wins. Lines end with "\n"; the first line is the header.
+ */
+fun labelsCsv(history: List<LabelRecord>): String {
+    val sb = StringBuilder(LABELS_CSV_HEADER).append('\n')
+    for (r in history) {
+        sb.append("B${r.beatUtcMs},${r.beatUtcMs},BEAT,${csvField(r.label)},${LABEL_TIME.format(java.time.Instant.ofEpochMilli(r.createdAtUtcMs))},${csvField(r.note)},\n")
+    }
+    return sb.toString()
+}

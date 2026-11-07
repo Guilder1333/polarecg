@@ -665,7 +665,10 @@ Details in §7.5–7.6.
   (`events/RawWindowLoader.kt`; `:core-dsp` `event/RawWindow.kt`: `ecgFilesFor` picks the hourly files, `cutWindow` cuts inside the gap-free stretch, never across a hole, tested)
   and shows it in the same strip and label buttons as an event (`ClipReviewBody`, shared with the event review). It only works while the raw files are on the phone; the
   screen says so otherwise. Not done: jump to an exact time of day (only day + scrolling), previous/next beat buttons in the window.
-  Still to do: `labels.csv` in the session zip in the PC format, so `analyze --labels` reads phone labels.)
+  Part 4, export, built 2026-11-07, **not yet tried on the phone**: the session zip holds `labels.csv` in the PC tool's format (`item,utcMs,kind,label,labeledAtUtc,note,bumpUtcMs`;
+  one row per label press in the order of writing, item = "B"+beat time, last row wins; `labelsCsv` in `:core-dsp`, tested to read back with `parseOwnerLabels`). It holds the labels of
+  the beats in the session's time range. To use it: copy it to `data/labels/<session>/labels.csv`, then `analyze <session> --labels data/labels/<session>`. If you also label the
+  same session with the PC tool, merge by hand; the two files are not combined automatically.)
 - [ ] **P5.8 [AI]** Settings: raw recording toggle, ACC rate, classifier sensitivity presets,
   optional alerts (off by default), data export (CSV) and delete.
 - [ ] **P5.10 [YOU+AI]** **Actions and events** (idea from the owner, 2026-10-29: see why the per-hour numbers change, e.g. during a

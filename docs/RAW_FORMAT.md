@@ -164,7 +164,7 @@ Pauses longer than 3 s in the recording are shortened to 3 s; speeds are 1×, 10
 Not part of a session folder: the app saves a short ECG clip for each event it finds (P5.4), in `files/clips/`, named by
 the event's id in the `event` table (`<id>.bin`; if that name is taken, `<id>_1.bin`: a clip file is never overwritten). The
 table row has the type, times and the file name; the clip file holds the ECG and the beats so that it can be read alone,
-also after the `beat` rows are pruned (90 days). In the session zip (Export) they are in `clips/`, with `events.csv`.
+also after the `beat` rows are pruned (90 days). In the session zip (Export) they are in `clips/`, with `events.csv`; the owner's labels of the session are in `labels.csv` (same format as the PC tool's, docs/LABELING_TOOL.md).
 
 Little-endian. Written by `ClipFormat` in `:core-dsp` (`dsp/event/ClipFormat.kt`), which also reads it.
 

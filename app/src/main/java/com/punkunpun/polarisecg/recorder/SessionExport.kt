@@ -3,12 +3,14 @@ package com.punkunpun.polarisecg.recorder
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.punkunpun.polarisecg.dsp.annotations.labelsCsv
 import com.punkunpun.polarisecg.storage.BeatDao
 import com.punkunpun.polarisecg.storage.BeatEntity
 import com.punkunpun.polarisecg.storage.EventDao
 import com.punkunpun.polarisecg.storage.EventEntity
 import com.punkunpun.polarisecg.storage.PolarisDatabase
 import com.punkunpun.polarisecg.storage.clipsDir
+import com.punkunpun.polarisecg.storage.toRecord
 import java.io.File
 import java.io.OutputStream
 import java.time.Instant
@@ -24,7 +26,7 @@ fun latestSession(sessionsDir: File): File? =
  * Zips one session folder into the cache directory and returns the zip. Blocking: call off the UI thread.
  *
  * With [database] the zip also gets `polaris.db` (a copy of the whole database) and `beats.csv` (the beats saved for the
- * session's time range, to compare with `analyze` of the same raw files, P5.3), `events.csv` and the ECG clips of the session's
+ * session's time range, to compare with `analyze` of the same raw files, P5.3), `events.csv`, `labels.csv` (the owner's labels, PC format) and the ECG clips of the session's
  * events in `clips/` (P5.4; read them with `cli`'s clip format, docs/RAW_FORMAT.md). Nothing is deleted by an export (P5.3b).
  */
 fun zipSession(context: Context, session: File, database: PolarisDatabase? = null): File {
@@ -45,6 +47,11 @@ fun zipSession(context: Context, session: File, database: PolarisDatabase? = nul
             val events = sessionEvents(session, database.eventDao())
             out.putNextEntry(ZipEntry("${session.name}/events.csv"))
             writeEventsCsv(out, events)
+            out.closeEntry()
+            // The owner's labels of the session's beats, in the PC tool's format: copy it to data/labels/<session>/ for `analyze --labels`.
+            out.putNextEntry(ZipEntry("${session.name}/labels.csv"))
+            val labels = sessionRange(session).let { (from, to) -> database.labelDao().historyBetween(from, to) }
+            out.write(labelsCsv(labels.map { it.toRecord() }).toByteArray(Charsets.UTF_8))
             out.closeEntry()
             for (name in events.mapNotNull { it.clipFile }) {
                 val file = File(clipsDir(context), name).takeIf { it.isFile } ?: continue // pruned, or never written
