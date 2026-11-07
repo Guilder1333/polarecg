@@ -65,6 +65,7 @@
     <string name="ev_back">Back</string>
     <string name="ev_hint">Tap a beat to select it. The letter above a beat is the automatic class; your label appears next to it.</string>
     <string name="ev_auto">Automatic: %1$s</string>
+    <string name="ev_rr">Interval before: %1$s ms, after: %2$s ms</string>
     <string name="ev_yours">Your label: %1$s</string>
     <string name="ev_not_labelled">not labelled</string>
     <string name="ev_history">History</string>
@@ -83,6 +84,11 @@
     <string name="br_capped">Only the first %1$d are listed; choose \"Unlabelled only\" or another day.</string>
     <string name="br_no_ecg">The raw ECG around this beat is not on the phone (or has a gap here).</string>
     <string name="br_loading">Loading the ECG...</string>
+    <string name="br_accept">Accept</string>
+    <string name="br_list_loading">Loading...</string>
+    <string name="br_cancel">Cancel</string>
+    <string name="br_pending">(not saved yet)</string>
+    <string name="br_hint">Mark only the beats that are wrong. Accept saves your marks and confirms every other unlabelled beat here as its automatic class; Cancel saves nothing.</string>
     <string name="sum_title">Summary</string>
     <string name="sum_24h">Last 24 h</string>
     <string name="sum_today">Today</string>

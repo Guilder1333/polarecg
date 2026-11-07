@@ -54,6 +54,7 @@ import com.punkunpun.polarisecg.dsp.event.ClipFormat
 import com.punkunpun.polarisecg.dsp.event.EventClip
 import com.punkunpun.polarisecg.dsp.event.eventTitle
 import com.punkunpun.polarisecg.dsp.event.nearestBeat
+import com.punkunpun.polarisecg.dsp.event.neighbourIntervals
 import com.punkunpun.polarisecg.storage.EventEntity
 import com.punkunpun.polarisecg.storage.LabelEntity
 import com.punkunpun.polarisecg.storage.clipsDir
@@ -134,12 +135,22 @@ fun ReviewScreen(app: PolarisApp, eventId: Long, onBack: () -> Unit, modifier: M
 }
 
 /**
+ * Marks the owner has chosen but not saved yet (the beat browse): beat time -> label, "" = undo of a saved label. Nothing is
+ * written until the screen's Accept; [set] with null drops a pending mark. `null` instead of a [StagedLabels] = every press is saved
+ * at once (the event review).
+ */
+internal class StagedLabels(val marks: Map<Long, String>, val set: (beatUtcMs: Long, label: String?) -> Unit)
+
+private val PENDING_COLOR = Color(0xFFF57C00) // orange: a mark that is not saved yet (saved ones are blue)
+
+/**
  * The trace of [clip] with the beat details and the label buttons below it: shared by the event review and the beat browse.
- * [initialBeatMs] is the beat selected at first (0 = none). Emits its children into the caller's Column.
+ * [initialBeatMs] is the beat selected at first (0 = none). With [staging] the buttons only stage marks (shown in orange);
+ * without it they save at once. Emits its children into the caller's Column.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ClipReviewBody(app: PolarisApp, c: EventClip, initialBeatMs: Long) {
+internal fun ClipReviewBody(app: PolarisApp, c: EventClip, initialBeatMs: Long, staging: StagedLabels? = null) {
     val labelDao = app.database.labelDao()
     val scope = rememberCoroutineScope()
     var selectedBeatMs by rememberSaveable(c.ecg.startUtcMs) { mutableLongStateOf(initialBeatMs) } // 0 = none selected
@@ -152,6 +163,7 @@ internal fun ClipReviewBody(app: PolarisApp, c: EventClip, initialBeatMs: Long) 
     ClipTrace(
         clip = c,
         labels = labelByBeat,
+        staged = staging?.marks ?: emptyMap(),
         selectedBeatMs = selectedBeatMs,
         onTap = { utcMs -> selectedBeatMs = nearestBeat(c.beats, utcMs, TAP_RANGE_MS)?.utcMs ?: 0L },
     )
@@ -166,23 +178,36 @@ internal fun ClipReviewBody(app: PolarisApp, c: EventClip, initialBeatMs: Long) 
 
         Text(localTimeMs(beat.utcMs), style = MaterialTheme.typography.titleSmall)
         Text(stringResource(R.string.ev_auto, autoText(beat)))
+        neighbourIntervals(c.beats, c.beats.indexOf(beat)).let { (before, after) ->
+            Text(stringResource(R.string.ev_rr, before?.toString() ?: "-", after?.toString() ?: "-"))
+        }
+        val pending = staging?.marks?.get(beat.utcMs)
+        val shownMark = if (pending != null) pending.ifEmpty { labelText("") } else ownerMark(current) ?: stringResource(R.string.ev_not_labelled)
         Text(
-            stringResource(
-                R.string.ev_yours,
-                ownerMark(current) ?: stringResource(R.string.ev_not_labelled),
-            ),
+            stringResource(R.string.ev_yours, shownMark) + if (pending != null) " " + stringResource(R.string.br_pending) else "",
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (choice in OwnerLabel.CHOICES) {
-                val chosen = choice.isNotEmpty() && current?.label == choice
-                val onClick = {
-                    // Room needs a background thread; the row is added, never changed (see LabelDao).
-                    scope.launch(Dispatchers.IO) {
-                        labelDao.insert(
-                            LabelEntity(beatUtcMs = beat.utcMs, label = choice, note = "", createdAtUtcMs = System.currentTimeMillis()),
-                        )
+                val chosen = choice.isNotEmpty() && (pending ?: current?.label) == choice
+                val onClick = if (staging != null) {
+                    {
+                        // Undo drops a pending mark; with none pending it stages the undo of a saved label (a beat with no label: nothing to do)
+                        when {
+                            choice.isNotEmpty() -> staging.set(beat.utcMs, choice)
+                            pending != null -> staging.set(beat.utcMs, null)
+                            ownerMark(current) != null -> staging.set(beat.utcMs, "")
+                        }
                     }
-                    Unit
+                } else {
+                    {
+                        // Room needs a background thread; the row is added, never changed (see LabelDao).
+                        scope.launch(Dispatchers.IO) {
+                            labelDao.insert(
+                                LabelEntity(beatUtcMs = beat.utcMs, label = choice, note = "", createdAtUtcMs = System.currentTimeMillis()),
+                            )
+                        }
+                        Unit
+                    }
                 }
                 val text = if (choice.isEmpty()) "Undo" else choice
                 if (chosen) Button(onClick = onClick) { Text(text) } else FilledTonalButton(onClick = onClick) { Text(text) }
@@ -203,7 +228,7 @@ internal fun ClipReviewBody(app: PolarisApp, c: EventClip, initialBeatMs: Long) 
  * `Canvas` draws with plain functions (no Compose element per beat), so 30 beats and 2 600 samples stay cheap.
  */
 @Composable
-private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, selectedBeatMs: Long, onTap: (Long) -> Unit) {
+private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, staged: Map<Long, String>, selectedBeatMs: Long, onTap: (Long) -> Unit) {
     val density = LocalDensity.current
     val pxPerSecond = with(density) { DP_PER_SECOND.dp.toPx() }
     val scroll = rememberScrollState()
@@ -243,13 +268,13 @@ private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, selectedB
         Canvas(
             modifier = Modifier
                 .width(widthDp)
-                .height(240.dp)
+                .height(256.dp)
                 .pointerInput(clip) {
                     // The tap position is in the strip's own pixels (it moves with the scroll): pixels -> seconds -> UTC.
                     detectTapGestures { p -> onTap(ecg.startUtcMs + (p.x / pxPerSecond * 1000).toLong()) }
                 },
         ) {
-            val topBand = 22.dp.toPx()
+            val topBand = 38.dp.toPx() // two rows: the automatic class letters, and under them the intervals
             val bottomBand = 26.dp.toPx()
             val plotHeight = size.height - topBand - bottomBand
             val mid = (lo + hi) / 2
@@ -285,16 +310,25 @@ private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, selectedB
             drawPath(path, line, style = Stroke(width = 1.6.dp.toPx()))
 
             val letterStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            for (b in clip.beats) {
+            val rrStyle = TextStyle(fontSize = 11.sp, color = quiet)
+            for ((i, b) in clip.beats.withIndex()) {
+                // the interval from the previous beat, in ms, centred between the two beats
+                if (i > 0) {
+                    val prevX = (clip.beats[i - 1].utcMs - ecg.startUtcMs) / 1000f * pxPerSecond
+                    val thisX = (b.utcMs - ecg.startUtcMs) / 1000f * pxPerSecond
+                    val rr = textMeasurer.measure((b.utcMs - clip.beats[i - 1].utcMs).toString(), rrStyle)
+                    drawText(rr, topLeft = Offset((prevX + thisX) / 2f - rr.size.width / 2f, 21.dp.toPx()))
+                }
                 val x = (b.utcMs - ecg.startUtcMs) / 1000f * pxPerSecond
                 val color = colors[b.cls] ?: quiet
                 drawLine(color.copy(alpha = 0.5f), Offset(x, topBand), Offset(x, topBand + plotHeight))
                 val auto = textMeasurer.measure(b.cls, letterStyle.copy(color = color))
                 drawText(auto, topLeft = Offset(x - auto.size.width / 2f, 2.dp.toPx()))
-                val mark = ownerMark(labels[b.utcMs])
+                val pending = staged[b.utcMs]
+                val mark = if (pending != null) pending.ifEmpty { "-" } else ownerMark(labels[b.utcMs])
                 if (mark != null) {
-                    // the owner's label below the trace, in blue: never confused with the automatic letter above
-                    val own = textMeasurer.measure(mark, letterStyle.copy(color = Color(0xFF1E88E5)))
+                    // the owner's label below the trace: blue when saved, orange while it is only staged; never confused with the automatic letter above
+                    val own = textMeasurer.measure(mark, letterStyle.copy(color = if (pending != null) PENDING_COLOR else Color(0xFF1E88E5)))
                     drawText(own, topLeft = Offset(x - own.size.width / 2f, size.height - bottomBand + 3.dp.toPx()))
                 }
             }

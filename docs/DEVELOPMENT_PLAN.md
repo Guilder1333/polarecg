@@ -665,6 +665,16 @@ Details in §7.5–7.6.
   (`events/RawWindowLoader.kt`; `:core-dsp` `event/RawWindow.kt`: `ecgFilesFor` picks the files, `cutWindow` cuts inside the gap-free stretch, never across a hole, tested). **It reads the session from its first file**, not only the hour of the beat: found on the real night `20261105T201459Z` (2026-11-07), where reading only the last two hourly files put the ECG 1.63 s away from the saved beat markers. The sample clock of a stretch starts at the stretch's first frame and the strap's clock drifts against the phone's (about 25 ppm), so a later start gives a different time axis than the one the beats were timed on. Reading from the start gives beat markers 41 ms (+-3) from the R spikes on all 25 beats of the check; the cost on the PC was 0.65 s for 18 hours (37 MB), not yet timed on the phone
   and shows it in the same strip and label buttons as an event (`ClipReviewBody`, shared with the event review). It only works while the raw files are on the phone; the
   screen says so otherwise. Not done: jump to an exact time of day (only day + scrolling), previous/next beat buttons in the window.
+  Accept / Cancel in the beat window, 2026-11-07, **not yet tried on the phone** (owner's request: they mark only what is off, not every beat): in the browse window the
+  N/S/V/Q/?/Undo buttons only **stage** marks (orange, "not saved yet"; they survive a rotation); nothing is written until **Accept**, which saves the marks and confirms
+  every other unlabelled beat of the strip (the whole 20 s) as its **automatic class** with the note `accepted` (rule `labelsToSave` in `:core-dsp`, tested: beats that already have
+  a label, also "?", are never touched; an undone beat counts as unlabelled). **Cancel** and the system Back save nothing. Accepted beats are ordinary label rows, so the list
+  shows them as "ok S" and "Unlabelled only" hides them, and `analyze --labels` counts them as labels that agree with our class. Note for the evaluation: an accepted N is a
+  claim that the owner looked at it; an unreviewed beat is not one. The event review (P5.7 part 2) still saves every press at once.
+  Browse list and strip, same day (owner's requests, **not yet tried on the phone**): the list keeps its **scroll position**, the class and day and the "Unlabelled only"
+  box when a beat is opened and closed (they live in `EventsRoute`; the list is drawn only after beats and labels have loaded, because a LazyColumn with no items drops its
+  position), and starts at the top again when the class or day changes. **Intervals**: the strip shows the RR in ms between every two beats (second row above the trace),
+  the details of a selected beat give the interval before and after it (`neighbourIntervals`), and list rows show the beat's RR and its "early" value.
   Part 4, export, built 2026-11-07, **not yet tried on the phone**: the session zip holds `labels.csv` in the PC tool's format (`item,utcMs,kind,label,labeledAtUtc,note,bumpUtcMs`;
   one row per label press in the order of writing, item = "B"+beat time, last row wins; `labelsCsv` in `:core-dsp`, tested to read back with `parseOwnerLabels`). It holds the labels of
   the beats in the session's time range. To use it: copy it to `data/labels/<session>/labels.csv`, then `analyze <session> --labels data/labels/<session>`. If you also label the

@@ -22,3 +22,14 @@ fun eventTitle(type: String): String {
     if (parts.size == 1 && type.isNotEmpty()) return type.lowercase().replaceFirstChar { it.uppercase() }
     return type
 }
+
+/**
+ * The intervals around the beat at [index] of [beats] (time order), in ms: from the beat before it, and to the beat after it.
+ * Null at the ends of the list (the clip does not hold the neighbour). Shown on the review strip: the RR of a premature beat is
+ * short and the one after it long.
+ */
+fun neighbourIntervals(beats: List<ClipBeat>, index: Int): Pair<Long?, Long?> {
+    val before = beats.getOrNull(index - 1)?.let { beats[index].utcMs - it.utcMs }
+    val after = beats.getOrNull(index + 1)?.let { it.utcMs - beats[index].utcMs }
+    return before to after
+}

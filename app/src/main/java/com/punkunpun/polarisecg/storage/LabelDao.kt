@@ -14,6 +14,10 @@ interface LabelDao {
     @Insert
     suspend fun insert(label: LabelEntity): Long
 
+    /** Several rows in one transaction (Room does this for a list): all are written or none, e.g. "Accept" on a strip. */
+    @Insert
+    suspend fun insertAll(labels: List<LabelEntity>)
+
     /**
      * The current (newest) row of every beat labelled between the two times. The inner query picks, per beat, the highest id;
      * the outer one reads those rows. Includes "?" and "" (undone) rows: the caller decides what they mean.

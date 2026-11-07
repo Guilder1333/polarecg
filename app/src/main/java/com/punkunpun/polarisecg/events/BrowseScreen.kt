@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -25,6 +27,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,15 +37,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.punkunpun.polarisecg.PolarisApp
 import com.punkunpun.polarisecg.R
+import com.punkunpun.polarisecg.dsp.annotations.ACCEPTED_NOTE
+import com.punkunpun.polarisecg.dsp.annotations.currentLabelRows
+import com.punkunpun.polarisecg.dsp.annotations.labelsToSave
 import com.punkunpun.polarisecg.dsp.classify.ClassifierConfig
 import com.punkunpun.polarisecg.dsp.event.ClipBeat
 import com.punkunpun.polarisecg.dsp.event.EventClip
 import com.punkunpun.polarisecg.storage.BeatEntity
+import com.punkunpun.polarisecg.storage.LabelEntity
+import com.punkunpun.polarisecg.storage.toRecord
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Which beats the browse lists. [EARLY_N] = normal beats that came early: the ones that may really be S (P4.8). */
@@ -77,12 +88,15 @@ fun BrowseScreen(
     onDay: (Long) -> Unit,
     onOpen: (Long) -> Unit,
     onBack: () -> Unit,
+    // kept by the caller: this screen leaves the screen while a beat is open, and these must not be forgotten with it
+    listState: LazyListState,
+    unlabelledOnly: Boolean,
+    onUnlabelledOnly: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
     val beatDao = app.database.beatDao()
     val labelDao = app.database.labelDao()
-    var unlabelledOnly by remember { mutableStateOf(false) }
 
     // First visit (epochDay 0): the day of the newest saved beat, so the list is not empty on opening.
     LaunchedEffect(epochDay) {
@@ -95,17 +109,24 @@ fun BrowseScreen(
     val (from, to) = dayRangeUtc(day)
 
     var beats by remember { mutableStateOf<List<BeatEntity>>(emptyList()) }
-    LaunchedEffect(kind, from) {
+    var loadedKey by remember { mutableStateOf<String?>(null) } // which (class, day) `beats` belongs to
+    val key = "${kind.key}:$from"
+    LaunchedEffect(key) {
         beats = withContext(Dispatchers.IO) {
             when (kind) {
                 BrowseKind.EARLY_N -> beatDao.earlyNormals(from, to, ClassifierConfig().sPrematurity, LIST_CAP)
                 else -> beatDao.byClass(from, to, kind.key, LIST_CAP)
             }
         }
+        loadedKey = key
     }
-    val labelRows by remember(from) { labelDao.observeCurrentBetween(from, to) }.collectAsState(initial = emptyList())
-    val labelByBeat = remember(labelRows) { labelRows.associateBy { it.beatUtcMs } }
+    // null until Room has answered once: the list is not drawn before that
+    val labelRows by remember(from) { labelDao.observeCurrentBetween(from, to) }.collectAsState<List<LabelEntity>, List<LabelEntity>?>(initial = null)
+    val labelByBeat = remember(labelRows) { (labelRows ?: emptyList()).associateBy { it.beatUtcMs } }
     val shown = if (unlabelledOnly) beats.filter { labelByBeat[it.utcMs]?.label.isNullOrEmpty() } else beats
+    // Drawing the list before beats and labels are there would show an empty or wrong list for a moment, and a LazyColumn with
+    // no items throws its scroll position away: the reason the list used to jump to the top after a beat was reviewed.
+    val ready = loadedKey == key && labelRows != null
 
     Column(modifier = modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -132,20 +153,26 @@ fun BrowseScreen(
             }
         }
         Row(
-            modifier = Modifier.clickable { unlabelledOnly = !unlabelledOnly },
+            modifier = Modifier.clickable { onUnlabelledOnly(!unlabelledOnly) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(checked = unlabelledOnly, onCheckedChange = { unlabelledOnly = it })
+            Checkbox(checked = unlabelledOnly, onCheckedChange = onUnlabelledOnly)
             Text(stringResource(R.string.br_unlabelled_only))
+        }
+        if (!ready) {
+            Text(stringResource(R.string.br_list_loading), style = MaterialTheme.typography.bodySmall)
+            return@Column // leaves this Column block; the list below is not drawn yet
         }
         Text(stringResource(R.string.br_count, shown.size), style = MaterialTheme.typography.bodySmall)
         if (beats.size >= LIST_CAP) Text(stringResource(R.string.br_capped, LIST_CAP), style = MaterialTheme.typography.bodySmall)
         if (shown.isEmpty()) {
             Text(stringResource(R.string.br_empty))
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(shown, key = { it.utcMs }) { b ->
-                    val mark = labelByBeat[b.utcMs]?.label?.takeIf { it.isNotEmpty() }
+                    val row = labelByBeat[b.utcMs]?.takeIf { it.label.isNotEmpty() }
+                    // "ok S" = accepted as the automatic class; "you: V" = marked by hand
+                    val mark = row?.let { if (it.note == ACCEPTED_NOTE) "ok ${it.label}" else "you: ${it.label}" }
                     Card(modifier = Modifier.fillMaxWidth().clickable { onOpen(b.utcMs) }) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -153,8 +180,9 @@ fun BrowseScreen(
                         ) {
                             val t = Instant.ofEpochMilli(b.utcMs).atZone(ZoneId.systemDefault()).format(timeOfDay)
                             Text("$t   ${b.cls}")
-                            Text(b.prematurity?.let { "early %.2f".format(java.util.Locale.US, it) } ?: "")
-                            Text(mark?.let { "you: $it" } ?: "")
+                            // the interval before the beat, and how early it came (1.00 = on time)
+                            Text(listOfNotNull(b.rrMs?.let { "$it ms" }, b.prematurity?.let { "early %.2f".format(java.util.Locale.US, it) }).joinToString("  "))
+                            Text(mark ?: "")
                         }
                     }
                 }
@@ -163,12 +191,27 @@ fun BrowseScreen(
     }
 }
 
-/** The ECG around one beat from the raw files; all beats in it are labelable, as in an event clip. */
+/** Staged marks survive a screen rotation as text: "beatMs:label,beatMs:label" (labels are N S V Q ? or empty, no ":" or ","). */
+private val StagedSaver = Saver<Map<Long, String>, String>(
+    save = { m -> m.entries.joinToString(",") { "${it.key}:${it.value}" } },
+    restore = { s ->
+        if (s.isEmpty()) emptyMap() else s.split(',').associate { part -> part.split(':', limit = 2).let { it[0].toLong() to it[1] } }
+    },
+)
+
+/**
+ * The ECG around one beat from the raw files. The owner marks only the beats that are wrong: the buttons stage marks (orange), and
+ * **Accept** saves them and confirms every other unlabelled beat of the strip as its automatic class ([labelsToSave]); **Cancel**
+ * (and the system Back) saves nothing. So "Unlabelled only" in the list hides everything that was looked at.
+ */
 @Composable
 fun BrowseWindowScreen(app: PolarisApp, beatUtcMs: Long, onBack: () -> Unit, modifier: Modifier = Modifier) {
-    BackHandler(onBack = onBack)
+    BackHandler(onBack = onBack) // Back = Cancel: nothing was saved
+    val scope = rememberCoroutineScope()
     var clip by remember(beatUtcMs) { mutableStateOf<EventClip?>(null) }
     var loaded by remember(beatUtcMs) { mutableStateOf(false) }
+    var staged by rememberSaveable(beatUtcMs, stateSaver = StagedSaver) { mutableStateOf(emptyMap<Long, String>()) }
+    var saving by remember { mutableStateOf(false) }
 
     LaunchedEffect(beatUtcMs) {
         clip = withContext(Dispatchers.IO) {
@@ -184,15 +227,39 @@ fun BrowseWindowScreen(app: PolarisApp, beatUtcMs: Long, onBack: () -> Unit, mod
         modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        val c = clip
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onBack) { Text(stringResource(R.string.ev_back)) }
+            if (c == null) {
+                OutlinedButton(onClick = onBack) { Text(stringResource(R.string.ev_back)) }
+            } else {
+                OutlinedButton(onClick = onBack, enabled = !saving) { Text(stringResource(R.string.br_cancel)) }
+                Button(
+                    enabled = !saving,
+                    onClick = {
+                        saving = true
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                val dao = app.database.labelDao()
+                                // read the labels again now: they may have changed since the strip was opened
+                                val current = currentLabelRows(dao.currentBetween(c.ecg.startUtcMs, c.ecg.endUtcMs + 1).map { it.toRecord() })
+                                val rows = labelsToSave(c.beats, current, staged, System.currentTimeMillis())
+                                dao.insertAll(rows.map { LabelEntity(beatUtcMs = it.beatUtcMs, label = it.label, note = it.note, createdAtUtcMs = it.createdAtUtcMs) })
+                            }
+                            onBack()
+                        }
+                    },
+                ) { Text(stringResource(R.string.br_accept)) }
+            }
             Text(localTime(beatUtcMs), style = MaterialTheme.typography.titleMedium)
         }
-        val c = clip
         if (c == null) {
             Text(stringResource(if (loaded) R.string.br_no_ecg else R.string.br_loading))
         } else {
-            ClipReviewBody(app, c, initialBeatMs = beatUtcMs)
+            Text(stringResource(R.string.br_hint), style = MaterialTheme.typography.bodySmall)
+            ClipReviewBody(
+                app, c, initialBeatMs = beatUtcMs,
+                staging = StagedLabels(staged) { beat, label -> staged = if (label == null) staged - beat else staged + (beat to label) },
+            )
         }
     }
 }

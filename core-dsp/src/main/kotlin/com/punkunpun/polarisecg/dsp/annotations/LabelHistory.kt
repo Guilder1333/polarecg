@@ -64,3 +64,35 @@ fun labelsCsv(history: List<LabelRecord>): String {
     }
     return sb.toString()
 }
+
+/** The `note` of a label row written by "Accept": the owner looked at the beat and left the automatic class as it is. */
+const val ACCEPTED_NOTE = "accepted"
+
+/**
+ * What "Accept" on a reviewed strip saves (P5.7). [staged] are the marks the owner chose (beat time -> label, "" = undo);
+ * every other beat of [beats] that has **no label yet** (never labelled, or undone) is confirmed with its own automatic class,
+ * note [ACCEPTED_NOTE]: the owner marks only what is off, so "not marked" means "as expected". The rows follow the PC tool's
+ * rules, so `analyze --labels` counts a confirmed beat like a hand label that agrees with the automatic class.
+ *
+ * Left alone: a beat that already has a label (also "?"), a staged mark equal to the current one (nothing changed), a staged
+ * undo of a beat that has no label, a staged label that is not valid, and a beat whose class is not N, S, V or Q.
+ * [current] is the newest row of each beat, as in [currentLabelRows].
+ */
+fun labelsToSave(
+    beats: List<com.punkunpun.polarisecg.dsp.event.ClipBeat>,
+    current: Map<Long, LabelRecord>,
+    staged: Map<Long, String>,
+    nowMs: Long,
+): List<LabelRecord> {
+    val rows = ArrayList<LabelRecord>()
+    for (b in beats) {
+        val now = current[b.utcMs]?.label ?: ""
+        val mark = staged[b.utcMs]
+        if (mark != null) {
+            if (OwnerLabel.isValid(mark) && mark != now) rows += LabelRecord(b.utcMs, mark, "", nowMs)
+        } else if (now.isEmpty() && b.cls in OwnerLabel.CLASSES) {
+            rows += LabelRecord(b.utcMs, b.cls, ACCEPTED_NOTE, nowMs)
+        }
+    }
+    return rows
+}

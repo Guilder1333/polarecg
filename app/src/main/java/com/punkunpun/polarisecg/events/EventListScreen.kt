@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +37,7 @@ internal fun localTime(utcMs: Long): String = dateTime.format(Instant.ofEpochMil
 
 /** The events the live pipeline found (V couplets, runs, bigeminy, pauses...), newest first. A tap opens the review screen. */
 @Composable
-fun EventListScreen(app: PolarisApp, onOpen: (Long) -> Unit, onBrowse: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun EventListScreen(app: PolarisApp, onOpen: (Long) -> Unit, onBack: () -> Unit, listState: LazyListState, modifier: Modifier = Modifier) {
     BackHandler(onBack = onBack)
     // A Flow from Room: the list redraws by itself when a new event is saved.
     val events by app.database.eventDao().observeRecent(LIST_LIMIT).collectAsState(initial = emptyList())
@@ -45,12 +46,10 @@ fun EventListScreen(app: PolarisApp, onOpen: (Long) -> Unit, onBrowse: () -> Uni
             OutlinedButton(onClick = onBack) { Text(stringResource(R.string.ev_back)) }
             Text(stringResource(R.string.ev_title), style = MaterialTheme.typography.titleLarge)
         }
-        // beats that are not events (S, early normals...): listed by day, the ECG is cut from the raw files
-        OutlinedButton(onClick = onBrowse) { Text(stringResource(R.string.br_open)) }
         if (events.isEmpty()) {
             Text(stringResource(R.string.ev_empty))
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(events, key = { it.id }) { EventRow(it, onClick = { onOpen(it.id) }) }
             }
         }

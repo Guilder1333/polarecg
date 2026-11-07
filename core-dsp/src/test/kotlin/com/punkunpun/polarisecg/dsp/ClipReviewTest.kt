@@ -3,6 +3,7 @@ package com.punkunpun.polarisecg.dsp
 import com.punkunpun.polarisecg.dsp.event.ClipBeat
 import com.punkunpun.polarisecg.dsp.event.eventTitle
 import com.punkunpun.polarisecg.dsp.event.nearestBeat
+import com.punkunpun.polarisecg.dsp.event.neighbourIntervals
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -26,5 +27,12 @@ class ClipReviewTest {
         assertEquals("S bigeminy", eventTitle("S_BIGEMINY"))
         assertEquals("Pause", eventTitle("PAUSE"))
         assertEquals("SOMETHING_ELSE_NEW", eventTitle("SOMETHING_ELSE_NEW"))
+    }
+
+    @Test fun intervalsAroundABeatAreReadFromTheNeighbours() {
+        assertEquals(800L to 800L, neighbourIntervals(beats, 1))
+        assertEquals(null to 800L, neighbourIntervals(beats, 0))
+        assertEquals(800L to null, neighbourIntervals(beats, 2))
+        assertEquals(null to null, neighbourIntervals(listOf(beat(5)), 0))
     }
 }

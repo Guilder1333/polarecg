@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import com.punkunpun.polarisecg.annotations.AnnotationKind
 import com.punkunpun.polarisecg.annotations.AnnotationScreen
 import com.punkunpun.polarisecg.diagnostics.DiagnosticsScreen
+import com.punkunpun.polarisecg.events.BrowseRoute
 import com.punkunpun.polarisecg.events.EventsRoute
 import com.punkunpun.polarisecg.live.LiveScreen
 import com.punkunpun.polarisecg.replay.ReplayScreen
@@ -95,6 +96,7 @@ class MainActivity : ComponentActivity() {
                 var showReplay by rememberSaveable { mutableStateOf(false) }
                 var showSummary by rememberSaveable { mutableStateOf(false) }
                 var showEvents by rememberSaveable { mutableStateOf(false) }
+                var showBrowse by rememberSaveable { mutableStateOf(false) }
                 // The picker for an action/event: which kind, and when the button was pressed (null kind = closed).
                 var annotateKind by rememberSaveable { mutableStateOf<String?>(null) }
                 var annotatePressedMs by rememberSaveable { mutableStateOf(0L) }
@@ -140,6 +142,12 @@ class MainActivity : ComponentActivity() {
                             onBack = { showEvents = false },
                             modifier = Modifier.padding(innerPadding),
                         )
+                    } else if (showPairing && showBrowse) {
+                        BrowseRoute(
+                            app = application as PolarisApp,
+                            onBack = { showBrowse = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
                     } else if (showPairing && showSummary) {
                         SummaryScreen(
                             app = application as PolarisApp,
@@ -166,6 +174,7 @@ class MainActivity : ComponentActivity() {
                             onOpenLive = { showLive = true },
                             onOpenSummary = { showSummary = true },
                             onOpenEvents = { showEvents = true },
+                            onOpenBrowse = { showBrowse = true },
                             onOpenReplay = { showReplay = true },
                             onAnnotate = onAnnotate,
                             modifier = Modifier.padding(innerPadding),

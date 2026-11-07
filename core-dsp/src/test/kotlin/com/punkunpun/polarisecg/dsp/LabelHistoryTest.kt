@@ -1,6 +1,9 @@
 package com.punkunpun.polarisecg.dsp
 
+import com.punkunpun.polarisecg.dsp.annotations.ACCEPTED_NOTE
 import com.punkunpun.polarisecg.dsp.annotations.LabelRecord
+import com.punkunpun.polarisecg.dsp.annotations.labelsToSave
+import com.punkunpun.polarisecg.dsp.event.ClipBeat
 import com.punkunpun.polarisecg.dsp.annotations.OwnerLabel
 import com.punkunpun.polarisecg.dsp.annotations.currentClassLabels
 import com.punkunpun.polarisecg.dsp.annotations.currentLabelRows
@@ -61,5 +64,45 @@ class LabelHistoryTest {
         assertEquals(history.size + 1, lines.size) // every press is a row, nothing is merged
         assertEquals(currentClassLabels(history), parseOwnerLabels(lines))
         assertEquals(mapOf(1_792_615_494_444L to "V"), parseOwnerLabels(lines))
+    }
+
+    private fun beat(t: Long, cls: String) = ClipBeat(t, cls, good = true, vDoubt = false, rescued = false)
+
+    @Test fun acceptSavesTheMarksAndConfirmsTheRest() {
+        val beats = listOf(beat(1, "N"), beat(2, "S"), beat(3, "N"), beat(4, "V"))
+        val rows = labelsToSave(beats, current = emptyMap(), staged = mapOf(3L to "S"), nowMs = 9)
+        // the marked beat gets the owner's label; the others are confirmed with their own class and the note
+        assertEquals(
+            listOf(
+                LabelRecord(1, "N", ACCEPTED_NOTE, 9), LabelRecord(2, "S", ACCEPTED_NOTE, 9),
+                LabelRecord(3, "S", "", 9), LabelRecord(4, "V", ACCEPTED_NOTE, 9),
+            ),
+            rows,
+        )
+    }
+
+    @Test fun acceptNeverTouchesBeatsThatAlreadyHaveALabel() {
+        val beats = listOf(beat(1, "N"), beat(2, "N"), beat(3, "N"))
+        val current = currentLabelRows(listOf(row(1, "V"), row(2, OwnerLabel.UNSURE), row(3, OwnerLabel.UNDONE)))
+        val rows = labelsToSave(beats, current, staged = emptyMap(), nowMs = 9)
+        // 1 (V) and 2 (unsure) stay as the owner left them; 3 was undone, so it has no label and is confirmed
+        assertEquals(listOf(LabelRecord(3, "N", ACCEPTED_NOTE, 9)), rows)
+    }
+
+    @Test fun anUnchangedOrEmptyMarkWritesNothingAndIsNotConfirmed() {
+        val beats = listOf(beat(1, "N"), beat(2, "N"), beat(3, "N"))
+        val current = currentLabelRows(listOf(row(1, "S")))
+        // 1: staged S is the label it already has; 2: undo of a beat without label; 3: an invalid label
+        val rows = labelsToSave(beats, current, staged = mapOf(1L to "S", 2L to "", 3L to "X"), nowMs = 9)
+        assertEquals(emptyList(), rows)
+    }
+
+    @Test fun aStagedUndoOfARealLabelIsSaved() {
+        val current = currentLabelRows(listOf(row(1, "S")))
+        assertEquals(listOf(LabelRecord(1, "", "", 9)), labelsToSave(listOf(beat(1, "N")), current, mapOf(1L to ""), 9))
+    }
+
+    @Test fun beatsWithoutAClassAreNotConfirmed() {
+        assertEquals(emptyList(), labelsToSave(listOf(beat(1, "?")), emptyMap(), emptyMap(), 9))
     }
 }
