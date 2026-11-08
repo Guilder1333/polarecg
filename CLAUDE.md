@@ -25,3 +25,21 @@ premature beat (PVC/PAC) detection and HRV. Everything runs on the phone; no clo
 - `session.json` is written atomically (temp file + move). Naming/recovery logic lives in
   `:core-dsp` (`dsp/raw/RawSegments.kt`) so it is unit-tested on the PC.
 - If you change the layout, update `docs/RAW_FORMAT.md` and the "Decisions" list in plan §8.
+
+## Deep links (open a beat on the phone)
+
+`polarecg://beat/<utcMs>` opens the beat window for the beat at that UTC time (ms, the `utcMs` of `beats.csv` or the
+database) on the phone. Use it instead of rendering ECG pictures when the owner asks to look at a beat: send the link,
+the owner looks at the real screen and can label it there.
+
+```
+MSYS_NO_PATHCONV=1 adb shell am start -a android.intent.action.VIEW -d "polarecg://beat/1794120032399"
+```
+
+- Works whether the app is closed or open on any screen (`MainActivity` is `singleTop`; `onNewIntent` handles the open case).
+  It shows the browse behind the beat (class of the beat, its local day) so Prev/Next work; the permissions screen
+  comes first if the permissions are missing.
+- Code: `MainActivity.readDeepLink`, `BrowseRoute(deepBeatMs)`, `BeatDao.beatAt`; manifest intent filter on `MainActivity`.
+- The beat must be in the phone's database (the window is cut from the raw files on the phone). A time with no beat
+  still opens, showing "no ECG" if the raw files do not cover it.
+- Do not take screenshots of the phone to check it unless the owner asks: the screen shows health data.

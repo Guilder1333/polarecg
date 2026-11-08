@@ -20,6 +20,10 @@ interface BeatDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(beats: List<BeatEntity>)
 
+    /** The beat at exactly this time, or null (deep link to a beat). Blocking, like [beatsBetween]. */
+    @Query("SELECT * FROM beat WHERE utcMs = :utcMs")
+    fun beatAt(utcMs: Long): BeatEntity?
+
     /** Time of the newest saved beat, null if the table is empty. Blocking, like [beatsBetween]. */
     @Query("SELECT MAX(utcMs) FROM beat")
     fun latestUtcMs(): Long?

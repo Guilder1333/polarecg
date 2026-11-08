@@ -2,6 +2,7 @@ package com.punkunpun.polarecg.events
 
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -12,8 +13,12 @@ import androidx.compose.ui.Modifier
 import com.punkunpun.polarecg.PolarApp
 import com.punkunpun.polarecg.dsp.classify.ClassifierConfig
 import com.punkunpun.polarecg.storage.BeatEntity
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The event list and the review screen of one event (P5.7). `rememberSaveable` keeps the position across a screen rotation.
@@ -37,7 +42,14 @@ fun EventsRoute(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifier
  * (no beat is at 0 ms).
  */
 @Composable
-fun BrowseRoute(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun BrowseRoute(
+    app: PolarApp,
+    onBack: () -> Unit,
+    /** A beat to open at once (deep link), 0 = none. */
+    deepBeatMs: Long = 0L,
+    onDeepBeatHandled: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     var openBeatMs by rememberSaveable { mutableLongStateOf(0L) }
     // the browse's own choices survive a trip to a beat window and back
     var kindKey by rememberSaveable { mutableStateOf(BrowseKind.S.key) }
@@ -46,6 +58,16 @@ fun BrowseRoute(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifier
     // scroll position: kept here because the browse screen is left while a beat is open
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    // A deep link: show the list of the beat's class on the beat's day behind it (so Prev and Next work), then open the beat.
+    LaunchedEffect(deepBeatMs) {
+        if (deepBeatMs != 0L) {
+            val beat = withContext(Dispatchers.IO) { app.database.beatDao().beatAt(deepBeatMs) }
+            kindKey = when (beat?.cls) { "V" -> BrowseKind.V.key; "Q" -> BrowseKind.Q.key; "N" -> BrowseKind.EARLY_N.key; else -> BrowseKind.S.key }
+            epochDay = Instant.ofEpochMilli(deepBeatMs).atZone(ZoneId.systemDefault()).toLocalDate().toEpochDay()
+            openBeatMs = deepBeatMs
+            onDeepBeatHandled()
+        }
+    }
     // the beats of the list being browsed (class and day), whatever their labels, in time order
     suspend fun browseList(): List<BeatEntity> {
         val kind = BrowseKind.fromKey(kindKey)

@@ -1,6 +1,7 @@
 package com.punkunpun.polarecg
 
 import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Rational
@@ -15,6 +16,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,6 +47,22 @@ class MainActivity : ComponentActivity() {
     // only the live trace. Set by the system callback onPictureInPictureModeChanged below.
     private var inPip by mutableStateOf(false)
 
+    // A beat asked for by a deep link, polarecg://beat/<utcMs> (0 = none): the browse opens on it, then clears it.
+    private var deepLinkBeatMs by mutableLongStateOf(0L)
+
+    /** Reads `polarecg://beat/<utcMs>` from an intent; anything else is ignored. */
+    private fun readDeepLink(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme != "polarecg" || uri.host != "beat") return
+        uri.lastPathSegment?.toLongOrNull()?.takeIf { it > 0 }?.let { deepLinkBeatMs = it }
+    }
+
+    // singleTop: a link opened while the app is already running arrives here instead of in a new window
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        readDeepLink(intent)
+    }
+
     /**
      * Allowed to turn itself into a floating window when the user swipes up to Home. Only offered while
      * the live screen is visible: elsewhere a floating window would show nothing useful.
@@ -62,6 +80,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (savedInstanceState == null) readDeepLink(intent) // not again after a recreation
         setContent {
             PolarECGTheme {
                 var bluetoothGranted by remember { mutableStateOf(AppPermissions.hasBluetooth(this)) }
@@ -105,6 +124,14 @@ class MainActivity : ComponentActivity() {
                 val onAnnotate = { kind: AnnotationKind, pressedMs: Long ->
                     annotatePressedMs = pressedMs
                     annotateKind = kind.key
+                }
+                // A deep link leaves whatever screen is open and shows the browse, which then opens the beat.
+                LaunchedEffect(deepLinkBeatMs) {
+                    if (deepLinkBeatMs != 0L) {
+                        showLive = false; showReplay = false; showSummary = false; showEvents = false
+                        showConnection = false; showDiagnostics = false; annotateKind = null
+                        showBrowse = true
+                    }
                 }
                 val allGranted = bluetoothGranted && notificationsGranted && batteryGranted
                 val showPairing = bluetoothGranted && (allGranted || permissionsAcknowledged)
@@ -154,6 +181,8 @@ class MainActivity : ComponentActivity() {
                         BrowseRoute(
                             app = application as PolarApp,
                             onBack = { showBrowse = false },
+                            deepBeatMs = deepLinkBeatMs,
+                            onDeepBeatHandled = { deepLinkBeatMs = 0L },
                             modifier = Modifier.padding(innerPadding),
                         )
                     } else if (showPairing && showSummary) {
