@@ -436,48 +436,9 @@ Details in §7.5–7.6.
   MIT-BIH and NSTDB, not on this lead. The existing tool the owner uses has no export (only paid images or raw
   ECG, same as ours), so a beat-by-beat comparison with it is not possible: own-data ground truth comes from
   labelling our own beats (P4.6). **Closed 2026-10-28 (owner): external data is done for now; other sources of own-data labels may come later.**)
-- [ ] **P4.6 [YOU]** Label a set of your own beats in the review UI (P5.7) — at least a few hundred
+- [x] **P4.6 [YOU]** *(done 2026-11-08: the owner has labelled many beats)* Label a set of your own beats in the review UI (P5.7) — at least a few hundred
   V/S beats and their neighbors. This is gold for tuning and for Phase 7.
   (Design of the labeling tool, with the `n s v q b ?` labels and the sampling plan: `docs/LABELING_TOOL.md`. The tool is built (`analysis/label_beats.py`, `eval_labels.py`); the labelling itself is up to you: start with `--gallery`, then the first night.)
-- [ ] **P4.7 [AI]** Baseline drift makes the shape rules call normal beats V. Found by labelling (P4.6, first night,
-  2026-10-28): of our 71 V, 37 were normal beats on a drifting baseline (V +P 39 %), all fired by `corr` < 0.5 /
-  `areaRatio` > 2, with normal timing, width and height. Decision with the owner: **do not change the V rules or
-  filter the drift out of the signal** (the V rule is right in most cases; filtering could bend real shapes, and
-  on-time V beats exist in MIT-BIH/INCART: an "only early" gate would cost 7-11 points of V Se there, whose labels
-  are partly unjudgeable on one lead anyway). Instead: new feature `driftRatio` and flag `vDoubt` = a V resting only
-  on the drift-sensitive rules while `driftRatio` > 0.15 ("questionable V", still counted as V, listed for review).
-  On the first night: 37 of 71 V are questionable; of those the owner called 30 N, 5 Q, 2 V; of the other 29, 22 V,
-  7 N, 5 Q (confident V: precision 39 % -> 76 %). Threshold chosen on that one night, so **to be checked on the second
-  night** before the number is trusted. Not done yet: V patterns (couplets, runs) still count questionable Vs;
-  the Q rule (28 of 50 sampled Q were normal: motion score and slope score veto clean beats) is the next item.
-  Step 2 (2026-10-28, from reviewing night 2): (a) V by `areaRatio` > 2 now also needs `corr` < 0.9 (7 same-shape beats
-  at one stretch, a stale template, were V; all N for the owner); (b) an early beat (prematurity < 0.85) with
-  `corr` < 0.72 is V, not S (on both nights, early beats on a flat baseline in the 0.45-0.72 zone: 33+ V, 13 S, 4 N
-  for the owner; before they were S); (c) `vDoubt` also covers a V that is on time (47 of 49 such were N for the owner).
-  Result on the two labelled nights (V among the owner's N/V labels): confident V 86 % / 89 %, questionable V 11 % / 22 %;
-  V Se 58 -> 100 % and 70 -> 80 %, S +P 86 -> 93 % and 93 -> 94 %. MIT-BIH/INCART (simulated from the stored features,
-  the Kotlin run was not repeated there): V Se +2.8 / +3.2 / +2.4 points, V +P -1.5 / -5.4 / +0.2. Remaining disagreement:
-  early, different-looking beats the owner calls S where we say V (5 and 12 items): V vs S for such beats is where the
-  owner is unsure too.
-  Step 3 (same day): Q rescue. Of 100 sampled Q the owner called 65 N, 4 S, 1 V and 30 Q (motion >= 100 mG and
-  `slopeRatio` > 0.04 veto clean beats via `sqi`). A poor beat with `corr` >= 0.9, both detectors agreeing, slope <= 0.15 and
-  hf <= 0.05 is now classified (`qRescue` = 1; `good` unchanged). Owner's Q beats that were normal: 52 % recovered, 8 %
-  of real Q came along; MIT-BIH true beats lost to poor quality 3.5 -> 2.7 %, INCART 16.0 -> 11.5 %, noise detections
-  caught as before (MIT 93.0 -> 92.9 %, INCART 89.8, NSTDB 89.7). Disagreements with the owner's labels, nights 1 / 2:
-  85 -> 74 and 63 -> 41. Open: the Q beats left (motion), windows/HRV still count rescued beats as poor.
-  Step 4 (2026-10-28, from the third labelled night, 20261028, 11.8 h): on that night all 19 sampled V were N (8) or Q (11),
-  none V. (a) An on-time V (prematurity >= 0.85) is now questionable even when wide and dissimilar: that exemption let
-  15 such beats through on the three nights, none of them V for the owner (8 N, 7 Q); on time, 0 of 15 unflagged and 2 of
-  52 flagged were V. (b) `rescueCorr` 0.9 -> 0.75: the owner's N beats lost to motion (350-875 mG) had a correlation of
-  0.7-0.89; sample of poor beats with both detectors agreeing and low noise: 23 N / 2 Q at >= 0.75 (0 at >= 0.9). MIT-BIH
-  (non-paced) N Se +0.3, V +P -1.0; NSTDB V +P -2.4; detection and noise flagging unchanged. (c) V pattern events say
-  "k questionable" in `detail` (still reported). Disagreements with the owner's labels, nights 1 / 2 / 3: 74 -> 67, 41 -> 36,
-  23 -> 16. Confident V: 91 % / 95 % V among N/V (nights 1 / 2; night 3 had no confident V with a label). (d) Window `quality` counts rescued beats as usable
-  (`goodBeats` stays strictly good, for HRV to decide): unusable windows 18 -> 7, 24 -> 2, 290 -> 0 of 4252 (the motion
-  stretches of night 3). Open: HRV (P5.5) decides whether rescued beats give NN intervals (their R position under motion is
-  less reliable; default: no); V burden stays "between v - vDoubt and v"; a "confident only" count of V events for the
-  summary/alerts (P5.6).
-
 - [ ] **P4.8 [YOU+AI]** Better S detection (found 2026-10-31 by labelling the full-day recording `20261029T143124Z`; **nothing in the
   classifier is changed yet** except `sMaxSpread`: **0.05 -> 0.10 on 2026-10-31 (owner: accuracy on own data matters more than MIT-BIH precision for now)**). The owner has ideas based on the relationship of three consecutive beat
   intervals (RR before, RR after, and the one before that) and wants to check that such a relationship is not a false correlation
@@ -754,6 +715,45 @@ Only if rules plateau (e.g. S beats or noise misclassified too often).
   pre-train on MIT-BIH + INCART (130 Hz), fine-tune on your labeled beats.
 - [ ] **P7.2 [AI]** Export to TFLite / ONNX, run in `:app` (model input prepared by `:core-dsp`).
 - [ ] **P7.3 [YOU+AI]** Compare with rule-based on held-out nights; keep rules as fallback.
+
+- [ ] **P4.7 [AI]** *(moved here 2026-11-08 by the owner: no rule-based solution; wait for the learned classifier, P7.1-P7.3, and see whether it fixes this)* Baseline drift makes the shape rules call normal beats V. Found by labelling (P4.6, first night,
+  2026-10-28): of our 71 V, 37 were normal beats on a drifting baseline (V +P 39 %), all fired by `corr` < 0.5 /
+  `areaRatio` > 2, with normal timing, width and height. Decision with the owner: **do not change the V rules or
+  filter the drift out of the signal** (the V rule is right in most cases; filtering could bend real shapes, and
+  on-time V beats exist in MIT-BIH/INCART: an "only early" gate would cost 7-11 points of V Se there, whose labels
+  are partly unjudgeable on one lead anyway). Instead: new feature `driftRatio` and flag `vDoubt` = a V resting only
+  on the drift-sensitive rules while `driftRatio` > 0.15 ("questionable V", still counted as V, listed for review).
+  On the first night: 37 of 71 V are questionable; of those the owner called 30 N, 5 Q, 2 V; of the other 29, 22 V,
+  7 N, 5 Q (confident V: precision 39 % -> 76 %). Threshold chosen on that one night, so **to be checked on the second
+  night** before the number is trusted. Not done yet: V patterns (couplets, runs) still count questionable Vs;
+  the Q rule (28 of 50 sampled Q were normal: motion score and slope score veto clean beats) is the next item.
+  Step 2 (2026-10-28, from reviewing night 2): (a) V by `areaRatio` > 2 now also needs `corr` < 0.9 (7 same-shape beats
+  at one stretch, a stale template, were V; all N for the owner); (b) an early beat (prematurity < 0.85) with
+  `corr` < 0.72 is V, not S (on both nights, early beats on a flat baseline in the 0.45-0.72 zone: 33+ V, 13 S, 4 N
+  for the owner; before they were S); (c) `vDoubt` also covers a V that is on time (47 of 49 such were N for the owner).
+  Result on the two labelled nights (V among the owner's N/V labels): confident V 86 % / 89 %, questionable V 11 % / 22 %;
+  V Se 58 -> 100 % and 70 -> 80 %, S +P 86 -> 93 % and 93 -> 94 %. MIT-BIH/INCART (simulated from the stored features,
+  the Kotlin run was not repeated there): V Se +2.8 / +3.2 / +2.4 points, V +P -1.5 / -5.4 / +0.2. Remaining disagreement:
+  early, different-looking beats the owner calls S where we say V (5 and 12 items): V vs S for such beats is where the
+  owner is unsure too.
+  Step 3 (same day): Q rescue. Of 100 sampled Q the owner called 65 N, 4 S, 1 V and 30 Q (motion >= 100 mG and
+  `slopeRatio` > 0.04 veto clean beats via `sqi`). A poor beat with `corr` >= 0.9, both detectors agreeing, slope <= 0.15 and
+  hf <= 0.05 is now classified (`qRescue` = 1; `good` unchanged). Owner's Q beats that were normal: 52 % recovered, 8 %
+  of real Q came along; MIT-BIH true beats lost to poor quality 3.5 -> 2.7 %, INCART 16.0 -> 11.5 %, noise detections
+  caught as before (MIT 93.0 -> 92.9 %, INCART 89.8, NSTDB 89.7). Disagreements with the owner's labels, nights 1 / 2:
+  85 -> 74 and 63 -> 41. Open: the Q beats left (motion), windows/HRV still count rescued beats as poor.
+  Step 4 (2026-10-28, from the third labelled night, 20261028, 11.8 h): on that night all 19 sampled V were N (8) or Q (11),
+  none V. (a) An on-time V (prematurity >= 0.85) is now questionable even when wide and dissimilar: that exemption let
+  15 such beats through on the three nights, none of them V for the owner (8 N, 7 Q); on time, 0 of 15 unflagged and 2 of
+  52 flagged were V. (b) `rescueCorr` 0.9 -> 0.75: the owner's N beats lost to motion (350-875 mG) had a correlation of
+  0.7-0.89; sample of poor beats with both detectors agreeing and low noise: 23 N / 2 Q at >= 0.75 (0 at >= 0.9). MIT-BIH
+  (non-paced) N Se +0.3, V +P -1.0; NSTDB V +P -2.4; detection and noise flagging unchanged. (c) V pattern events say
+  "k questionable" in `detail` (still reported). Disagreements with the owner's labels, nights 1 / 2 / 3: 74 -> 67, 41 -> 36,
+  23 -> 16. Confident V: 91 % / 95 % V among N/V (nights 1 / 2; night 3 had no confident V with a label). (d) Window `quality` counts rescued beats as usable
+  (`goodBeats` stays strictly good, for HRV to decide): unusable windows 18 -> 7, 24 -> 2, 290 -> 0 of 4252 (the motion
+  stretches of night 3). Open: HRV (P5.5) decides whether rescued beats give NN intervals (their R position under motion is
+  less reliable; default: no); V burden stays "between v - vDoubt and v"; a "confident only" count of V events for the
+  summary/alerts (P5.6).
 
 ---
 
