@@ -35,6 +35,10 @@ class HourBucket(
     val burdenPercent: Double? get() = if (judged > 0) 100.0 * (s + v) / judged else null
 }
 
+/** The same hour moved by [ms] in time (to lay yesterday's hours over today's in a comparison). */
+fun HourBucket.shiftedBy(ms: Long) =
+    HourBucket(startUtcMs + ms, n, s, v, q, vDoubt, coverage, rmssdMs, hrMeanBpm, hrMinBpm, hrMaxBpm)
+
 class RangeSummary(
     val fromUtcMs: Long,
     val toUtcMs: Long,

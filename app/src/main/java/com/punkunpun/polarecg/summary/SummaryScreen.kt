@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.punkunpun.polarecg.PolarApp
 import com.punkunpun.polarecg.R
+import com.punkunpun.polarecg.storage.SummaryDao
 import com.punkunpun.polarecg.dsp.summary.HourBucket
 import com.punkunpun.polarecg.dsp.summary.HrvPoint
 import com.punkunpun.polarecg.dsp.summary.MinuteSummary
@@ -66,8 +67,17 @@ fun rangeBounds(range: SummaryRange, nowMs: Long, zone: ZoneId = ZoneId.systemDe
     }
 }
 
-private fun percent(v: Double?) = v?.let { String.format(Locale.ROOT, "%.2f %%", it) } ?: "-"
-private fun one(v: Double?) = v?.let { String.format(Locale.ROOT, "%.1f", it) } ?: "-"
+/** What the summary shows for [from, to): the rows of the long-term tables, summed up. Room runs the reads off the UI thread. */
+internal suspend fun loadSummary(dao: SummaryDao, from: Long, to: Long): RangeSummary {
+    val minutes = dao.minutesBetween(from, to).map {
+        MinuteSummary(it.minuteUtcMs, it.beats, it.n, it.s, it.v, it.q, it.vDoubt, it.hrMeanBpm, it.hrMinBpm, it.hrMaxBpm, it.coverage, it.motionMg)
+    }
+    val hrv = dao.hrvBetween(from, to).map { HrvPoint(it.startUtcMs, it.valid, it.rmssdMs, it.sdnnMs) }
+    return summarizeRange(minutes, hrv, from, to)
+}
+
+internal fun percent(v: Double?) = v?.let { String.format(Locale.ROOT, "%.2f %%", it) } ?: "-"
+internal fun one(v: Double?) = v?.let { String.format(Locale.ROOT, "%.1f", it) } ?: "-"
 
 /**
  * The summary (P5.6): beats and S/V burden, burden per hour, heart rate, HRV and how much was recorded, read from the
@@ -76,6 +86,11 @@ private fun one(v: Double?) = v?.let { String.format(Locale.ROOT, "%.1f", it) } 
 @Composable
 fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifier) {
     BackHandler(onBack = onBack)
+    var comparing by rememberSaveable { mutableStateOf(false) }
+    if (comparing) {
+        CompareScreen(app, onBack = { comparing = false }, modifier = modifier)
+        return
+    }
     var range by rememberSaveable { mutableStateOf(SummaryRange.LAST_24H) }
     var summary by remember { mutableStateOf<RangeSummary?>(null) }
     val dao = app.database.summaryDao()
@@ -84,13 +99,7 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
 
     LaunchedEffect(range, rows) {
         val (from, to) = rangeBounds(range, System.currentTimeMillis())
-        summary = withContext(Dispatchers.IO) {
-            val minutes = dao.minutesBetween(from, to).map {
-                MinuteSummary(it.minuteUtcMs, it.beats, it.n, it.s, it.v, it.q, it.vDoubt, it.hrMeanBpm, it.hrMinBpm, it.hrMaxBpm, it.coverage, it.motionMg)
-            }
-            val hrv = dao.hrvBetween(from, to).map { HrvPoint(it.startUtcMs, it.valid, it.rmssdMs, it.sdnnMs) }
-            summarizeRange(minutes, hrv, from, to)
-        }
+        summary = withContext(Dispatchers.IO) { loadSummary(dao, from, to) }
     }
 
     Column(
@@ -126,7 +135,10 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
             HourBars(s.hours, { it.rmssdMs }, { null }, singleColor = MaterialTheme.colorScheme.tertiary)
             Text(stringResource(R.string.sum_not_yet), style = MaterialTheme.typography.bodySmall)
         }
-        OutlinedButton(onClick = onBack) { Text(stringResource(R.string.sum_back)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = { comparing = true }) { Text(stringResource(R.string.cmp_open)) }
+            OutlinedButton(onClick = onBack) { Text(stringResource(R.string.sum_back)) }
+        }
     }
 }
 
@@ -139,7 +151,7 @@ private val GUTTER = 36.dp
  * width of one hour's slot, a function from a value to its y on the canvas, and the start of the first hour.
  */
 @Composable
-private fun HourChart(
+internal fun HourChart(
     hours: List<HourBucket>,
     lo: Double,
     hi: Double,

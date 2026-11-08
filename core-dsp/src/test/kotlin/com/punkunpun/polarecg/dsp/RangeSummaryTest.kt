@@ -2,6 +2,7 @@ package com.punkunpun.polarecg.dsp
 
 import com.punkunpun.polarecg.dsp.summary.HrvPoint
 import com.punkunpun.polarecg.dsp.summary.MinuteSummary
+import com.punkunpun.polarecg.dsp.summary.shiftedBy
 import com.punkunpun.polarecg.dsp.summary.summarizeRange
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,6 +60,15 @@ class RangeSummaryTest {
         assertNull(r.hours[1].hrMeanBpm)
         assertNull(r.hours[1].hrMinBpm)
         assertNull(r.hours[1].hrMaxBpm)
+    }
+
+    @Test fun aShiftedHourKeepsEverythingButItsTime() {
+        val r = summarizeRange(listOf(minute(0, s = 2, v = 1)), emptyList(), h0, h0 + 3_600_000L)
+        val moved = r.hours.single().shiftedBy(24 * 3_600_000L)
+        assertEquals(h0 + 24 * 3_600_000L, moved.startUtcMs)
+        assertEquals(2, moved.s)
+        assertEquals(1, moved.v)
+        assertEquals(70.0, moved.hrMeanBpm!!, 1e-9)
     }
 
     @Test fun hrvIsTheMedianOfTheValidWindowsOnly() {
