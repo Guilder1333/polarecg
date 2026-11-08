@@ -24,6 +24,15 @@ const val NN_MAX_MS = 2000L
 /** An NN interval may differ from the NN before it (when that one ends where this one starts) by this fraction at most. */
 const val NN_MAX_JUMP = 0.20
 
+/**
+ * An NN interval must also fit the rhythm around it: the beat's prematurity (its interval over the median of the recent ones)
+ * within this range. A beat the detector skipped makes a double interval (prematurity about 2), which the jump rule above cannot
+ * catch when there is no NN right before it (the start of a stretch, after an ectopic or poor beat); it showed as 38 bpm at night.
+ * Beats without the feature (no history yet) are not judged.
+ */
+const val NN_MIN_PREMATURITY = 0.8
+const val NN_MAX_PREMATURITY = 1.25
+
 /** A window is "valid" (fit to show) if valid NN intervals cover at least this fraction of it. */
 const val HRV_MIN_COVERAGE = 0.70
 
@@ -38,7 +47,8 @@ data class Nn(val startUtcMs: Long, val endUtcMs: Long) {
 /**
  * Finds the NN intervals beat by beat (the live pipeline gives beats one at a time). An interval counts if both beats are
  * class N with a good signal (rescued beats are not `good`, so their less certain R positions stay out), in the same gap-free
- * segment, 300-2000 ms long, and within 20 % of the NN right before it when that one ends where this one starts.
+ * segment, 300-2000 ms long, within 20 % of the NN right before it when that one ends where this one starts, and in step with the
+ * recent rhythm ([NN_MIN_PREMATURITY]..[NN_MAX_PREMATURITY]).
  */
 class NnTracker {
     private var previousBeat: Beat? = null
@@ -51,6 +61,8 @@ class NnTracker {
         if (a == null || a.segment != b.segment || a.cls != "N" || b.cls != "N" || !a.good || !b.good) return null
         val ms = b.utcMs - a.utcMs
         if (ms < NN_MIN_MS || ms > NN_MAX_MS) return null
+        val prematurity = b.features?.prematurity
+        if (prematurity != null && (prematurity < NN_MIN_PREMATURITY || prematurity > NN_MAX_PREMATURITY)) return null
         val previous = lastNn
         if (previous != null && previous.endUtcMs == a.utcMs && abs(ms - previous.ms) > NN_MAX_JUMP * previous.ms) return null
         return Nn(a.utcMs, b.utcMs).also { lastNn = it }

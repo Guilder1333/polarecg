@@ -28,6 +28,9 @@ class HourBucket(
     val hrMeanBpm: Double? = null,
     val hrMinBpm: Double? = null,
     val hrMaxBpm: Double? = null,
+    /** The lowest and highest per-minute mean heart rate of the hour: steadier than the single-beat [hrMinBpm] and [hrMaxBpm]. */
+    val hrMinuteLowBpm: Double? = null,
+    val hrMinuteHighBpm: Double? = null,
 ) {
     private val judged: Int get() = n + s + v
     val sPercent: Double? get() = if (judged > 0) 100.0 * s / judged else null
@@ -37,7 +40,7 @@ class HourBucket(
 
 /** The same hour moved by [ms] in time (to lay yesterday's hours over today's in a comparison). */
 fun HourBucket.shiftedBy(ms: Long) =
-    HourBucket(startUtcMs + ms, n, s, v, q, vDoubt, coverage, rmssdMs, hrMeanBpm, hrMinBpm, hrMaxBpm)
+    HourBucket(startUtcMs + ms, n, s, v, q, vDoubt, coverage, rmssdMs, hrMeanBpm, hrMinBpm, hrMaxBpm, hrMinuteLowBpm, hrMinuteHighBpm)
 
 class RangeSummary(
     val fromUtcMs: Long,
@@ -57,6 +60,9 @@ class RangeSummary(
     val rmssdMedianMs: Double?,
     val sdnnMedianMs: Double?,
     val hours: List<HourBucket>,
+    /** The lowest and highest per-minute mean heart rate of the range (a minute counts with its own mean, so one odd interval cannot move it much). */
+    val hrMinuteLowBpm: Double? = null,
+    val hrMinuteHighBpm: Double? = null,
 ) {
     private val judged: Int get() = n + s + v
     val sPercent: Double? get() = if (judged > 0) 100.0 * s / judged else null
@@ -95,6 +101,7 @@ fun summarizeRange(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, fromUtcMs:
             (rows.sumOf { it.coverage } / 60.0).coerceAtMost(1.0),
             median(validHrv.filter { it.startUtcMs >= start && it.startUtcMs < start + HOUR_MS }.mapNotNull { it.rmssdMs }),
             weightedHrMean(rows), rows.mapNotNull { it.hrMinBpm }.minOrNull(), rows.mapNotNull { it.hrMaxBpm }.maxOrNull(),
+            rows.mapNotNull { it.hrMeanBpm }.minOrNull(), rows.mapNotNull { it.hrMeanBpm }.maxOrNull(),
         )
     }.sortedBy { it.startUtcMs }
 
@@ -106,5 +113,6 @@ fun summarizeRange(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, fromUtcMs:
         (covered / rangeMinutes).coerceAtMost(1.0),
         validHrv.size, median(validHrv.mapNotNull { it.rmssdMs }), median(validHrv.mapNotNull { it.sdnnMs }),
         hours,
+        inRange.mapNotNull { it.hrMeanBpm }.minOrNull(), inRange.mapNotNull { it.hrMeanBpm }.maxOrNull(),
     )
 }

@@ -57,6 +57,12 @@ class RangeSummaryTest {
         assertEquals(75.0, r.hours[0].hrMeanBpm!!, 1e-9) // (60*20 + 80*60) / 80
         assertEquals(50.0, r.hours[0].hrMinBpm!!, 1e-9)
         assertEquals(95.0, r.hours[0].hrMaxBpm!!, 1e-9)
+        // the lowest and highest minute average (steadier than the single beats): 60 and 80 here
+        assertEquals(60.0, r.hours[0].hrMinuteLowBpm!!, 1e-9)
+        assertEquals(80.0, r.hours[0].hrMinuteHighBpm!!, 1e-9)
+        assertEquals(60.0, r.hrMinuteLowBpm!!, 1e-9)
+        assertEquals(80.0, r.hrMinuteHighBpm!!, 1e-9)
+        assertNull(r.hours[1].hrMinuteLowBpm)
         assertNull(r.hours[1].hrMeanBpm)
         assertNull(r.hours[1].hrMinBpm)
         assertNull(r.hours[1].hrMaxBpm)

@@ -123,7 +123,8 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
             Text(stringResource(R.string.sum_beats, s.beats, s.n, s.s, s.v, s.q))
             Text(stringResource(R.string.sum_burden, percent(s.sPercent), percent(s.vPercent), percent(s.burdenPercent)), style = MaterialTheme.typography.titleMedium)
             if (s.vDoubt > 0) Text(stringResource(R.string.sum_vdoubt, s.vDoubt), style = MaterialTheme.typography.bodySmall)
-            Text(stringResource(R.string.sum_hr, one(s.hrMinBpm), one(s.hrMeanBpm), one(s.hrMaxBpm)))
+            Text(stringResource(R.string.sum_hr, one(s.hrMinuteLowBpm), one(s.hrMeanBpm), one(s.hrMinuteHighBpm)))
+            Text(stringResource(R.string.sum_hr_beats, one(s.hrMinBpm), one(s.hrMaxBpm)), style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.sum_hrv, one(s.rmssdMedianMs), one(s.sdnnMedianMs), s.hrvWindows))
             Text(stringResource(R.string.sum_coverage, one(100 * s.coverage)))
 
@@ -223,22 +224,28 @@ private fun HourLabels(hours: List<HourBucket>) {
 }
 
 /**
- * Heart rate per hour in one chart: a pale bar from the hour's lowest to its highest value (the window) and a solid tick at its
- * mean. The scale runs from the lowest to the highest value of the range, rounded to 10 bpm. An hour without HR is a gap.
+ * Heart rate per hour as a candlestick: the body runs from the hour's lowest to its highest per-minute average, the thin line
+ * (wick) from its lowest to its highest single interval, and a solid tick marks the mean. The scale covers the wicks, rounded to
+ * 10 bpm. An hour without HR is a gap.
  */
 @Composable
 private fun HrBars(hours: List<HourBucket>) {
     val color = MaterialTheme.colorScheme.primary
-    val withHr = hours.filter { it.hrMeanBpm != null && it.hrMinBpm != null && it.hrMaxBpm != null }
+    val wickColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val withHr = hours.filter {
+        it.hrMeanBpm != null && it.hrMinBpm != null && it.hrMaxBpm != null && it.hrMinuteLowBpm != null && it.hrMinuteHighBpm != null
+    }
     if (withHr.isEmpty()) return
     val lo = floor(withHr.minOf { it.hrMinBpm!! } / 10) * 10
     val hi = (ceil(withHr.maxOf { it.hrMaxBpm!! } / 10) * 10).coerceAtLeast(lo + 10)
     HourChart(hours, lo, hi, 140.dp) { left, slot, y, first0 ->
         for (h in withHr) {
             val x = left + ((h.startUtcMs - first0) / 3_600_000L).toInt() * slot + slot * 0.1f
-            val top = y(h.hrMaxBpm!!)
-            drawRect(color.copy(alpha = 0.3f), topLeft = Offset(x, top), size = Size(slot * 0.8f, (y(h.hrMinBpm!!) - top).coerceAtLeast(2f)))
-            drawRect(color, topLeft = Offset(x, y(h.hrMeanBpm!!) - 2.dp.toPx()), size = Size(slot * 0.8f, 4.dp.toPx()))
+            val centre = x + slot * 0.4f
+            drawLine(wickColor, Offset(centre, y(h.hrMaxBpm!!)), Offset(centre, y(h.hrMinBpm!!)), strokeWidth = 1.5.dp.toPx())
+            val top = y(h.hrMinuteHighBpm!!)
+            drawRect(color.copy(alpha = 0.45f), topLeft = Offset(x, top), size = Size(slot * 0.8f, (y(h.hrMinuteLowBpm!!) - top).coerceAtLeast(2f)))
+            drawRect(color, topLeft = Offset(x, y(h.hrMeanBpm!!) - 1.5.dp.toPx()), size = Size(slot * 0.8f, 3.dp.toPx()))
         }
     }
     Text(stringResource(R.string.sum_hr_legend), style = MaterialTheme.typography.labelSmall)

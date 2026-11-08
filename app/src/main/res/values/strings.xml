@@ -101,12 +101,13 @@
     <string name="sum_beats">Beats: %1$d (N %2$d, S %3$d, V %4$d, Q %5$d)</string>
     <string name="sum_burden">Burden: S %1$s, V %2$s, S+V %3$s</string>
     <string name="sum_vdoubt">%1$d of the V beats are questionable (likely normal beats on a drifting baseline).</string>
-    <string name="sum_hr">Heart rate: min %1$s, mean %2$s, max %3$s bpm</string>
+    <string name="sum_hr">Heart rate (minute averages): lowest %1$s, mean %2$s, highest %3$s bpm</string>
+    <string name="sum_hr_beats">Single intervals: slowest %1$s, fastest %2$s bpm (can include detector glitches)</string>
     <string name="sum_hrv">HRV: median RMSSD %1$s ms, SDNN %2$s ms (%3$d windows of 5 min)</string>
     <string name="sum_coverage">Recorded: %1$s %% of the period</string>
     <string name="sum_chart_burden">S (blue) and V (red) burden per hour, %%</string>
-    <string name="sum_chart_hr">Heart rate per hour (mean and window), bpm</string>
-    <string name="sum_hr_legend">Pale bar: lowest to highest of the hour. Tick: mean.</string>
+    <string name="sum_chart_hr">Heart rate per hour, bpm</string>
+    <string name="sum_hr_legend">Bar: lowest to highest minute average of the hour. Line: slowest to fastest single interval. Tick: mean.</string>
     <string name="sum_chart_rmssd">RMSSD per hour, ms</string>
     <string name="sum_not_yet">Longest run and the hour-by-hour view per action come later (events table, P5.4).</string>
     <string name="cmp_open">Compare</string>
@@ -125,8 +126,8 @@
     <string name="cmp_v">V, %%</string>
     <string name="cmp_burden">S+V, %%</string>
     <string name="cmp_hr_mean">HR mean, bpm</string>
-    <string name="cmp_hr_min">HR min, bpm</string>
-    <string name="cmp_hr_max">HR max, bpm</string>
+    <string name="cmp_hr_min">HR lowest minute, bpm</string>
+    <string name="cmp_hr_max">HR highest minute, bpm</string>
     <string name="cmp_rmssd">RMSSD, ms</string>
     <string name="cmp_sdnn">SDNN, ms</string>
     <string name="cmp_coverage">Recorded, %%</string>

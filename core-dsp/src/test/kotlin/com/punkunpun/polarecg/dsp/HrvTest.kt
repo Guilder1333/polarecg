@@ -4,6 +4,7 @@ import com.punkunpun.polarecg.dsp.analysis.Beat
 import com.punkunpun.polarecg.dsp.hrv.HRV_WINDOW_MS
 import com.punkunpun.polarecg.dsp.hrv.Nn
 import com.punkunpun.polarecg.dsp.hrv.hrvWindows
+import com.punkunpun.polarecg.dsp.beat.BeatFeatures
 import com.punkunpun.polarecg.dsp.hrv.nnIntervals
 import com.punkunpun.polarecg.dsp.hrv.spectrum
 import com.punkunpun.polarecg.dsp.hrv.timeDomain
@@ -50,6 +51,15 @@ class HrvTest {
         // a 15 % change is allowed, a 25 % one is not
         assertEquals(2, nnIntervals(beatsFrom(listOf(800, 920))).size)
         assertEquals(1, nnIntervals(beatsFrom(listOf(800, 1000))).size)
+    }
+
+    @Test fun anIntervalThatDoesNotFitTheRecentRhythmIsDropped() {
+        fun withPrematurity(t: Long, pre: Double) = beat(t).also {
+            it.features = BeatFeatures(t.toDouble(), true, null, null, null, null, pre, null, null, null, null, null, null, null, null, false, false)
+        }
+        // a skipped beat: 1544 ms where the rhythm is 750 (prematurity 2.1) is the first interval of a stretch, so the jump rule cannot see it
+        val beats = listOf(withPrematurity(t0, 1.0), withPrematurity(t0 + 1544, 2.1), withPrematurity(t0 + 2294, 1.0), withPrematurity(t0 + 3044, 1.0))
+        assertEquals(listOf<Long>(750, 750), nnIntervals(beats).map { it.ms })
     }
 
     // ---- time domain ---------------------------------------------------------------------------------------------
