@@ -195,13 +195,15 @@ def main(argv=None) -> int:
     ap.add_argument("--frozen-classes", action="store_true",
                     help="use the class stored in queue.csv (the classifier of the day the queue was built) "
                          "instead of the current analyze output")
+    ap.add_argument("--analysis-root", type=Path, default=Path("data/analysis"),
+                    help="folder holding the `analyze` outputs sessions-<session> (default data/analysis)")
     args = ap.parse_args(argv)
     pooled: list[tuple] = []
     for s in args.sessions:
         if not (s / "queue.csv").is_file():
             print(f"skipping {s}: no queue.csv")
             continue
-        analysis = Path("data/analysis") / f"sessions-{s.name}"        # where the CLI puts it
+        analysis = args.analysis_root / f"sessions-{s.name}"        # where the CLI puts it
         pairs = labelled_items(s, None if args.frozen_classes else analysis)
         pooled += pairs
         print(report(pairs, s.name))
