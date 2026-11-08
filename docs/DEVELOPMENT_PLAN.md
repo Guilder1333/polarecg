@@ -632,7 +632,9 @@ Details in §7.5–7.6.
   valid; median RMSSD 24.7 ms, SDNN 54.7 ms, LF/HF 3.3; by action RMSSD sleeping 26.7, sitting 25.6, walking 17.2, bicycle 13.5, HR the
   other way, as expected. Not done here: storing HRV on the phone (`hrv_window` table) and showing it: P5.6 (summary screen) needs it;
   the "night-time RMSSD" number needs a sleep/wake rule (later). HRV from ECG RR at 130 Hz has about 1 ms resolution, fine for RMSSD of
-  this size (about 25 ms), but not for a very low-variability recording.)
+  this size (about 25 ms), but not for a very low-variability recording.
+  Update 2026-11-08: an interval must also fit the recent rhythm (the beat's prematurity 0.8-1.25): a skipped beat made a double interval,
+  accepted when no NN came right before it (38 bpm at night, and a bad value in HRV); checked on 169 865 stored beats.)
 - [ ] **P5.6 [YOU+AI]** Summary screen: today / last night / last 24 h — beats, V and S burden per
   hour (bar chart), longest run, HR min/avg/max, HRV trend, data coverage.
   (Built 2026-10-31, **not yet tried on the phone**. Long-term tables from §8, database version 2 with a real migration
@@ -648,6 +650,10 @@ Details in §7.5–7.6.
   burden per action on the phone, a chart style the owner has looked at. **Done when:** after a recorded day the screen shows
   numbers that match `report.md` / `minutes.csv` of the same session (counts exactly, HR and burden to rounding), also for "Last 24 h"
   after more than one session.)
+  Update 2026-11-08: heart rate on the screen is the lowest / mean / highest per-minute average (single intervals can carry detector
+  glitches); the hourly HR chart is a candlestick (body: lowest to highest minute average of the hour, wick: slowest to fastest
+  interval, tick: mean); value grids on all charts; a Compare screen (today / yesterday up to the same time of day, or the last 24 h
+  / the 24 h before) with a table of changes and hour-by-hour lines. Rows already stored keep their old single-interval extremes.
 - [ ] **P5.7 [YOU+AI]** Event list + **review screen**: ECG clip viewer with beat markers and class
   labels; tap a beat to relabel (N/S/V/noise). Labels stored separately from automatic classes:
   a relabel never changes `beat.cls`; it appends a row to `label` (history kept, newest wins), and the screen shows
