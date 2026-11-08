@@ -6,6 +6,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -63,7 +72,7 @@ enum class BrowseKind(val key: String) {
     }
 }
 
-private const val LIST_CAP = 3000
+internal const val LIST_CAP = 3000
 private val timeOfDay = DateTimeFormatter.ofPattern("HH:mm:ss")
 private val dayFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd (EEE)")
 
@@ -201,17 +210,33 @@ private val StagedSaver = Saver<Map<Long, String>, String>(
 
 /**
  * The ECG around one beat from the raw files. The owner marks only the beats that are wrong: the buttons stage marks (orange), and
- * **Accept** saves them and confirms every other unlabelled beat of the strip as its automatic class ([labelsToSave]); **Cancel**
+ * **Accept** saves them and confirms the opened beat and the one before and after it as their automatic class ([labelsToSave]); **Cancel**
  * (and the system Back) saves nothing. So "Unlabelled only" in the list hides everything that was looked at.
  */
 @Composable
-fun BrowseWindowScreen(app: PolarApp, beatUtcMs: Long, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun BrowseWindowScreen(
+    app: PolarApp,
+    beatUtcMs: Long,
+    onBack: () -> Unit,
+    /** The beat after this one in the list being browsed (any label), or null at the end. */
+    nextBeatOf: suspend (Long) -> Long?,
+    /** The beat before this one in that list, or null at the start. */
+    prevBeatOf: suspend (Long) -> Long?,
+    onOpenBeat: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     BackHandler(onBack = onBack) // Back = Cancel: nothing was saved
     val scope = rememberCoroutineScope()
     var clip by remember(beatUtcMs) { mutableStateOf<EventClip?>(null) }
     var loaded by remember(beatUtcMs) { mutableStateOf(false) }
     var staged by rememberSaveable(beatUtcMs, stateSaver = StagedSaver) { mutableStateOf(emptyMap<Long, String>()) }
-    var saving by remember { mutableStateOf(false) }
+    var saving by remember(beatUtcMs) { mutableStateOf(false) }
+    var nextMs by remember(beatUtcMs) { mutableStateOf<Long?>(null) }
+    var prevMs by remember(beatUtcMs) { mutableStateOf<Long?>(null) }
+    LaunchedEffect(beatUtcMs) {
+        nextMs = withContext(Dispatchers.IO) { nextBeatOf(beatUtcMs) }
+        prevMs = withContext(Dispatchers.IO) { prevBeatOf(beatUtcMs) }
+    }
 
     LaunchedEffect(beatUtcMs) {
         clip = withContext(Dispatchers.IO) {
@@ -232,26 +257,33 @@ fun BrowseWindowScreen(app: PolarApp, beatUtcMs: Long, onBack: () -> Unit, modif
             if (c == null) {
                 OutlinedButton(onClick = onBack) { Text(stringResource(R.string.ev_back)) }
             } else {
-                OutlinedButton(onClick = onBack, enabled = !saving) { Text(stringResource(R.string.br_cancel)) }
-                Button(
-                    enabled = !saving,
-                    onClick = {
-                        saving = true
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                val dao = app.database.labelDao()
-                                // read the labels again now: they may have changed since the strip was opened
-                                val current = currentLabelRows(dao.currentBetween(c.ecg.startUtcMs, c.ecg.endUtcMs + 1).map { it.toRecord() })
-                                val rows = labelsToSave(c.beats, current, staged, System.currentTimeMillis())
-                                dao.insertAll(rows.map { LabelEntity(beatUtcMs = it.beatUtcMs, label = it.label, note = it.note, createdAtUtcMs = it.createdAtUtcMs) })
-                            }
-                            onBack()
+                OutlinedIconButton(onClick = onBack, enabled = !saving) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.br_cancel)) }
+                // Accept saves and returns to the list; Next saves the same way and opens the following beat
+                val save = { goNext: Boolean ->
+                    saving = true
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            val dao = app.database.labelDao()
+                            // read the labels again now: they may have changed since the strip was opened
+                            val current = currentLabelRows(dao.currentBetween(c.ecg.startUtcMs, c.ecg.endUtcMs + 1).map { it.toRecord() })
+                            // only the opened beat and its direct neighbours count as looked at: with the V or Q filter the strip
+                            // holds other beats the owner never judged
+                            val i = c.beats.indexOfFirst { it.utcMs == beatUtcMs }
+                            val looked = c.beats.slice(maxOf(0, i - 1)..minOf(c.beats.lastIndex, i + 1)).map { it.utcMs }.toSet()
+                            val rows = labelsToSave(c.beats, current, staged, System.currentTimeMillis(), confirm = if (i >= 0) looked else null)
+                            dao.insertAll(rows.map { LabelEntity(beatUtcMs = it.beatUtcMs, label = it.label, note = it.note, createdAtUtcMs = it.createdAtUtcMs) })
                         }
-                    },
-                ) { Text(stringResource(R.string.br_accept)) }
+                        val next = nextMs
+                        if (goNext && next != null) onOpenBeat(next) else onBack()
+                    }
+                }
+                // Previous saves nothing, like Cancel
+                OutlinedIconButton(onClick = { prevMs?.let(onOpenBeat) }, enabled = !saving && prevMs != null) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.br_prev)) }
+                FilledIconButton(enabled = !saving, onClick = { save(false) }) { Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.br_accept)) }
+                FilledTonalIconButton(enabled = !saving && nextMs != null, onClick = { save(true) }) { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.br_next)) }
             }
-            Text(localTime(beatUtcMs), style = MaterialTheme.typography.titleMedium)
         }
+        Text(localTime(beatUtcMs), style = MaterialTheme.typography.titleMedium)
         if (c == null) {
             Text(stringResource(if (loaded) R.string.br_no_ecg else R.string.br_loading))
         } else {

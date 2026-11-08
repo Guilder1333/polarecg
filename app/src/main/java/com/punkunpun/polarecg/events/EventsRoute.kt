@@ -10,6 +10,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.punkunpun.polarecg.PolarApp
+import com.punkunpun.polarecg.dsp.classify.ClassifierConfig
+import com.punkunpun.polarecg.storage.BeatEntity
+import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 /**
@@ -43,8 +46,21 @@ fun BrowseRoute(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifier
     // scroll position: kept here because the browse screen is left while a beat is open
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    // the beats of the list being browsed (class and day), whatever their labels, in time order
+    suspend fun browseList(): List<BeatEntity> {
+        val kind = BrowseKind.fromKey(kindKey)
+        val (from, to) = dayRangeUtc(LocalDate.ofEpochDay(epochDay))
+        val dao = app.database.beatDao()
+        return if (kind == BrowseKind.EARLY_N) dao.earlyNormals(from, to, ClassifierConfig().sPrematurity, LIST_CAP) else dao.byClass(from, to, kind.key, LIST_CAP)
+    }
     if (openBeatMs != 0L) {
-        BrowseWindowScreen(app, beatUtcMs = openBeatMs, onBack = { openBeatMs = 0L }, modifier = modifier)
+        BrowseWindowScreen(
+            app, beatUtcMs = openBeatMs, onBack = { openBeatMs = 0L },
+            nextBeatOf = { ms -> browseList().firstOrNull { it.utcMs > ms }?.utcMs },
+            prevBeatOf = { ms -> browseList().lastOrNull { it.utcMs < ms }?.utcMs },
+            onOpenBeat = { openBeatMs = it },
+            modifier = modifier,
+        )
     } else {
         BrowseScreen(
             app,

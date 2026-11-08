@@ -105,4 +105,10 @@ class LabelHistoryTest {
     @Test fun beatsWithoutAClassAreNotConfirmed() {
         assertEquals(emptyList(), labelsToSave(listOf(beat(1, "?")), emptyMap(), emptyMap(), 9))
     }
+
+    @Test fun onlyTheGivenBeatsAreConfirmedButStagedMarksAlwaysSave() {
+        val beats = listOf(beat(1, "N"), beat(2, "V"), beat(3, "N"), beat(4, "N"))
+        val rows = labelsToSave(beats, emptyMap(), mapOf(4L to "S"), 9, confirm = setOf(2L, 3L))
+        assertEquals(listOf(LabelRecord(2, "V", ACCEPTED_NOTE, 9), LabelRecord(3, "N", ACCEPTED_NOTE, 9), LabelRecord(4, "S", "", 9)), rows)
+    }
 }

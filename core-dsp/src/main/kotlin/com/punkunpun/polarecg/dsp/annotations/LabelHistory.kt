@@ -83,6 +83,8 @@ fun labelsToSave(
     current: Map<Long, LabelRecord>,
     staged: Map<Long, String>,
     nowMs: Long,
+    /** If given, only these beats are confirmed automatically (staged marks are saved whatever this says); null = every beat of [beats]. */
+    confirm: Set<Long>? = null,
 ): List<LabelRecord> {
     val rows = ArrayList<LabelRecord>()
     for (b in beats) {
@@ -90,7 +92,7 @@ fun labelsToSave(
         val mark = staged[b.utcMs]
         if (mark != null) {
             if (OwnerLabel.isValid(mark) && mark != now) rows += LabelRecord(b.utcMs, mark, "", nowMs)
-        } else if (now.isEmpty() && b.cls in OwnerLabel.CLASSES) {
+        } else if (now.isEmpty() && b.cls in OwnerLabel.CLASSES && (confirm == null || b.utcMs in confirm)) {
             rows += LabelRecord(b.utcMs, b.cls, ACCEPTED_NOTE, nowMs)
         }
     }

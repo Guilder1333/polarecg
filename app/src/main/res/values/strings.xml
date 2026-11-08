@@ -89,6 +89,8 @@
     <string name="br_no_ecg">The raw ECG around this beat is not on the phone (or has a gap here).</string>
     <string name="br_loading">Loading the ECG...</string>
     <string name="br_accept">Accept</string>
+    <string name="br_next">Save and go to the next beat</string>
+    <string name="br_prev">Previous beat</string>
     <string name="br_list_loading">Loading...</string>
     <string name="br_cancel">Cancel</string>
     <string name="br_pending">(not saved yet)</string>
