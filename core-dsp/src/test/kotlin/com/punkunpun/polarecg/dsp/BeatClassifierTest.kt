@@ -24,9 +24,10 @@ class BeatClassifierTest {
         flip: Boolean = false,
         drift: Double? = null,
         rrPost: Double? = 800.0, // the interval after the beat; a premature beat is followed by a pause (rrPre 800 / 1400 = 0.57)
+        compensation: Double? = 1.0, // (rrPre + rrPost) / (2 rrRef); above 1.35 the next beat was probably missed
     ) = BeatFeatures(
         timeMs = 0.0, good = good, rrPreMs = 800.0, rrPostMs = rrPost, rrRefMs = 800.0, rrSpread = rrSpread,
-        prematurity = prematurity, shortening = shortening, compensation = 1.0, corr = corr, shift = 0.0, qrsWidthMs = 60.0,
+        prematurity = prematurity, shortening = shortening, compensation = compensation, corr = corr, shift = 0.0, qrsWidthMs = 60.0,
         widthRatio = widthRatio, ampRatio = 1.0, areaRatio = areaRatio, polarityFlip = flip, normalTimed = true, driftRatio = drift,
     )
 
@@ -121,6 +122,30 @@ class BeatClassifierTest {
         assertEquals(BeatClass.NORMAL, cls(features(prematurity = 0.7, shortening = 0.7, rrPost = 1000.0))) // 0.8
         assertEquals(BeatClass.PREMATURE, cls(features(prematurity = 0.7, shortening = 0.7, rrPost = 1100.0))) // 0.73
         assertEquals(BeatClass.NORMAL, cls(features(prematurity = 0.7, shortening = 0.7, rrPost = null))) // end of a segment
+    }
+
+    @Test fun aLongIntervalAfterTheBeatIsAMissedBeatNotAPause() {
+        // rrPre 800 * 0.8 = 640, rrPost 1600 (two intervals): compensation 1.4 -> the detector skipped a beat
+        val missed = features(prematurity = 0.8, shortening = 0.8, rrPost = 1600.0, compensation = 1.4)
+        assertTrue(classifier.isLongInterval(missed))
+        assertEquals(BeatClass.NORMAL, cls(missed))
+        // a real pause that makes up for the early beat: compensation about 1
+        val pause = features(prematurity = 0.6, shortening = 0.6, rrPost = 1400.0, compensation = 1.0)
+        assertFalse(classifier.isLongInterval(pause))
+        assertEquals(BeatClass.PREMATURE, cls(pause))
+        assertFalse(classifier.isLongInterval(features(compensation = null)))
+    }
+
+    @Test fun aLongIntervalBeforeANormalBeatIsSS() {
+        assertEquals(BeatClass.SUPPRESSED, cls(features(prematurity = 2.0, shortening = 2.0)))
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 2.0, shortening = 1.1))) // the rate slowed down, the interval before was long too
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 2.0, shortening = 2.0, rrPost = 1400.0))) // next one still long: slower rhythm
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 2.0, shortening = 2.0, rrPost = null))) // no next beat yet
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 1.3))) // a slow beat, not a skipped one
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 2.0, rrSpread = 0.3))) // irregular rhythm: says little
+        assertEquals(BeatClass.UNCLASSIFIABLE, cls(features(prematurity = 2.0, good = false)))
+        assertEquals(BeatClass.VENTRICULAR, cls(features(prematurity = 2.0, corr = 0.3))) // shape rules first
+        assertTrue(BeatClass.isPremature("S") && BeatClass.isPremature("SS") && !BeatClass.isPremature("N"))
     }
 
     @Test fun aGradualSpeedUpIsNotPremature() {

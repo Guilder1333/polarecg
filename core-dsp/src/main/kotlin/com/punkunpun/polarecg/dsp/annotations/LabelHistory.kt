@@ -9,6 +9,8 @@ package com.punkunpun.polarecg.dsp.annotations
 object OwnerLabel {
     const val NORMAL = "N"
     const val PREMATURE = "S"
+    /** A long interval before this beat: a suppressed (skipped) beat. Adds up to S in the counts. */
+    const val SUPPRESSED = "SS"
     const val VENTRICULAR = "V"
     /** Noise, motion, a broken-looking signal: "cannot tell" (the PC tool's Q). */
     const val UNCLASSIFIABLE = "Q"
@@ -23,10 +25,10 @@ object OwnerLabel {
     const val UNDONE = ""
 
     /** The labels the owner can choose from the screen, in the order the buttons show them. */
-    val CHOICES = listOf(NORMAL, PREMATURE, VENTRICULAR, UNCLASSIFIABLE, NOT_A_BEAT, UNSURE, UNDONE)
+    val CHOICES = listOf(NORMAL, PREMATURE, SUPPRESSED, VENTRICULAR, UNCLASSIFIABLE, NOT_A_BEAT, UNSURE, UNDONE)
 
     /** The labels that count as a class (what the reports compare with the automatic class). */
-    val CLASSES = setOf(NORMAL, PREMATURE, VENTRICULAR, UNCLASSIFIABLE, NOT_A_BEAT)
+    val CLASSES = setOf(NORMAL, PREMATURE, SUPPRESSED, VENTRICULAR, UNCLASSIFIABLE, NOT_A_BEAT)
 
     fun isValid(label: String) = label in CHOICES
 }

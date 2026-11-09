@@ -240,6 +240,7 @@ private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, staged: M
     val colors = mapOf(
         "N" to quiet,
         "S" to MaterialTheme.colorScheme.tertiary,
+        "SS" to MaterialTheme.colorScheme.tertiary,
         "V" to MaterialTheme.colorScheme.error,
         "Q" to quiet,
     )

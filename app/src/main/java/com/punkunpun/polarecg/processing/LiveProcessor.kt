@@ -172,7 +172,7 @@ class LiveProcessor(private val connection: PolarConnection) {
         stats = stats.copy(
             beats = stats.beats + 1,
             normal = stats.normal + if (b.cls == BeatClass.NORMAL) 1 else 0,
-            premature = stats.premature + if (b.cls == BeatClass.PREMATURE) 1 else 0,
+            premature = stats.premature + if (BeatClass.isPremature(b.cls)) 1 else 0,
             ventricular = stats.ventricular + if (b.cls == BeatClass.VENTRICULAR) 1 else 0,
             ventricularDoubt = stats.ventricularDoubt + if (b.cls == BeatClass.VENTRICULAR && b.vDoubt) 1 else 0,
             unclassifiable = stats.unclassifiable + if (b.cls == BeatClass.UNCLASSIFIABLE) 1 else 0,

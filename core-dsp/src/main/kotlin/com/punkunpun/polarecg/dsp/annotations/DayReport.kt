@@ -39,7 +39,7 @@ private fun winCounts(result: AnalysisResult, labels: Map<Long, String>): List<W
         val label = labels[b.utcMs] // the owner's label replaces our class; a V the owner confirmed is not "questionable"
         when (label ?: b.cls) {
             "N" -> c[0]++
-            "S" -> c[1]++
+            "S", "SS" -> c[1]++
             "V" -> { c[2]++; if (label == null && b.vDoubt) c[3]++ }
         }
     }

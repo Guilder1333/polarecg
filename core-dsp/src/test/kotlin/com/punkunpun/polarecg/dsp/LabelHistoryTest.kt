@@ -37,7 +37,8 @@ class LabelHistoryTest {
 
     @Test fun choicesAreValidAndOthersAreNot() {
         assertTrue(OwnerLabel.CHOICES.all(OwnerLabel::isValid))
-        assertFalse(OwnerLabel.isValid("X"))
+        assertFalse(OwnerLabel.isValid("Z"))
+        assertTrue(OwnerLabel.isValid("X") && OwnerLabel.isValid("SS"))
         assertFalse(OwnerLabel.isValid("s")) // upper case only, as in labels.csv
     }
 
@@ -93,7 +94,7 @@ class LabelHistoryTest {
         val beats = listOf(beat(1, "N"), beat(2, "N"), beat(3, "N"))
         val current = currentLabelRows(listOf(row(1, "S")))
         // 1: staged S is the label it already has; 2: undo of a beat without label; 3: an invalid label
-        val rows = labelsToSave(beats, current, staged = mapOf(1L to "S", 2L to "", 3L to "X"), nowMs = 9)
+        val rows = labelsToSave(beats, current, staged = mapOf(1L to "S", 2L to "", 3L to "Z"), nowMs = 9)
         assertEquals(emptyList(), rows)
     }
 

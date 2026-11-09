@@ -4,6 +4,7 @@ import com.punkunpun.polarecg.dsp.analysis.AnalysisResult
 import com.punkunpun.polarecg.dsp.analysis.USABLE_QUALITY
 import com.punkunpun.polarecg.dsp.analysis.WINDOW_MS
 import com.punkunpun.polarecg.dsp.analysis.Window
+import com.punkunpun.polarecg.dsp.classify.BeatClass
 
 /** Name used for the time when no action was running (before the first one, or after "no action"). */
 const val NO_ACTION = "(none)"
@@ -76,7 +77,7 @@ fun summarizeActions(result: AnalysisResult, spans: List<ActionSpan>, hasMarks: 
         val a = accs.getValue(name)
         when (b.cls) {
             "N" -> a.n++
-            "S" -> a.s++
+            "S", "SS" -> a.s++
             "V" -> { a.v++; if (b.vDoubt) a.vDoubt++ }
             "Q" -> a.q++
         }
@@ -106,7 +107,7 @@ fun eventContexts(result: AnalysisResult, marks: List<Mark>): List<EventContext>
         fun hr(from: Long, to: Long) = result.windows
             .filter { it.quality >= USABLE_QUALITY && it.startUtcMs >= from && it.startUtcMs < to }
             .mapNotNull { it.meanHrBpm }.takeIf { it.isNotEmpty() }?.average()
-        fun ectopic(from: Long, to: Long) = result.beats.count { (it.cls == "S" || it.cls == "V") && it.utcMs >= from && it.utcMs < to }
+        fun ectopic(from: Long, to: Long) = result.beats.count { (BeatClass.isPremature(it.cls) || it.cls == "V") && it.utcMs >= from && it.utcMs < to }
         EventContext(
             m,
             hr(m.timeMs - EVENT_CONTEXT_MS, m.timeMs), hr(m.timeMs, m.timeMs + EVENT_CONTEXT_MS),

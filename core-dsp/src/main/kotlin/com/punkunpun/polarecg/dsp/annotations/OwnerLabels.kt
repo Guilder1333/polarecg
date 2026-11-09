@@ -6,7 +6,7 @@ package com.punkunpun.polarecg.dsp.annotations
  */
 
 /** The labels a beat can get that change its class: N, S, V, Q. ("?" means unsure and leaves the automatic class alone.) */
-private val CLASS_LABELS = setOf("N", "S", "V", "Q", "X")
+private val CLASS_LABELS = setOf("N", "S", "SS", "V", "Q", "X")
 
 /** Splits one CSV line into fields (RFC 4180 quotes: `"a,b"`, `""` for a quote). Returns null for a line cut off inside quotes. */
 internal fun splitCsvLine(line: String): List<String>? {

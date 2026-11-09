@@ -88,7 +88,7 @@ class SummaryBuilder {
         beats++
         when (b.cls) {
             "N" -> n++
-            "S" -> s++
+            "S", "SS" -> s++
             "V" -> { v++; if (b.vDoubt) vDoubt++ }
             "Q" -> q++
         }

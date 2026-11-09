@@ -26,6 +26,12 @@ class OwnerLabelsSummaryTest {
         assertEquals(70.0, r[1].hrMeanBpm)
     }
 
+    @Test fun ssAddsUpToSAndSsToSChangesNothing() {
+        val m = MinuteSummary(t0, 70, 66, 2, 2, 0, 0, 70.0, 60.0, 80.0, 1.0, null)
+        val r = applyOwnerLabels(listOf(m), listOf(LabelledBeat(t0 + 1_000, "N", false, "SS"), LabelledBeat(t0 + 2_000, "SS", false, "S")))[0]
+        assertEquals(listOf(65, 3), listOf(r.n, r.s))
+    }
+
     @Test fun notABeatLeavesTheCountsAndTheBeatTotal() {
         val m = MinuteSummary(t0, 72, 67, 2, 2, 1, 1, 70.0, 60.0, 80.0, 1.0, null) // 1 Q, 2 V of which 1 doubtful
         val r = applyOwnerLabels(listOf(m), listOf(LabelledBeat(t0 + 1_000, "Q", false, "X"), LabelledBeat(t0 + 2_000, "V", true, "X")))[0]

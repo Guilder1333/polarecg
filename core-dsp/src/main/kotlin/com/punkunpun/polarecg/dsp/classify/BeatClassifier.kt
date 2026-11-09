@@ -8,6 +8,13 @@ object BeatClass {
     const val NORMAL = "N"
     /** Premature, normal shape (supraventricular). */
     const val PREMATURE = "S"
+    /**
+     * Long interval before a normal-shaped beat: most likely a beat the detector (or the heart) suppressed. Counted with S
+     * in every total (see [isPremature]); kept apart so it can be told from an early beat and labelled on its own.
+     */
+    const val SUPPRESSED = "SS"
+    /** True for S and SS: the classes that add up to the premature-beat counts. */
+    fun isPremature(cls: String) = cls == PREMATURE || cls == SUPPRESSED
     /** Ventricular-looking. */
     const val VENTRICULAR = "V"
     /** Cannot be judged: poor signal or no template yet. */
@@ -60,6 +67,25 @@ data class ClassifierConfig(
      * Needs the next beat: without it (end of a segment) the beat is N.
      */
     val sNextRatio: Double = 0.75,
+    /**
+     * SS (a beat that follows a skipped one): a beat of normal shape, steady rhythm, whose interval before it is
+     * - at least [ssLateness] times the reference (a skipped beat makes about 2.0), AND
+     * - at least [ssLengthening] times the interval before that (`BeatFeatures.shortening`: the mirror of [sShortening]), AND
+     * - followed by an interval of at most [ssMaxNextRatio] times the reference (the rhythm is back: the mirror of the pause test of S).
+     * The last two tell a skipped beat from a heart rate that slowed down (reference lags behind). Measured on the 32 gap items the
+     * owner labelled "blocked early beat" and 646 labelled "nothing" (10 nights, weighted): the ratio alone gives precision 45 % at 1.7;
+     * the three together 97 % / recall 99 % (tuned on those same labels, so a little optimistic).
+     */
+    val ssLateness: Double = 1.6,
+    val ssLengthening: Double = 1.5,
+    val ssMaxNextRatio: Double = 1.3,
+    /**
+     * ...and the interval after it is not a LONG one, i.e. a skipped beat: the mirror of the short-interval test. A premature beat
+     * is followed by a pause that makes up for it (compensation = (rrPre + rrPost) / (2 rrRef) is about 1, lower for many PACs);
+     * when the detector missed the next beat, rrPost is about two normal intervals and the compensation is 1.4 or more. Then the
+     * "pause" is a hole in the detection, not a pause after an early beat, and the beat is N. Without the compensation the test is skipped.
+     */
+    val sMaxCompensation: Double = 1.35,
     /**
      * A V that rests only on the drift-sensitive shape rules (correlation, area) is "questionable" when
      * the baseline wanders this much around it (`BeatFeatures.driftRatio`, P4.7). Still a V; the flag only
@@ -122,6 +148,18 @@ class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) 
         val abrupt = f.shortening?.let { it <= config.sShortening } == true
         // Followed by a pause: rrPre / rrPost (both exist or the beat cannot be called S).
         val pause = f.rrPreMs != null && f.rrPostMs != null && f.rrPostMs > 0 && f.rrPreMs / f.rrPostMs <= config.sNextRatio
-        return if (early && steady && abrupt && pause) BeatClass.PREMATURE else BeatClass.NORMAL
+        val skippedNext = isLongInterval(f)
+        if (early && steady && abrupt && pause && !skippedNext) return BeatClass.PREMATURE
+        val late = f.prematurity?.let { it >= config.ssLateness } == true
+        val lengthened = f.shortening?.let { it >= config.ssLengthening } == true
+        val rhythmBack = f.rrPostMs != null && f.rrRefMs != null && f.rrRefMs > 0 && f.rrPostMs / f.rrRefMs <= config.ssMaxNextRatio
+        return if (late && lengthened && rhythmBack && steady) BeatClass.SUPPRESSED else BeatClass.NORMAL
     }
+
+    /**
+     * True if the interval after the beat is so long that the detector most likely missed a beat in it (compensation above
+     * [ClassifierConfig.sMaxCompensation]): the long counterpart of an early beat. Used by the S rule; the pipeline can also use it to
+     * mark the interval as unreliable.
+     */
+    fun isLongInterval(f: BeatFeatures): Boolean = f.compensation?.let { it > config.sMaxCompensation } == true
 }

@@ -15,10 +15,13 @@ private const val MINUTE_MS = 60_000L
  * adds no `vDoubt`, and a relabelled doubtful V takes its doubt away. Only the counts change; heart rate, coverage and the rest
  * stay as they were. (Beats pruned from the database are not in [labelled]: those minutes keep the automatic counts.)
  */
+/** SS (suppressed beat) adds up to S in every count; the other classes are their own count. */
+private fun bucket(cls: String) = if (cls == OwnerLabel.SUPPRESSED) OwnerLabel.PREMATURE else cls
+
 fun applyOwnerLabels(minutes: List<MinuteSummary>, labelled: List<LabelledBeat>): List<MinuteSummary> {
     if (labelled.isEmpty()) return minutes
     val byMinute = labelled
-        .filter { it.label in OwnerLabel.CLASSES && it.label != it.autoCls }
+        .filter { it.label in OwnerLabel.CLASSES && bucket(it.label) != bucket(it.autoCls) }
         .groupBy { Math.floorDiv(it.utcMs, MINUTE_MS) * MINUTE_MS }
     if (byMinute.isEmpty()) return minutes
     return minutes.map { m ->
@@ -27,9 +30,10 @@ fun applyOwnerLabels(minutes: List<MinuteSummary>, labelled: List<LabelledBeat>)
         var doubt = m.vDoubt
         var beats = m.beats
         for (c in changes) {
-            if (c.autoCls !in count) continue
-            count[c.autoCls] = count.getValue(c.autoCls) - 1
-            if (c.label == OwnerLabel.NOT_A_BEAT) beats-- else count[c.label] = count.getValue(c.label) + 1
+            val from = bucket(c.autoCls)
+            if (from !in count) continue
+            count[from] = count.getValue(from) - 1
+            if (c.label == OwnerLabel.NOT_A_BEAT) beats-- else count[bucket(c.label)] = count.getValue(bucket(c.label)) + 1
             if (c.autoCls == "V" && c.autoVDoubt) doubt--
         }
         MinuteSummary(

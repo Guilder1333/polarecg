@@ -157,7 +157,7 @@ fun hourlyBurden(beats: List<Beat>): List<HourlyBurden> {
         HourlyBurden(
             hour * HOUR_MS,
             n = bs.count { it.cls == BeatClass.NORMAL },
-            s = bs.count { it.cls == BeatClass.PREMATURE },
+            s = bs.count { BeatClass.isPremature(it.cls) },
             v = bs.count { it.cls == BeatClass.VENTRICULAR },
             q = bs.count { it.cls == BeatClass.UNCLASSIFIABLE },
             vDoubt = bs.count { it.cls == BeatClass.VENTRICULAR && it.vDoubt },
