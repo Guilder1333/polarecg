@@ -6,7 +6,7 @@ package com.punkunpun.polarecg.dsp.annotations
  */
 
 /** The labels a beat can get that change its class: N, S, V, Q. ("?" means unsure and leaves the automatic class alone.) */
-private val CLASS_LABELS = setOf("N", "S", "V", "Q")
+private val CLASS_LABELS = setOf("N", "S", "V", "Q", "X")
 
 /** Splits one CSV line into fields (RFC 4180 quotes: `"a,b"`, `""` for a quote). Returns null for a line cut off inside quotes. */
 internal fun splitCsvLine(line: String): List<String>? {
@@ -30,7 +30,7 @@ internal fun splitCsvLine(line: String): List<String>? {
 }
 
 /**
- * Current class label of every beat the owner labelled: beat time (`utcMs`) -> "N" | "S" | "V" | "Q".
+ * Current class label of every beat the owner labelled: beat time (`utcMs`) -> "N" | "S" | "V" | "Q" | "X" (X = not a beat).
  * Gap items, unsure ("?"), undone labels and damaged lines are left out. [lines] include the header line.
  */
 fun parseOwnerLabels(lines: List<String>): Map<Long, String> {

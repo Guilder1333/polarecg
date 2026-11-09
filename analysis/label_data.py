@@ -26,7 +26,7 @@ ALL = 10 ** 9                # "take every item of the group"
 GAP_FACTOR = 1.35            # a GAP item: RR at least this many times the reference RR
 PATTERN_TOLERANCE_MS = 60    # an event start/end must lie this close to a detected beat
 
-BEAT_LABELS = ("N", "S", "V", "Q", "?")
+BEAT_LABELS = ("N", "S", "V", "Q", "X", "?")   # X = not a beat (drift, artefact)
 GAP_LABELS = ("B", "N", "?")
 QUEUE_COLUMNS = ["item", "kind", "utcMs", "group", "weight", "ourClass"]
 LABEL_COLUMNS = ["item", "utcMs", "kind", "label", "labeledAtUtc", "note", "bumpUtcMs"]
