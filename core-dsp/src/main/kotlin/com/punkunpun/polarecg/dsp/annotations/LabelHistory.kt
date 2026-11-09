@@ -12,16 +12,21 @@ object OwnerLabel {
     const val VENTRICULAR = "V"
     /** Noise, motion, a broken-looking signal: "cannot tell" (the PC tool's Q). */
     const val UNCLASSIFIABLE = "Q"
+    /**
+     * Not a heartbeat at all: drift, a pacing spike, a motion artefact the detector took for a beat. Unlike Q ("is a beat,
+     * cannot tell the class") the beat is dropped from the counts of the summary, and it tells a classifier "this was noise".
+     */
+    const val NOT_A_BEAT = "X"
     /** Skipped on purpose: "don't guess". Leaves the automatic class alone. */
     const val UNSURE = "?"
     /** Take back an earlier label (a new row; the old one stays in the history). */
     const val UNDONE = ""
 
     /** The labels the owner can choose from the screen, in the order the buttons show them. */
-    val CHOICES = listOf(NORMAL, PREMATURE, VENTRICULAR, UNCLASSIFIABLE, UNSURE, UNDONE)
+    val CHOICES = listOf(NORMAL, PREMATURE, VENTRICULAR, UNCLASSIFIABLE, NOT_A_BEAT, UNSURE, UNDONE)
 
     /** The labels that count as a class (what the reports compare with the automatic class). */
-    val CLASSES = setOf(NORMAL, PREMATURE, VENTRICULAR, UNCLASSIFIABLE)
+    val CLASSES = setOf(NORMAL, PREMATURE, VENTRICULAR, UNCLASSIFIABLE, NOT_A_BEAT)
 
     fun isValid(label: String) = label in CHOICES
 }
