@@ -87,7 +87,7 @@ fun CompareScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
     LaunchedEffect(mode, rows) {
         val b = compareBounds(mode, System.currentTimeMillis())
         val (cur, prev) = withContext(Dispatchers.IO) {
-            loadSummary(dao, b.current.first, b.current.second) to loadSummary(dao, b.previous.first, b.previous.second)
+            loadSummary(app.database, b.current.first, b.current.second) to loadSummary(app.database, b.previous.first, b.previous.second)
         }
         bounds = b
         current = cur

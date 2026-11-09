@@ -34,9 +34,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.punkunpun.polarecg.PolarApp
 import com.punkunpun.polarecg.R
-import com.punkunpun.polarecg.storage.SummaryDao
+import com.punkunpun.polarecg.storage.PolarDatabase
 import com.punkunpun.polarecg.dsp.summary.HourBucket
 import com.punkunpun.polarecg.dsp.summary.HrvPoint
+import com.punkunpun.polarecg.dsp.summary.LabelledBeat
+import com.punkunpun.polarecg.dsp.summary.applyOwnerLabels
 import com.punkunpun.polarecg.dsp.summary.MinuteSummary
 import com.punkunpun.polarecg.dsp.summary.RangeSummary
 import com.punkunpun.polarecg.dsp.summary.niceTicks
@@ -67,11 +69,21 @@ fun rangeBounds(range: SummaryRange, nowMs: Long, zone: ZoneId = ZoneId.systemDe
     }
 }
 
-/** What the summary shows for [from, to): the rows of the long-term tables, summed up. Room runs the reads off the UI thread. */
-internal suspend fun loadSummary(dao: SummaryDao, from: Long, to: Long): RangeSummary {
-    val minutes = dao.minutesBetween(from, to).map {
+/**
+ * What the summary shows for [from, to): the rows of the long-term tables, summed up, with the owner's labels preferred over the
+ * automatic class (a relabelled beat counts as the owner's class; "?" and undone keep the automatic one). Beats already pruned
+ * from the `beat` table cannot be corrected, those minutes keep the automatic counts. Room runs the reads off the UI thread.
+ */
+internal suspend fun loadSummary(database: PolarDatabase, from: Long, to: Long): RangeSummary {
+    val dao = database.summaryDao()
+    val stored = dao.minutesBetween(from, to).map {
         MinuteSummary(it.minuteUtcMs, it.beats, it.n, it.s, it.v, it.q, it.vDoubt, it.hrMeanBpm, it.hrMinBpm, it.hrMaxBpm, it.coverage, it.motionMg)
     }
+    val labels = database.labelDao().currentBetween(from, to).associate { it.beatUtcMs to it.label }
+    val minutes = if (labels.isEmpty()) stored else applyOwnerLabels(
+        stored,
+        database.beatDao().autoOfLabelled(from, to).mapNotNull { a -> labels[a.utcMs]?.let { LabelledBeat(a.utcMs, a.cls, a.vDoubt, it) } },
+    )
     val hrv = dao.hrvBetween(from, to).map { HrvPoint(it.startUtcMs, it.valid, it.rmssdMs, it.sdnnMs) }
     return summarizeRange(minutes, hrv, from, to)
 }
@@ -99,7 +111,7 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
 
     LaunchedEffect(range, rows) {
         val (from, to) = rangeBounds(range, System.currentTimeMillis())
-        summary = withContext(Dispatchers.IO) { loadSummary(dao, from, to) }
+        summary = withContext(Dispatchers.IO) { loadSummary(app.database, from, to) }
     }
 
     Column(

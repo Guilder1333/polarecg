@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.Flow
 /** A class and how many beats have it, from a `GROUP BY` query. */
 data class ClassCount(val cls: String, val n: Int)
 
+/** The detector's class of a beat the owner has labelled (see [BeatDao.autoOfLabelled]). */
+data class AutoClass(val utcMs: Long, val cls: String, val vDoubt: Boolean)
+
 /**
  * The queries on the `beat` table. Room writes the code behind this interface at build time and checks the
  * SQL then, so a wrong column name is a build error. `suspend` functions run off the UI thread; a function
@@ -33,6 +36,13 @@ interface BeatDao {
 
     @Query("SELECT cls, COUNT(*) AS n FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs GROUP BY cls")
     suspend fun countByClass(fromUtcMs: Long, toUtcMs: Long): List<ClassCount>
+
+    /** The automatic class of every beat that has a label row in the range (the summary applies the owner's labels on top). */
+    @Query(
+        "SELECT utcMs, cls, vDoubt FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs " +
+            "AND utcMs IN (SELECT beatUtcMs FROM label WHERE beatUtcMs >= :fromUtcMs AND beatUtcMs < :toUtcMs)",
+    )
+    suspend fun autoOfLabelled(fromUtcMs: Long, toUtcMs: Long): List<AutoClass>
 
     /** Blocking (not `suspend`): for the export, which already runs off the UI thread. */
     @Query("SELECT * FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs ORDER BY utcMs")

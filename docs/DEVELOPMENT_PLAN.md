@@ -608,7 +608,7 @@ Details in §7.5–7.6.
   normal stop saves the minute and window still open, a kill loses the open one (as the unflushed beats); after Stop and Start within
   one minute or window the fuller row wins. `summary/SummaryScreen.kt` (button **Summary** on the start screen): ranges Last 24 h /
   Today / Last night (22:00-08:00 local), beats and S/V burden, questionable V, HR min/mean/max, median RMSSD and SDNN, share of the
-  period recorded, bar charts of S and V burden and of RMSSD per hour. **Not done:** the longest run (needs the `event` table, P5.4),
+  period recorded, bar charts of S and V burden and of RMSSD per hour. **The owner's labels win over the automatic class** (`loadSummary` applies the newest label per beat to the minute counts with `applyOwnerLabels`, `dsp/summary/OwnerLabels.kt`; "?" and undone keep the automatic class; beats already pruned cannot be corrected). **Not done:** the longest run (needs the `event` table, P5.4),
   burden per action on the phone, a chart style the owner has looked at. **Done when:** after a recorded day the screen shows
   numbers that match `report.md` / `minutes.csv` of the same session (counts exactly, HR and burden to rounding), also for "Last 24 h"
   after more than one session.)
