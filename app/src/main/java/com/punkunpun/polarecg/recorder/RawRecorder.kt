@@ -6,7 +6,9 @@ import com.punkunpun.polarecg.dsp.raw.RawNames
 import com.punkunpun.polarecg.dsp.raw.RawStream
 import com.punkunpun.polarecg.dsp.raw.RawWriter
 import com.punkunpun.polarecg.dsp.raw.archiveSegment
+import com.punkunpun.polarecg.dsp.time.ClockSeed
 import com.punkunpun.polarecg.dsp.time.TimeMapper
+import com.punkunpun.polarecg.dsp.time.clockSeedFrom
 import com.punkunpun.polarecg.log.ConnectionLog
 import com.punkunpun.polarecg.log.LogType
 import com.punkunpun.polarecg.log.formatJst
@@ -168,6 +170,16 @@ class RawRecorder(
         } catch (e: Exception) {
             Log.e(TAG, "could not write $TIME_MAP_FILE", e)
         }
+    }
+
+    /**
+     * The clock relation the previous run of this session ended with, if the app was restarted less than a minute after it (see
+     * [clockSeedFrom]); null for a new session. Read after [start]; hand it to `LiveProcessor.start`.
+     */
+    fun clockSeed(): ClockSeed? {
+        if (!session.resumed) return null
+        val file = File(session.dir, TIME_MAP_FILE)
+        return runCatching { clockSeedFrom(file.readLines(), System.currentTimeMillis()) }.getOrNull()
     }
 
     private fun newSessionMeta(startMs: Long): JSONObject = JSONObject()

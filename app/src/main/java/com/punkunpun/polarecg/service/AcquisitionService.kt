@@ -86,7 +86,7 @@ class AcquisitionService : Service() {
         if (recorder == null && app.deviceStore.rawRecording) {
             recorder = RawRecorder(app.sessionsDir, app.polarConnection, deviceId, appVersion(), app.connectionLog).also { it.start() }
         }
-        app.liveProcessor.start() // no-op if already running (START_STICKY restarts call this again)
+        app.liveProcessor.start(clockSeed = recorder?.clockSeed()) // re-anchors the clock after a quick restart; no-op if already running (START_STICKY restarts call this again)
         app.beatWriter.start(app.liveProcessor.beats)
         app.eventWriter.start(app.liveProcessor.events)
         watchStatusForNotification()

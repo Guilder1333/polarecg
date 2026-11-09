@@ -6,6 +6,7 @@ import com.punkunpun.polarecg.dsp.classify.BeatClass
 import com.punkunpun.polarecg.dsp.event.EventRecorder
 import com.punkunpun.polarecg.dsp.event.RecordedEvent
 import com.punkunpun.polarecg.dsp.live.LivePipeline
+import com.punkunpun.polarecg.dsp.time.ClockSeed
 import com.punkunpun.polarecg.polar.AccFrame
 import com.punkunpun.polarecg.polar.EcgFrame
 import com.punkunpun.polarecg.polar.PolarConnection
@@ -90,9 +91,9 @@ class LiveProcessor(private val connection: PolarConnection) {
      * and with back-pressure, so that a replay at any speed gives the same beats as `analyze`.
      */
     @Synchronized
-    fun start(fromConnection: Boolean = true) {
+    fun start(fromConnection: Boolean = true, clockSeed: ClockSeed? = null) {
         if (scope != null) return
-        val pipeline = LivePipeline()
+        val pipeline = LivePipeline(clockSeed = clockSeed)
         val recorder = EventRecorder(pipeline.history) // looks at the pipeline's beats and its last minutes of ECG
         stats = LiveStats()
         _stats.value = stats

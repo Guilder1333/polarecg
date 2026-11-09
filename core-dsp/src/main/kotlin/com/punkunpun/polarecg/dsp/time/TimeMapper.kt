@@ -23,6 +23,21 @@ const val POLAR_EPOCH_UNIX_MS = 946_684_800_000L
 /** The offset between the two clocks moved suddenly by [deltaMs] (positive = phone-sensor grew). */
 data class ClockJump(val connection: Int, val phoneTimeMs: Long, val deltaMs: Long)
 
+/** The clock relation a previous run ended with: phone UTC [phoneMs] at which the offset (phone - sensor, ms) was [offsetMs]. */
+data class ClockSeed(val phoneMs: Long, val offsetMs: Long)
+
+/**
+ * The seed from the last row of `timemap.csv` ([lines] include the header: `connection,phoneUtcMs,sensorNs,offsetMs,kind`), or null if
+ * there is none, the row is damaged or older than [maxAgeMs] at [nowMs] (a longer gap lets the two clocks drift apart by more than
+ * the first frame's delay is worth).
+ */
+fun clockSeedFrom(lines: List<String>, nowMs: Long, maxAgeMs: Long = 60_000): ClockSeed? {
+    val f = lines.asReversed().firstOrNull { it.isNotBlank() }?.split(',') ?: return null
+    val phoneMs = f.getOrNull(1)?.toLongOrNull() ?: return null
+    val offsetMs = f.getOrNull(3)?.toLongOrNull() ?: return null
+    return if (nowMs - phoneMs in 0..maxAgeMs) ClockSeed(phoneMs, offsetMs) else null
+}
+
 class TimeMapper(
     /** Offset changes bigger than this are reported as jumps. Normal jitter is a few hundred ms. */
     private val jumpThresholdMs: Long = 1_000,
@@ -81,6 +96,18 @@ class TimeMapper(
                 null
             }
         }
+    }
+
+    /**
+     * Re-anchor after the app was killed and restarted while the strap kept running: start from the offset the previous run had
+     * ([ClockSeed]) instead of from the first frame, which arrives late by an unknown delay (52 ms on the night of 2026-11-08, and the whole
+     * stretch inherited it). A whole-recording replay never loses its state, so this makes live times equal those of `analyze`. The seed is
+     * an ordinary sample of the window: a real clock change is still caught as a jump, and it expires after [windowMs].
+     */
+    @Synchronized
+    fun seed(seed: ClockSeed) {
+        if (connection < 0) startConnection()
+        if (estimate == null) accept(seed.phoneMs, seed.offsetMs)
     }
 
     /** Converts a sensor timestamp to phone UTC ms, or null before the first [observe]. */

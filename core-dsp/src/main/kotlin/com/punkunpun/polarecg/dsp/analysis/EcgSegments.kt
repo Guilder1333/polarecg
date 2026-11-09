@@ -2,6 +2,7 @@ package com.punkunpun.polarecg.dsp.analysis
 
 import com.punkunpun.polarecg.dsp.ECG_SAMPLE_RATE_HZ
 import com.punkunpun.polarecg.dsp.raw.RawRecord
+import com.punkunpun.polarecg.dsp.time.ClockSeed
 import com.punkunpun.polarecg.dsp.time.TimeMapper
 import kotlin.math.abs
 
@@ -115,6 +116,9 @@ class SegmentTracker {
     /** Phone UTC of the first sample of the segment the latest frame belongs to. */
     var segmentStartUtcMs = 0L
         private set
+
+    /** Starts the clock estimate from a previous run's offset, see [TimeMapper.seed]. */
+    fun seed(seed: ClockSeed) = mapper.seed(seed)
 
     /** Adds the next frame (not an empty one); true if it starts a new segment. */
     fun add(sensorTimeNs: Long, phoneTimeMs: Long, sampleCount: Int): Boolean {

@@ -3,6 +3,7 @@ package com.punkunpun.polarecg.dsp.live
 import com.punkunpun.polarecg.dsp.analysis.Beat
 import com.punkunpun.polarecg.dsp.analysis.SegmentClock
 import com.punkunpun.polarecg.dsp.analysis.SegmentTracker
+import com.punkunpun.polarecg.dsp.time.ClockSeed
 import com.punkunpun.polarecg.dsp.beat.BeatFeatureExtractor
 import com.punkunpun.polarecg.dsp.beat.BeatFeatures
 import com.punkunpun.polarecg.dsp.beat.BeatInput
@@ -38,10 +39,12 @@ class LivePipeline(
     private val qualityConfig: QualityConfig = QualityConfig(),
     /** How much accelerometer history is kept; a live pipeline needs seconds, `analyzeEcg` wants it all (see [motionBins]). */
     motionRetainMs: Long = 10 * 60_000L,
+    /** The clock offset a previous run of the same session ended with (app restart), or null. */
+    clockSeed: ClockSeed? = null,
 ) {
     private class Pending(val position: Double, val segment: Int, val quality: BeatQuality, val snippet: DoubleArray?)
 
-    private val tracker = SegmentTracker()
+    private val tracker = SegmentTracker().also { t -> clockSeed?.let(t::seed) }
     private val motion = MotionStream(retainMs = motionRetainMs)
     // one extractor for the whole run: its normal-beat template carries over gaps (P4.2)
     private val extractor = BeatFeatureExtractor()

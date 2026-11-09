@@ -1,7 +1,9 @@
 package com.punkunpun.polarecg.dsp
 
 import com.punkunpun.polarecg.dsp.time.POLAR_EPOCH_UNIX_MS
+import com.punkunpun.polarecg.dsp.time.ClockSeed
 import com.punkunpun.polarecg.dsp.time.TimeMapper
+import com.punkunpun.polarecg.dsp.time.clockSeedFrom
 import com.punkunpun.polarecg.dsp.time.sampleUtcMs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -98,5 +100,37 @@ class TimeMapperTest {
         assertEquals(t0, sampleUtcMs(t0, 0, 130))
         assertEquals(t0 + 1000, sampleUtcMs(t0, 130, 130))
         assertEquals(t0 + 7, sampleUtcMs(t0, 1, 130)) // 7.69 ms, truncated
+    }
+
+    @Test
+    fun aSeedFromTheLastRunBeatsTheFirstDelayedFrame() {
+        val skew = 5_000L
+        val m = TimeMapper()
+        m.seed(ClockSeed(t0 - 1_500, skew + 5)) // the previous run's best estimate: 5 ms of delay
+        m.observe(sensorNs(t0, skew), t0 + 56) // the first frame after the restart arrives 56 ms late
+        assertEquals(skew + 5, m.offsetMs()) // without the seed it would be skew + 56
+    }
+
+    @Test
+    fun aSeedDoesNotHideARealClockChange() {
+        val m = TimeMapper()
+        m.seed(ClockSeed(t0 - 1_500, 5_000))
+        val jump = m.observe(sensorNs(t0, 1_000), t0 + 10) // the offset dropped by 4 s: reported at once
+        assertNotNull(jump)
+    }
+
+    @Test
+    fun theSeedIsTheLastTimemapRowAndOnlyIfRecent() {
+        val lines = listOf(
+            "connection,phoneUtcMs,sensorNs,offsetMs,kind",
+            "0,${t0 - 90_000},1,111,start",
+            "0,${t0 - 30_000},2,222,periodic",
+            "",
+        )
+        assertEquals(ClockSeed(t0 - 30_000, 222), clockSeedFrom(lines, t0))
+        assertNull(clockSeedFrom(lines, t0 + 40_000)) // 70 s old: the clocks may have drifted apart
+        assertNull(clockSeedFrom(lines, t0 - 40_000)) // the phone clock went back
+        assertNull(clockSeedFrom(lines.take(1), t0)) // header only
+        assertNull(clockSeedFrom(listOf("0,abc,2,x,start"), t0)) // damaged
     }
 }
