@@ -72,6 +72,11 @@ data class ClassifierConfig(
      * - at least [ssLateness] times the reference (a skipped beat makes about 2.0), AND
      * - at least [ssLengthening] times the interval before that (`BeatFeatures.shortening`: the mirror of [sShortening]), AND
      * - followed by an interval of at most [ssMaxNextRatio] times the reference (the rhythm is back: the mirror of the pause test of S).
+     * - preceded by a NORMAL interval (at least [ssMinPrevRatio] times the reference; prematurity / shortening). After a short interval
+     *   (the early beat before it, an S) the long one is mostly that beat's compensatory pause, so the base is not the short interval
+     *   but the reference: the two together must exceed [ssMinPairRatio] times two reference intervals (a pause adds up to about 1.0-1.15,
+     *   a skip after an S to 1.33 or more), and the short one must be at least [ssMinShortRatio] of the reference (shorter is a false
+     *   beat, e.g. from baseline drift). Owner's "blocked" gaps: previous interval 0.86-1.14; the flagged beats he called N: 0.66 (pair 1.13) and 0.40.
      * The last two tell a skipped beat from a heart rate that slowed down (reference lags behind). Measured on the 32 gap items the
      * owner labelled "blocked early beat" and 646 labelled "nothing" (10 nights, weighted): the ratio alone gives precision 45 % at 1.7;
      * the three together 97 % / recall 99 % (tuned on those same labels, so a little optimistic).
@@ -79,6 +84,9 @@ data class ClassifierConfig(
     val ssLateness: Double = 1.6,
     val ssLengthening: Double = 1.5,
     val ssMaxNextRatio: Double = 1.3,
+    val ssMinPrevRatio: Double = 0.8,
+    val ssMinPairRatio: Double = 1.3,
+    val ssMinShortRatio: Double = 0.5,
     /**
      * ...and the interval after it is not a LONG one, i.e. a skipped beat: the mirror of the short-interval test. A premature beat
      * is followed by a pause that makes up for it (compensation = (rrPre + rrPost) / (2 rrRef) is about 1, lower for many PACs);
@@ -153,7 +161,10 @@ class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) 
         val late = f.prematurity?.let { it >= config.ssLateness } == true
         val lengthened = f.shortening?.let { it >= config.ssLengthening } == true
         val rhythmBack = f.rrPostMs != null && f.rrRefMs != null && f.rrRefMs > 0 && f.rrPostMs / f.rrRefMs <= config.ssMaxNextRatio
-        return if (late && lengthened && rhythmBack && steady) BeatClass.SUPPRESSED else BeatClass.NORMAL
+        val prevRatio = if (f.prematurity != null && f.shortening != null && f.shortening > 0) f.prematurity / f.shortening else null // previous interval / reference
+        val prevNormal = prevRatio != null && f.prematurity != null &&
+            (prevRatio >= config.ssMinPrevRatio || (prevRatio >= config.ssMinShortRatio && (prevRatio + f.prematurity) / 2 >= config.ssMinPairRatio))
+        return if (late && lengthened && rhythmBack && prevNormal && steady) BeatClass.SUPPRESSED else BeatClass.NORMAL
     }
 
     /**

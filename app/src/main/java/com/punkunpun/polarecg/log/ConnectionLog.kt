@@ -40,6 +40,9 @@ enum class LogType {
 
     /** Sensor clock and phone clock suddenly disagree differently than before (P1.8). Not a gap. */
     CLOCK_JUMP,
+
+    /** Measurement (P1.8 follow-up): the strap's own clock read, set to phone UTC and read again; see `measureStrapClock`. */
+    TIME_SYNC,
 }
 
 data class LogEvent(val timeMs: Long, val type: LogType, val detail: String? = null)
@@ -97,7 +100,7 @@ fun computeGaps(events: List<LogEvent>): List<Gap> {
                 close(e.timeMs)
                 streaming = false
             }
-            LogType.CONNECTING, LogType.CONNECTED, LogType.CLOCK_JUMP -> Unit
+            LogType.CONNECTING, LogType.CONNECTED, LogType.CLOCK_JUMP, LogType.TIME_SYNC -> Unit
         }
         lastTimeMs = e.timeMs
     }

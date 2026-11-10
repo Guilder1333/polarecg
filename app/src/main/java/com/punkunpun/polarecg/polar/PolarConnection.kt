@@ -36,6 +36,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "PolarConnection"
 
+/** Turns the strap clock measurement ([PolarConnection.measureStrapClock]) on. It SETS the strap's clock at every connection. */
+private const val MEASURE_STRAP_CLOCK = true
+private const val CLOCK_CALL_TIMEOUT_MS = 4_000L
+
 /** ECG: the H10 only supports 130 Hz / 14 bit. */
 internal const val ECG_RATE_HZ = 130
 internal const val ECG_RESOLUTION_BITS = 14
@@ -312,6 +316,7 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
         // the three streams as its children. Cancelling it (stopStreams) cancels them all, and
         // `isActive` on it tells us "streams are running or starting".
         streamJobs = listOf(scope.launch {
+            if (MEASURE_STRAP_CLOCK) measureStrapClock(id)
             clearStaleMeasurements(id)
             launchStream("ECG") {
                 api.startEcgStreaming(id, ecgSettings).collect { data ->
@@ -375,6 +380,50 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
             }
             setState(ConnectionState.Streaming)
         })
+    }
+
+    /**
+     * Measurement, not a feature: how well does the strap's own clock take a time from the phone? Reads the strap's time, sets it to
+     * the phone's UTC, reads it again, and logs (TIME_SYNC) the phone clock around every call. "set error" = what the strap says minus
+     * what the phone said at the middle of the read, so it includes half the round trip: the two are logged to tell them apart. A
+     * second set with .500 s tests whether sub-second values are kept. Whether the ECG timestamps then follow the new time shows in
+     * `timemap.csv`: the offset is then near the BLE delay instead of 7.85 years. Runs before the streams start, so no stream sees the
+     * clock step. Any failure is logged and ignored. Remove (or keep off) when the question is answered.
+     */
+    private suspend fun measureStrapClock(id: String) {
+        val utc = java.time.ZoneOffset.UTC
+        suspend fun read(): Triple<Long, Long, java.time.LocalDateTime?> {
+            val a = System.currentTimeMillis()
+            val t = withTimeoutOrNull(CLOCK_CALL_TIMEOUT_MS) { api.getLocalTime(id) }
+            return Triple(a, System.currentTimeMillis(), t)
+        }
+        fun errMs(r: Triple<Long, Long, java.time.LocalDateTime?>): String {
+            val t = r.third ?: return "none"
+            val strap = t.toInstant(utc).toEpochMilli()
+            return "${strap} (strap - phone mid = ${strap - (r.first + r.second) / 2} ms, rtt ${r.second - r.first} ms)"
+        }
+        try {
+            val before = read()
+            val s1a = System.currentTimeMillis()
+            val ok1 = withTimeoutOrNull(CLOCK_CALL_TIMEOUT_MS) { api.setLocalTime(id, java.time.LocalDateTime.now(utc)); true } == true
+            val s1b = System.currentTimeMillis()
+            val after = read()
+            // sub-second test: set a time that ends in .500 and see what comes back
+            val half = java.time.LocalDateTime.now(utc).withNano(500_000_000)
+            val s2a = System.currentTimeMillis()
+            val ok2 = withTimeoutOrNull(CLOCK_CALL_TIMEOUT_MS) { api.setLocalTime(id, half); true } == true
+            val s2b = System.currentTimeMillis()
+            val afterHalf = read()
+            log.log(
+                LogType.TIME_SYNC,
+                "before ${errMs(before)}; set1 ok=$ok1 took ${s1b - s1a} ms; after ${errMs(after)}; " +
+                    "set2(.500) ok=$ok2 took ${s2b - s2a} ms; afterHalf ${errMs(afterHalf)}",
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.log(LogType.TIME_SYNC, "failed: ${e.javaClass.simpleName}: ${e.message}")
+        }
     }
 
     /**

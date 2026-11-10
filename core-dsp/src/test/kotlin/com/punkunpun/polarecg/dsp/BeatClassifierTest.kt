@@ -148,6 +148,15 @@ class BeatClassifierTest {
         assertTrue(BeatClass.isPremature("S") && BeatClass.isPremature("SS") && !BeatClass.isPremature("N"))
     }
 
+    @Test fun aLongIntervalAfterAShortOneIsAPauseNotASkip() {
+        // S (0.66) then its pause: prematurity 1.6, shortening 2.4 -> the interval before was 0.67 of the reference
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 1.6, shortening = 2.4)))
+        assertEquals(BeatClass.SUPPRESSED, cls(features(prematurity = 1.9, shortening = 1.9))) // before: a normal interval
+        // a skip right after an S: interval before 0.67, this one 2.0 -> together 1.33 of two intervals, more than a pause makes up
+        assertEquals(BeatClass.SUPPRESSED, cls(features(prematurity = 2.0, shortening = 3.0)))
+        assertEquals(BeatClass.NORMAL, cls(features(prematurity = 3.0, shortening = 7.5))) // before: 0.4, a false beat
+    }
+
     @Test fun aGradualSpeedUpIsNotPremature() {
         // 5 beats in a row at 0.8 of the reference, but each only 0.96 of the one before: the rate changed
         assertEquals(BeatClass.NORMAL, cls(features(prematurity = 0.78, shortening = 0.96)))
