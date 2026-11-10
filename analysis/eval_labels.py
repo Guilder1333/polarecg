@@ -22,7 +22,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from label_data import current_labels, read_label_rows, read_queue  # noqa: E402
 
-CLASSES = ("N", "S", "V")
+CLASSES = ("N", "S", "SS", "V")      # the classes a label can agree with
+S_FAMILY = ("S", "SS")                # SS (a beat after a skipped one) adds up to S in the counts
 
 
 def current_classes(analysis: Path) -> dict[int, str]:
@@ -58,13 +59,15 @@ def confusion(pairs: list[tuple], weighted: bool = True) -> dict[tuple[str, str]
     return dict(out)
 
 
-def se_ppv(conf: dict[tuple[str, str], float], cls: str) -> tuple[float | None, float | None]:
-    """Sensitivity and positive predictive value of ``cls`` against the owner's N/S/V labels.
+def se_ppv(conf: dict[tuple[str, str], float], cls: str | tuple[str, ...]) -> tuple[float | None, float | None]:
+    """Sensitivity and positive predictive value of ``cls`` against the owner's labels. ``cls`` is one class
+    or a family of classes (``S_FAMILY``: S and SS count as one, as they do in the summary).
     Se = our cls among the beats the owner called cls; +P = owner called it cls among our cls beats
-    that the owner judged (not ? or Q)."""
-    tp = conf.get((cls, cls), 0.0)
-    owner_cls = sum(w for (o, l), w in conf.items() if l == cls)
-    ours_judged = sum(w for (o, l), w in conf.items() if o == cls and l in CLASSES)
+    that the owner judged (N, S, SS or V; not ?, Q or X)."""
+    fam = (cls,) if isinstance(cls, str) else cls
+    tp = sum(w for (o, l), w in conf.items() if o in fam and l in fam)
+    owner_cls = sum(w for (o, l), w in conf.items() if l in fam)
+    ours_judged = sum(w for (o, l), w in conf.items() if o in fam and l in CLASSES)
     return (tp / owner_cls if owner_cls else None, tp / ours_judged if ours_judged else None)
 
 
@@ -123,18 +126,20 @@ def report(pairs: list[tuple], title: str) -> str:
     lines.append(f"labelled beats: {len(beats)}  (unsure {sum(1 for _, l in beats if l == '?')}, "
                  f"Q {sum(1 for _, l in beats if l == 'Q')})")
     conf, raw = confusion(pairs), confusion(pairs, weighted=False)
-    labels = ("N", "S", "V", "Q", "?")
+    labels = ("N", "S", "SS", "V", "Q", "X", "?")
     lines.append("")
     lines.append("weighted confusion (rows: our class, columns: your label; counts of beats of the night)")
     lines.append("our \\ you  " + "".join(f"{l:>10}" for l in labels) + "   | raw items")
-    for o in ("N", "S", "V", "Q"):
+    for o in ("N", "S", "SS", "V", "Q"):
         row = "".join(f"{conf.get((o, l), 0.0):10.0f}" for l in labels)
         lines.append(f"{o:>9}  {row}   | " + " ".join(f"{int(raw.get((o, l), 0)):>4}" for l in labels))
     lines.append("")
-    for cls in ("V", "S"):
+    for name, cls in (("V", "V"), ("S+SS", S_FAMILY), ("S", "S"), ("SS", "SS")):
         se, ppv = se_ppv(conf, cls)
-        n_raw = sum(int(n) for (o, l), n in raw.items() if l == cls)
-        lines.append(f"{cls}: Se {_pct(se)}   +P {_pct(ppv)}   ({n_raw} items labelled {cls})")
+        fam = (cls,) if isinstance(cls, str) else cls
+        n_raw = sum(int(n) for (o, l), n in raw.items() if l in fam)
+        lines.append(f"{name + ':':6s} Se {_pct(se)}   +P {_pct(ppv)}   ({n_raw} items labelled {name})"
+                     + ("   <- as counted in the summary" if name == "S+SS" else ""))
     gaps = gap_summary(pairs)
     if gaps:
         lines.append("")
@@ -158,7 +163,7 @@ def plot(pairs: list[tuple], title: str, path: Path) -> None:
     from matplotlib.dates import DateFormatter
     beats = [(q, l) for q, l in pairs if q.kind == "BEAT"]
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(14, 5), gridspec_kw={"width_ratios": [1, 2]})
-    rows, cols = ("N", "S", "V", "Q"), ("N", "S", "V", "Q", "?")
+    rows, cols = ("N", "S", "SS", "V", "Q"), ("N", "S", "SS", "V", "Q", "X", "?")
     conf = confusion(pairs)
     m = [[conf.get((o, l), 0.0) for l in cols] for o in rows]
     a1.imshow(m, cmap="Blues")

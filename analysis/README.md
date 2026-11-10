@@ -18,6 +18,7 @@ Contents now:
 | `test_view_ecg.py` | Offline tests of the viewer's data side |
 | `label_beats.py` | Label your own beats (or practise on MIT-BIH with `--gallery`), see below |
 | `label_data.py`, `eval_labels.py` | Queue / label files of the labeling tool; our class against your labels |
+| `test_eval_labels.py` | Tests of the S / SS / S+SS figures of `eval_labels.py` |
 | `test_label_data.py`, `test_label_beats.py` | Tests of the labeling tool |
 | `premature_beats.py` | Rough PAC-like / PVC-like counts per hour, before P4 (see below) |
 | `test_premature_beats.py` | Tests of the rough count |
