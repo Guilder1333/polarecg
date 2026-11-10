@@ -10,7 +10,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -44,7 +54,11 @@ import com.punkunpun.polarecg.dsp.summary.RangeSummary
 import com.punkunpun.polarecg.dsp.summary.niceTicks
 import com.punkunpun.polarecg.dsp.summary.summarizeRange
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -88,6 +102,20 @@ internal suspend fun loadSummary(database: PolarDatabase, from: Long, to: Long):
     return summarizeRange(minutes, hrv, from, to)
 }
 
+/** [from, to) of one local calendar day; today's day ends at [nowMs]. */
+fun dayBounds(day: LocalDate, nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): Pair<Long, Long> {
+    val start = day.atStartOfDay(zone).toInstant().toEpochMilli()
+    val end = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    return start to minOf(end, maxOf(nowMs, start))
+}
+
+/** The local calendar days that hold at least one of the [quarterHours] (UTC ms / 900 000) of `quarterHoursWithData`. */
+fun daysWithData(quarterHours: List<Long>, zone: ZoneId = ZoneId.systemDefault()): Set<LocalDate> =
+    quarterHours.mapTo(HashSet()) { Instant.ofEpochMilli(it * 900_000L).atZone(zone).toLocalDate() }
+
+/** The date picker works in UTC: a picked day is the UTC midnight of that date; this is the calendar date it stands for. */
+fun pickerDate(utcMillis: Long): LocalDate = Instant.ofEpochMilli(utcMillis).atZone(ZoneOffset.UTC).toLocalDate()
+
 internal fun percent(v: Double?) = v?.let { String.format(Locale.ROOT, "%.2f %%", it) } ?: "-"
 internal fun one(v: Double?) = v?.let { String.format(Locale.ROOT, "%.1f", it) } ?: "-"
 
@@ -104,13 +132,21 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
         return
     }
     var range by rememberSaveable { mutableStateOf(SummaryRange.LAST_24H) }
+    // A chosen calendar day (epoch day) replaces the range chips until a chip is tapped again.
+    var pickedDay by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pickingDay by rememberSaveable { mutableStateOf(false) }
+    var daysWithData by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
     var summary by remember { mutableStateOf<RangeSummary?>(null) }
     val dao = app.database.summaryDao()
     // A new row in the table (every minute while recording) makes the numbers load again.
     val rows by dao.observeMinuteCount().collectAsState(initial = 0)
 
-    LaunchedEffect(range, rows) {
-        val (from, to) = rangeBounds(range, System.currentTimeMillis())
+    LaunchedEffect(rows) {
+        daysWithData = withContext(Dispatchers.IO) { daysWithData(dao.quarterHoursWithData()) }
+    }
+    LaunchedEffect(range, pickedDay, rows) {
+        val now = System.currentTimeMillis()
+        val (from, to) = pickedDay?.let { dayBounds(LocalDate.ofEpochDay(it), now) } ?: rangeBounds(range, now)
         summary = withContext(Dispatchers.IO) { loadSummary(app.database, from, to) }
     }
 
@@ -125,9 +161,19 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
                 SummaryRange.TODAY to R.string.sum_today,
                 SummaryRange.LAST_NIGHT to R.string.sum_night,
             )) {
-                FilterChip(selected = range == r, onClick = { range = r }, label = { Text(stringResource(label)) })
+                FilterChip(selected = pickedDay == null && range == r, onClick = { pickedDay = null; range = r }, label = { Text(stringResource(label)) })
+            }
+            IconButton(onClick = { pickingDay = true }) {
+                Icon(Icons.Filled.DateRange, contentDescription = stringResource(R.string.sum_pick_day))
             }
         }
+        pickedDay?.let { Text(LocalDate.ofEpochDay(it).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)), style = MaterialTheme.typography.titleMedium) }
+        if (pickingDay) DayPickerDialog(
+            days = daysWithData,
+            selected = pickedDay?.let(LocalDate::ofEpochDay),
+            onPick = { pickedDay = it.toEpochDay(); pickingDay = false },
+            onDismiss = { pickingDay = false },
+        )
         val s = summary
         if (s == null || s.beats == 0) {
             Text(stringResource(R.string.sum_empty))
@@ -153,6 +199,30 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
             OutlinedButton(onClick = onBack) { Text(stringResource(R.string.sum_back)) }
         }
     }
+}
+
+/** Calendar dialog: only the days with recorded data can be chosen, the others are greyed out. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DayPickerDialog(days: Set<LocalDate>, selected: LocalDate?, onPick: (LocalDate) -> Unit, onDismiss: () -> Unit) {
+    val years = days.map { it.year }
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = selected?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),
+        yearRange = (years.minOrNull() ?: LocalDate.now().year)..(years.maxOrNull() ?: LocalDate.now().year),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long) = pickerDate(utcTimeMillis) in days
+            override fun isSelectableYear(year: Int) = years.contains(year)
+        },
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(enabled = state.selectedDateMillis != null, onClick = { state.selectedDateMillis?.let { onPick(pickerDate(it)) } }) {
+                Text(stringResource(R.string.sum_ok))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.sum_cancel)) } },
+    ) { DatePicker(state = state) }
 }
 
 /** Width left of the bars for the value labels. */

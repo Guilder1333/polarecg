@@ -27,6 +27,13 @@ interface SummaryDao {
     @Query("SELECT * FROM hrv_window WHERE startUtcMs >= :fromUtcMs AND startUtcMs < :toUtcMs ORDER BY startUtcMs")
     suspend fun hrvBetween(fromUtcMs: Long, toUtcMs: Long): List<HrvEntity>
 
+    /**
+     * Which quarters of an hour (UTC ms / 900 000) have at least one minute row: the calendar greys out the days without data. Quarter
+     * hours rather than days, so the caller can place them on any time zone's calendar (some zones are 30 or 45 minutes off UTC).
+     */
+    @Query("SELECT DISTINCT minuteUtcMs / 900000 FROM minute_summary")
+    suspend fun quarterHoursWithData(): List<Long>
+
     /** Redraws the summary screen when new rows arrive. */
     @Query("SELECT COUNT(*) FROM minute_summary")
     fun observeMinuteCount(): Flow<Int>

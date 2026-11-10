@@ -136,6 +136,9 @@
     <string name="cmp_chart_hr">Mean heart rate per hour, bpm</string>
     <string name="cmp_chart_burden">S+V burden per hour, %%</string>
     <string name="sum_back">Back</string>
+    <string name="sum_pick_day">Pick a day</string>
+    <string name="sum_ok">OK</string>
+    <string name="sum_cancel">Cancel</string>
     <string name="live_title">Live ECG</string>
     <string name="live_hr">%1$d bpm</string>
     <string name="live_hr_none">– bpm</string>

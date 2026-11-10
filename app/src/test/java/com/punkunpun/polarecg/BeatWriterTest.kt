@@ -2,6 +2,7 @@ package com.punkunpun.polarecg
 
 import com.punkunpun.polarecg.dsp.analysis.Beat
 import com.punkunpun.polarecg.dsp.quality.BeatQuality
+import com.punkunpun.polarecg.storage.AutoClass
 import com.punkunpun.polarecg.storage.BeatDao
 import com.punkunpun.polarecg.storage.BeatEntity
 import com.punkunpun.polarecg.storage.BeatWriter
@@ -33,6 +34,8 @@ class BeatWriterTest {
         override fun observeCountSince(fromUtcMs: Long): Flow<Int> = emptyFlow()
         override fun byClass(fromUtcMs: Long, toUtcMs: Long, cls: String, limit: Int): List<BeatEntity> = emptyList()
         override fun earlyNormals(fromUtcMs: Long, toUtcMs: Long, maxPrematurity: Double, limit: Int): List<BeatEntity> = emptyList()
+        override fun beatAt(utcMs: Long): BeatEntity? = null
+        override suspend fun autoOfLabelled(fromUtcMs: Long, toUtcMs: Long): List<AutoClass> = emptyList()
     }
 
     private class FakeSummaryDao : SummaryDao {
@@ -44,6 +47,7 @@ class BeatWriterTest {
         override suspend fun hrvAt(startUtcMs: Long): HrvEntity? = windows[startUtcMs]
         override suspend fun minutesBetween(fromUtcMs: Long, toUtcMs: Long): List<MinuteEntity> = emptyList()
         override suspend fun hrvBetween(fromUtcMs: Long, toUtcMs: Long): List<HrvEntity> = emptyList()
+        override suspend fun quarterHoursWithData(): List<Long> = emptyList()
         override fun observeMinuteCount(): Flow<Int> = emptyFlow()
     }
 
