@@ -7,6 +7,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -75,11 +76,15 @@ fun BrowseRoute(
         val dao = app.database.beatDao()
         return if (kind == BrowseKind.EARLY_N) dao.earlyNormals(from, to, ClassifierConfig().sPrematurity, LIST_CAP) else dao.byClass(from, to, kind.key, LIST_CAP)
     }
+    // The windows of the beats around the open one, kept across Next / Previous (the screen below is rebuilt for every beat).
+    val clipCache = remember { ClipCache(scope, { ms -> loadBeatClip(app, ms) }) }
     if (openBeatMs != 0L) {
         BrowseWindowScreen(
             app, beatUtcMs = openBeatMs, onBack = { openBeatMs = 0L },
             nextBeatOf = { ms -> browseList().firstOrNull { it.utcMs > ms }?.utcMs },
             prevBeatOf = { ms -> browseList().lastOrNull { it.utcMs < ms }?.utcMs },
+            browseList = { browseList().map { it.utcMs } },
+            cache = clipCache,
             onOpenBeat = { openBeatMs = it },
             modifier = modifier,
         )

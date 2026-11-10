@@ -222,6 +222,10 @@ fun BrowseWindowScreen(
     nextBeatOf: suspend (Long) -> Long?,
     /** The beat before this one in that list, or null at the start. */
     prevBeatOf: suspend (Long) -> Long?,
+    /** The ids of all beats of the list being browsed, in time order (for loading the neighbours ahead). */
+    browseList: suspend () -> List<Long>,
+    /** Windows of the beats near this one, loaded ahead (see [ClipCache]); kept by the caller across the beats. */
+    cache: ClipCache<EventClip>,
     onOpenBeat: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -239,13 +243,10 @@ fun BrowseWindowScreen(
     }
 
     LaunchedEffect(beatUtcMs) {
-        clip = withContext(Dispatchers.IO) {
-            val ecg = loadRawWindow(app.sessionsDir, beatUtcMs, WINDOW_HALF_MS) ?: return@withContext null
-            val beats = app.database.beatDao().beatsBetween(ecg.startUtcMs, ecg.endUtcMs + 1)
-                .map { ClipBeat(it.utcMs, it.cls, it.good, it.vDoubt, it.rescued) }
-            EventClip(ecg, beats, eventStartUtcMs = beatUtcMs, eventEndUtcMs = beatUtcMs)
-        }
+        clip = cache.open(beatUtcMs).await() // at once when Next or Previous had it ready
         loaded = true
+        // the window is on the screen: now start the next two beats and the previous one (and forget the others)
+        cache.prefetch(beatUtcMs, browseList)
     }
 
     Column(
@@ -297,3 +298,11 @@ fun BrowseWindowScreen(
 }
 
 private const val WINDOW_HALF_MS = 10_000L
+
+/** The window of [beatUtcMs] for the beat screen: raw ECG from the files and the beats of the database around it; null = no ECG. */
+internal fun loadBeatClip(app: PolarApp, beatUtcMs: Long): EventClip? {
+    val ecg = loadRawWindow(app.sessionsDir, beatUtcMs, WINDOW_HALF_MS) ?: return null
+    val beats = app.database.beatDao().beatsBetween(ecg.startUtcMs, ecg.endUtcMs + 1)
+        .map { ClipBeat(it.utcMs, it.cls, it.good, it.vDoubt, it.rescued) }
+    return EventClip(ecg, beats, eventStartUtcMs = beatUtcMs, eventEndUtcMs = beatUtcMs)
+}
