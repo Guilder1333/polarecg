@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -34,7 +38,9 @@ import com.punkunpun.polarecg.dsp.summary.RangeSummary
 import com.punkunpun.polarecg.dsp.summary.shiftedBy
 import com.punkunpun.polarecg.events.localTime
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -51,6 +57,9 @@ enum class CompareMode {
 
     /** The last 24 hours against the 24 hours before them. */
     LAST_24H,
+
+    /** Two days picked on the calendar. */
+    DAYS,
 }
 
 /** The two periods of a comparison, each [from, to). [previous] is shifted back by one day (or 24 hours) from [current]. */
@@ -62,12 +71,26 @@ class CompareBounds(val current: Pair<Long, Long>, val previous: Pair<Long, Long
  */
 fun compareBounds(mode: CompareMode, nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): CompareBounds = when (mode) {
     CompareMode.LAST_24H -> CompareBounds((nowMs - 24 * HOUR_MS) to nowMs, (nowMs - 48 * HOUR_MS) to (nowMs - 24 * HOUR_MS))
-    CompareMode.TODAY_YESTERDAY -> {
+    CompareMode.TODAY_YESTERDAY, CompareMode.DAYS -> { // DAYS has its own bounds ([compareDays]); without two days it shows today and yesterday
         val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
         val start = today.atStartOfDay(zone).toInstant().toEpochMilli()
         val yesterday = today.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         CompareBounds(start to nowMs, yesterday to (yesterday + (nowMs - start)))
     }
+}
+
+/**
+ * Two picked days: [first] is the "now" column, [second] the "before" one (the two can be in any order). When one of them is today
+ * (still running), both are cut to the same length, so the evening of today is not set against a whole day.
+ */
+fun compareDays(first: LocalDate, second: LocalDate, nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): CompareBounds {
+    val a = dayBounds(first, nowMs, zone)
+    val b = dayBounds(second, nowMs, zone)
+    val running = first.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() > nowMs ||
+        second.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() > nowMs
+    if (!running) return CompareBounds(a, b)
+    val length = minOf(a.second - a.first, b.second - b.first)
+    return CompareBounds(a.first to a.first + length, b.first to b.first + length)
 }
 
 /**
@@ -78,14 +101,25 @@ fun compareBounds(mode: CompareMode, nowMs: Long, zone: ZoneId = ZoneId.systemDe
 fun CompareScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifier) {
     BackHandler(onBack = onBack)
     var mode by rememberSaveable { mutableStateOf(CompareMode.TODAY_YESTERDAY) }
+    var firstDay by rememberSaveable { mutableStateOf<Long?>(null) }   // epoch days of the two picked days
+    var secondDay by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pickStep by rememberSaveable { mutableStateOf(0) }             // 0 = no dialog, 1 = picking the first day, 2 = the second
+    var daysWithData by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
     var bounds by remember { mutableStateOf<CompareBounds?>(null) }
     var current by remember { mutableStateOf<RangeSummary?>(null) }
     var previous by remember { mutableStateOf<RangeSummary?>(null) }
     val dao = app.database.summaryDao()
     val rows by dao.observeMinuteCount().collectAsState(initial = 0)
 
-    LaunchedEffect(mode, rows) {
-        val b = compareBounds(mode, System.currentTimeMillis())
+    LaunchedEffect(rows) {
+        daysWithData = withContext(Dispatchers.IO) { daysWithData(dao.quarterHoursWithData()) }
+    }
+    LaunchedEffect(mode, firstDay, secondDay, rows) {
+        val now = System.currentTimeMillis()
+        val a = firstDay
+        val s = secondDay
+        val b = if (mode == CompareMode.DAYS && a != null && s != null) compareDays(LocalDate.ofEpochDay(a), LocalDate.ofEpochDay(s), now)
+        else compareBounds(mode, now)
         val (cur, prev) = withContext(Dispatchers.IO) {
             loadSummary(app.database, b.current.first, b.current.second) to loadSummary(app.database, b.previous.first, b.previous.second)
         }
@@ -102,6 +136,23 @@ fun CompareScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = mode == CompareMode.TODAY_YESTERDAY, onClick = { mode = CompareMode.TODAY_YESTERDAY }, label = { Text(stringResource(R.string.cmp_today)) })
             FilterChip(selected = mode == CompareMode.LAST_24H, onClick = { mode = CompareMode.LAST_24H }, label = { Text(stringResource(R.string.cmp_24h)) })
+            IconButton(onClick = { pickStep = 1 }) { Icon(Icons.Filled.DateRange, contentDescription = stringResource(R.string.cmp_pick_days)) }
+        }
+        when (pickStep) {
+            1 -> DayPickerDialog(
+                days = daysWithData,
+                selected = firstDay?.let(LocalDate::ofEpochDay),
+                onPick = { firstDay = it.toEpochDay(); pickStep = 2 },
+                onDismiss = { pickStep = 0 },
+                title = stringResource(R.string.cmp_pick_first),
+            )
+            2 -> DayPickerDialog(
+                days = daysWithData,
+                selected = secondDay?.let(LocalDate::ofEpochDay),
+                onPick = { secondDay = it.toEpochDay(); mode = CompareMode.DAYS; pickStep = 0 },
+                onDismiss = { pickStep = 0 },
+                title = stringResource(R.string.cmp_pick_second),
+            )
         }
         val b = bounds
         val cur = current
@@ -111,7 +162,10 @@ fun CompareScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
             Text(stringResource(R.string.cmp_before_period, localTime(b.previous.first), localTime(b.previous.second)))
             if (cur.beats == 0 || prev.beats == 0) Text(stringResource(R.string.cmp_missing), color = MaterialTheme.colorScheme.error)
 
-            CompareTable(cur, prev)
+            val shortDay = DateTimeFormatter.ofPattern("MMM d")
+            val nowLabel = if (mode == CompareMode.DAYS) firstDay?.let { LocalDate.ofEpochDay(it).format(shortDay) } else null
+            val beforeLabel = if (mode == CompareMode.DAYS) secondDay?.let { LocalDate.ofEpochDay(it).format(shortDay) } else null
+            CompareTable(cur, prev, nowLabel ?: stringResource(R.string.cmp_now), beforeLabel ?: stringResource(R.string.cmp_before))
 
             // the earlier hours moved onto the current ones: same x for the same time of day
             val shift = ((b.current.first - b.previous.first).toDouble() / HOUR_MS).roundToLong() * HOUR_MS
@@ -135,9 +189,9 @@ private fun axisHours(fromMs: Long, toMs: Long): List<HourBucket> {
 }
 
 @Composable
-private fun CompareTable(cur: RangeSummary, prev: RangeSummary) {
+private fun CompareTable(cur: RangeSummary, prev: RangeSummary, nowHeader: String, beforeHeader: String) {
     Column {
-        TableRow(stringResource(R.string.cmp_metric), stringResource(R.string.cmp_now), stringResource(R.string.cmp_before), stringResource(R.string.cmp_change), bold = true)
+        TableRow(stringResource(R.string.cmp_metric), nowHeader, beforeHeader, stringResource(R.string.cmp_change), bold = true)
         TableRow(stringResource(R.string.cmp_beats), cur.beats.toString(), prev.beats.toString(), signed((cur.beats - prev.beats).toDouble(), 0))
         TableRow(stringResource(R.string.cmp_s), percent(cur.sPercent), percent(prev.sPercent), diff(cur.sPercent, prev.sPercent, 2, " pp"))
         TableRow(stringResource(R.string.cmp_v), percent(cur.vPercent), percent(prev.vPercent), diff(cur.vPercent, prev.vPercent, 2, " pp"))

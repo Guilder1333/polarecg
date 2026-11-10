@@ -204,7 +204,13 @@ fun SummaryScreen(app: PolarApp, onBack: () -> Unit, modifier: Modifier = Modifi
 /** Calendar dialog: only the days with recorded data can be chosen, the others are greyed out. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DayPickerDialog(days: Set<LocalDate>, selected: LocalDate?, onPick: (LocalDate) -> Unit, onDismiss: () -> Unit) {
+internal fun DayPickerDialog(
+    days: Set<LocalDate>,
+    selected: LocalDate?,
+    onPick: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+    title: String? = null,
+) {
     val years = days.map { it.year }
     val state = rememberDatePickerState(
         initialSelectedDateMillis = selected?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),
@@ -222,7 +228,9 @@ private fun DayPickerDialog(days: Set<LocalDate>, selected: LocalDate?, onPick: 
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.sum_cancel)) } },
-    ) { DatePicker(state = state) }
+    ) {
+        DatePicker(state = state, title = title?.let { t -> { Text(t, modifier = Modifier.padding(start = 24.dp, top = 16.dp, end = 12.dp)) } })
+    }
 }
 
 /** Width left of the bars for the value labels. */

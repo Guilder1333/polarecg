@@ -96,7 +96,7 @@
     <string name="br_pending">(not saved yet)</string>
     <string name="br_hint">Mark only the beats that are wrong. Accept saves your marks and confirms every other unlabelled beat here as its automatic class; Cancel saves nothing.</string>
     <string name="sum_title">Summary</string>
-    <string name="sum_24h">Last 24 h</string>
+    <string name="sum_24h">24h</string>
     <string name="sum_today">Today</string>
     <string name="sum_night">Last night</string>
     <string name="sum_empty">Nothing recorded in this period yet.</string>
@@ -114,8 +114,11 @@
     <string name="sum_not_yet">Longest run and the hour-by-hour view per action come later (events table, P5.4).</string>
     <string name="cmp_open">Compare</string>
     <string name="cmp_title">Compare</string>
-    <string name="cmp_today">Today / yesterday</string>
-    <string name="cmp_24h">Last 24 h / the 24 h before</string>
+    <string name="cmp_today">Today</string>
+    <string name="cmp_24h">24h</string>
+    <string name="cmp_pick_days">Pick two days</string>
+    <string name="cmp_pick_first">First day (left column)</string>
+    <string name="cmp_pick_second">Day to compare it with</string>
     <string name="cmp_now_period">Now: %1$s to %2$s</string>
     <string name="cmp_before_period">Before: %1$s to %2$s</string>
     <string name="cmp_missing">One of the periods has no recorded beats, so its numbers are empty.</string>
