@@ -173,7 +173,7 @@ class RawRecorder(
     }
 
     /**
-     * The clock relation the previous run of this session ended with, if the app was restarted less than a minute after it (see
+     * The clock relation the previous run of this session ended with, if the app was restarted less than an hour after it (see
      * [clockSeedFrom]); null for a new session. Read after [start]; hand it to `LiveProcessor.start`.
      */
     fun clockSeed(): ClockSeed? {

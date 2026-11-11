@@ -120,17 +120,34 @@ class TimeMapperTest {
     }
 
     @Test
-    fun theSeedIsTheLastTimemapRowAndOnlyIfRecent() {
+    fun theSeedIsTheLastTimemapRowMovedOnAlongTheDriftAndOnlyIfRecent() {
         val lines = listOf(
             "connection,phoneUtcMs,sensorNs,offsetMs,kind",
             "0,${t0 - 90_000},1,111,start",
-            "0,${t0 - 30_000},2,222,periodic",
+            "0,${t0 - 30_000},2,222000,periodic",
             "",
         )
-        assertEquals(ClockSeed(t0 - 30_000, 222), clockSeedFrom(lines, t0))
-        assertNull(clockSeedFrom(lines, t0 + 40_000)) // 70 s old: the clocks may have drifted apart
+        // 30 s old: 30 000 ms * -25e-6 = -0.75 ms, rounded; dated now, so it stays in the window with the new frames
+        assertEquals(ClockSeed(t0, 222_000 - 1), clockSeedFrom(lines, t0))
+        // 10 minutes later: -15 ms
+        val later = clockSeedFrom(lines, t0 - 30_000 + 600_000)!!
+        assertEquals(222_000 - 15L, later.offsetMs)
+        // an hour: -90 ms; just over an hour: not used
+        assertEquals(222_000 - 90L, clockSeedFrom(lines, t0 - 30_000 + 3_600_000)!!.offsetMs)
+        assertNull(clockSeedFrom(lines, t0 - 30_000 + 3_600_001))
         assertNull(clockSeedFrom(lines, t0 - 40_000)) // the phone clock went back
         assertNull(clockSeedFrom(lines.take(1), t0)) // header only
         assertNull(clockSeedFrom(listOf("0,abc,2,x,start"), t0)) // damaged
+    }
+
+    @Test
+    fun aSeedFromAnHourAgoStillBeatsTheFirstDelayedFrame() {
+        val skew = 5_000L
+        val m = TimeMapper()
+        // the previous run ended 40 minutes ago with offset skew + 5; the strap's clock has gained 60 ms since (-25 ppm)
+        val seed = clockSeedFrom(listOf("h", "0,${t0 - 2_400_000},2,${skew + 5},periodic"), t0)!!
+        m.seed(seed)
+        m.observe(sensorNs(t0, skew - 60), t0 + 56) // true offset now skew - 55 (+56 ms of delay on this frame): seed skew - 55
+        assertEquals(skew - 55, m.offsetMs())
     }
 }

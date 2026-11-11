@@ -36,9 +36,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "PolarConnection"
 
-/** Turns the strap clock measurement ([PolarConnection.measureStrapClock]) on. It SETS the strap's clock at every connection. */
-private const val MEASURE_STRAP_CLOCK = true
+/**
+ * The strap clock measurement ([PolarConnection.measureStrapClock]), OFF. Result (2026-11-11): the H10 answers get/setLocalTime with
+ * PFTP NOT_IMPLEMENTED (201), also after a firmware update, so the app cannot set the strap's clock. (The Polar app can: after the
+ * update the strap's timestamps were the phone's local time.) Turning it on needs `FEATURE_POLAR_DEVICE_TIME_SETUP` in `PolarApp`.
+ */
+private const val MEASURE_STRAP_CLOCK = false
 private const val CLOCK_CALL_TIMEOUT_MS = 4_000L
+private const val TIME_SETUP_WAIT_MS = 3_000L
 
 /** ECG: the H10 only supports 130 Hz / 14 bit. */
 internal const val ECG_RATE_HZ = 130
@@ -117,6 +122,9 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
     @Volatile private var wantConnected = false
     private val backoff = ReconnectBackoff()
 
+    // True once the SDK says the strap's time service can be used (this connection); see measureStrapClock.
+    private val timeSetupReady = MutableStateFlow(false)
+
     // The one running recovery action: either the reconnect loop or a stream restart. At most one
     // at a time, so replacing it always cancels the old one (see replaceRecoveryJob).
     private var recoveryJob: Job? = null
@@ -132,9 +140,9 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
 
         // Called by the SDK when it says a feature can now be used. Streaming must wait for this.
         override fun bleSdkFeatureReady(identifier: String, feature: PolarBleSdkFeature) {
-            if (identifier == deviceId && feature == PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING) {
-                startStreams(identifier)
-            }
+            if (identifier != deviceId) return
+            if (feature == PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP) timeSetupReady.value = true
+            if (feature == PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING) startStreams(identifier)
         }
 
         override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
@@ -205,6 +213,7 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
 
     private fun onDisconnected(info: PolarDeviceInfo, reason: String?) {
         if (info.deviceId != deviceId) return
+        timeSetupReady.value = false
         stopStreams()
         setState(ConnectionState.Disconnected(reason), reason)
         // Unless the user asked for this, the strap went out of range / lost contact: get it back.
@@ -403,6 +412,9 @@ class PolarConnection(private val api: PolarBleApi, private val log: ConnectionL
             return "${strap} (strap - phone mid = ${strap - (r.first + r.second) / 2} ms, rtt ${r.second - r.first} ms)"
         }
         try {
+            // the SDK reports the time service as a feature of its own, usually a moment after the streaming one
+            val ready = withTimeoutOrNull(TIME_SETUP_WAIT_MS) { timeSetupReady.first { it } } != null
+            if (!ready) log.log(LogType.TIME_SYNC, "time setup feature not ready after $TIME_SETUP_WAIT_MS ms, trying anyway")
             val before = read()
             val s1a = System.currentTimeMillis()
             val ok1 = withTimeoutOrNull(CLOCK_CALL_TIMEOUT_MS) { api.setLocalTime(id, java.time.LocalDateTime.now(utc)); true } == true

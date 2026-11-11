@@ -27,15 +27,27 @@ data class ClockJump(val connection: Int, val phoneTimeMs: Long, val deltaMs: Lo
 data class ClockSeed(val phoneMs: Long, val offsetMs: Long)
 
 /**
- * The seed from the last row of `timemap.csv` ([lines] include the header: `connection,phoneUtcMs,sensorNs,offsetMs,kind`), or null if
- * there is none, the row is damaged or older than [maxAgeMs] at [nowMs] (a longer gap lets the two clocks drift apart by more than
- * the first frame's delay is worth).
+ * How fast the offset (phone - sensor) changes, ms per ms: -25 ppm, i.e. the strap's clock gains about 90 ms an hour on the phone's.
+ * Measured on two long connections (-25.1 ppm both; the first hour of a connection -30 ppm, the strap warming up).
  */
-fun clockSeedFrom(lines: List<String>, nowMs: Long, maxAgeMs: Long = 60_000): ClockSeed? {
+const val STRAP_DRIFT_MS_PER_MS = -25e-6
+
+/** A seed older than this is not used: the drift is only known to a few ppm, which is 10 ms an hour, but not to a few ten ms. */
+const val SEED_MAX_AGE_MS = 3_600_000L
+
+/**
+ * The seed from the last row of `timemap.csv` ([lines] include the header: `connection,phoneUtcMs,sensorNs,offsetMs,kind`), moved on
+ * to [nowMs] along the drift ([STRAP_DRIFT_MS_PER_MS]); null if there is no row, it is damaged, or older than [maxAgeMs].
+ * The seed is dated [nowMs] so that it stays in the mapper's window next to the first frames of the new run.
+ * (Assumes the strap kept its clock between the runs; if not, the mapper catches the difference as a jump.)
+ */
+fun clockSeedFrom(lines: List<String>, nowMs: Long, maxAgeMs: Long = SEED_MAX_AGE_MS): ClockSeed? {
     val f = lines.asReversed().firstOrNull { it.isNotBlank() }?.split(',') ?: return null
     val phoneMs = f.getOrNull(1)?.toLongOrNull() ?: return null
     val offsetMs = f.getOrNull(3)?.toLongOrNull() ?: return null
-    return if (nowMs - phoneMs in 0..maxAgeMs) ClockSeed(phoneMs, offsetMs) else null
+    val age = nowMs - phoneMs
+    if (age !in 0..maxAgeMs) return null
+    return ClockSeed(nowMs, offsetMs + Math.round(age * STRAP_DRIFT_MS_PER_MS))
 }
 
 class TimeMapper(
