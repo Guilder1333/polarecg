@@ -718,6 +718,7 @@ Only if rules plateau (e.g. S beats or noise misclassified too often).
 
 - [ ] **P7.1 [AI]** PyTorch 1D-CNN: input ≈ 1 s ECG around the beat (130 samples) + RR features;
   pre-train on MIT-BIH + INCART (130 Hz), fine-tune on your labeled beats.
+  Cases for the learned classifier (owner, 2026-11-11): a beat the detector MISSED in baseline drift leaves a long interval that the rules call SS (6 of 65 labelled SS were N, 5 of them after a Q or V; the clean one is 2026-11-11 21:09:35 JST, `utcMs` 1794398975850, a beat exactly in the middle of the gap). Rules cannot tell it from a suppressed beat without looking at the ECG inside the gap (template search in the gap); the model can be given the gap's signal.
 - [ ] **P7.2 [AI]** Export to TFLite / ONNX, run in `:app` (model input prepared by `:core-dsp`).
 - [ ] **P7.3 [YOU+AI]** Compare with rule-based on held-out nights; keep rules as fallback.
 
