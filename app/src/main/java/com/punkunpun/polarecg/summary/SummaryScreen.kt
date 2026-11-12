@@ -302,13 +302,27 @@ private fun HourBars(
     }
 }
 
-/** Hour labels under a chart: the hour of the day in the phone time zone, for the first hour and then every third one. */
+/**
+ * Hour labels under a chart: the hour of the day in the phone time zone, under the slot of every hour that is a multiple of 3.
+ * Each label sits at the x of its own slot (the same geometry as [HourChart]), so a gap in the data does not shift the labels.
+ */
 @Composable
 private fun HourLabels(hours: List<HourBucket>) {
+    if (hours.isEmpty()) return
     val zone = ZoneId.systemDefault()
-    Row(modifier = Modifier.fillMaxWidth().padding(start = GUTTER), horizontalArrangement = Arrangement.SpaceBetween) {
-        for (h in hours.filterIndexed { i, _ -> i % 3 == 0 }) {
-            Text(String.format(Locale.ROOT, "%02d", Instant.ofEpochMilli(h.startUtcMs).atZone(zone).hour), style = MaterialTheme.typography.labelSmall)
+    val textMeasurer = rememberTextMeasurer()
+    val style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurface)
+    Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) {
+        val left = GUTTER.toPx()
+        val first0 = hours.first().startUtcMs
+        val span = ((hours.last().startUtcMs - first0) / 3_600_000L).toInt() + 1
+        val slot = (size.width - left) / span
+        for (k in 0 until span) {
+            val hour = Instant.ofEpochMilli(first0 + k * 3_600_000L).atZone(zone).hour
+            if (hour % 3 != 0) continue
+            val text = textMeasurer.measure(String.format(Locale.ROOT, "%02d", hour), style)
+            val x = (left + (k + 0.5f) * slot - text.size.width / 2f).coerceIn(0f, size.width - text.size.width)
+            drawText(text, topLeft = Offset(x, 0f))
         }
     }
 }
