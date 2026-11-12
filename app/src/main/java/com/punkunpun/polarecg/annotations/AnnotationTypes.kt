@@ -15,7 +15,7 @@ private val PRESET_EVENTS = listOf("Dizzy", "Stress", "Palpitations", "Chest dis
  * can always show what was used; the most recently used come first.
  */
 class AnnotationTypes(private val file: File) {
-    private class Entry(val kind: AnnotationKind, val name: String, var hidden: Boolean, var lastUsedMs: Long)
+    private class Entry(val kind: AnnotationKind, val name: String, var hidden: Boolean, var lastUsedMs: Long, var icon: String? = null)
 
     private val entries: MutableList<Entry> = load()
 
@@ -25,7 +25,7 @@ class AnnotationTypes(private val file: File) {
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.getJSONObject(i)
                 val kind = AnnotationKind.fromKey(o.getString("kind")) ?: return@mapNotNull null
-                Entry(kind, o.getString("name"), o.optBoolean("hidden", false), o.optLong("lastUsedMs", 0))
+                Entry(kind, o.getString("name"), o.optBoolean("hidden", false), o.optLong("lastUsedMs", 0), o.optString("icon", "").ifEmpty { null })
             }.toMutableList()
         } catch (e: Exception) {
             null // no file yet, or damaged: start from the presets
@@ -44,13 +44,27 @@ class AnnotationTypes(private val file: File) {
     @Synchronized
     fun isHidden(kind: AnnotationKind, name: String): Boolean = find(kind, name)?.hidden == true
 
-    /** Adds a type (or shows a hidden one again). Returns the cleaned name, or null if it was blank. */
+    /** The icon the owner chose for [name], or null (then [markIcon] has the default). */
     @Synchronized
-    fun add(kind: AnnotationKind, rawName: String): String? {
+    fun icon(kind: AnnotationKind, name: String): String? = find(kind, name)?.icon
+
+    /** The icon to show for [name]: the owner's choice, else the preset's, else the general one of its kind. */
+    fun iconOf(kind: AnnotationKind, name: String?): String = name?.let { icon(kind, it) } ?: markIcon(kind, name)
+
+    /** Sets (or, with null, clears) the icon of [name]. */
+    @Synchronized
+    fun setIcon(kind: AnnotationKind, name: String, icon: String?) {
+        find(kind, name)?.let { it.icon = icon; save() }
+    }
+
+    /** Adds a type (or shows a hidden one again), with an [icon] if one was chosen. Returns the cleaned name, or null if it was blank. */
+    @Synchronized
+    fun add(kind: AnnotationKind, rawName: String, icon: String? = null): String? {
         val name = rawName.trim().replace(Regex("\\s+"), " ").take(40)
         if (name.isEmpty()) return null
         val existing = entries.firstOrNull { it.kind == kind && it.name.equals(name, ignoreCase = true) }
         if (existing != null) existing.hidden = false else entries += Entry(kind, name, false, 0)
+        if (icon != null) (existing ?: entries.last()).icon = icon
         save()
         return existing?.name ?: name
     }
@@ -70,7 +84,7 @@ class AnnotationTypes(private val file: File) {
     private fun save() {
         val arr = JSONArray()
         for (e in entries) {
-            arr.put(JSONObject().put("kind", e.kind.key).put("name", e.name).put("hidden", e.hidden).put("lastUsedMs", e.lastUsedMs))
+            arr.put(JSONObject().put("kind", e.kind.key).put("name", e.name).put("hidden", e.hidden).put("lastUsedMs", e.lastUsedMs).put("icon", e.icon ?: ""))
         }
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".tmp")

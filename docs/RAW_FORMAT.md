@@ -125,6 +125,9 @@ never changed or deleted, so it is safe to copy while the app runs; a kill can a
 - `pressedMs`: phone UTC ms of the button press, never changed. `timeMs`: when it happened (= `pressedMs` unless corrected).
   `recordedMs`: when this line was written.
 - **Corrections** are new lines with the same `id`; the newest line of an id wins. Earlier lines stay as the history.
+- **Deleting** a mark is a correction with `"deleted":true` added; readers leave such a mark out (an action that it ended then
+  runs on until the next one). Nothing is removed from the file. Corrections and deletions may be appended to a finished session.
+- The icon of a name (emoji) is not in the session: it is kept per phone in `annotation_types.json`.
 - `name` is stored in every record (the picker's list of names is app-wide, not in the session), so a folder is complete by itself.
 - Times are UTC ms like everything else; the phone shows JST.
 

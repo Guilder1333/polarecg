@@ -47,14 +47,32 @@ class AnnotationStore(private val sessionsDir: File, val types: AnnotationTypes)
         return a
     }
 
-    /** Appends a correction of [original] (same id): a new time, name or note. The press time and the earlier lines stay. */
+    /**
+     * Appends a correction of [original] (same id): a new time, name or note. The press time and the earlier lines stay.
+     * [session] is the folder the mark is in (default: the open session); a finished session can be corrected too.
+     */
     @Synchronized
-    fun correct(original: Annotation, timeMs: Long = original.timeMs, name: String? = original.name, note: String = original.note): Annotation? {
-        val dir = openSession() ?: return null
+    fun correct(
+        original: Annotation,
+        timeMs: Long = original.timeMs,
+        name: String? = original.name,
+        note: String = original.note,
+        session: File? = null,
+    ): Annotation? {
+        val dir = session ?: openSession() ?: return null
         val a = original.copy(name = name, timeMs = timeMs, note = note.trim(), recordedMs = System.currentTimeMillis())
         append(dir, a)
-        _currentAction.value = currentAction(readAll(dir))
+        refresh()
         return a
+    }
+
+    /** Appends a line that marks [original] as deleted (nothing is removed from the file). */
+    @Synchronized
+    fun delete(original: Annotation, session: File? = null): Boolean {
+        val dir = session ?: openSession() ?: return false
+        append(dir, original.copy(deleted = true, recordedMs = System.currentTimeMillis()))
+        refresh()
+        return true
     }
 
     private fun append(dir: File, a: Annotation) {

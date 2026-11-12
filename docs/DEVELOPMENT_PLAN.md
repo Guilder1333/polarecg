@@ -602,7 +602,7 @@ Details in §7.5–7.6.
   this size (about 25 ms), but not for a very low-variability recording.
   Update 2026-11-08: an interval must also fit the recent rhythm (the beat's prematurity 0.8-1.25): a skipped beat made a double interval,
   accepted when no NN came right before it (38 bpm at night, and a bad value in HRV); checked on 169 865 stored beats.)
-- [ ] **P5.6 [YOU+AI]** Summary screen: today / last night / last 24 h — beats, V and S burden per
+- [x] **P5.6 [YOU+AI]** Summary screen: today / last night / last 24 h — beats, V and S burden per
   hour (bar chart), longest run, HR min/avg/max, HRV trend, data coverage.
   (Built 2026-10-31, **not yet tried on the phone**. Long-term tables from §8, database version 2 with a real migration
   (`storage/Migrations.kt`, checked against the exported schema `app/schemas/` by `MigrationsTest`): `minute_summary` (one row per
@@ -654,7 +654,7 @@ Details in §7.5–7.6.
   same session with the PC tool, merge by hand; the two files are not combined automatically.)
 - [ ] **P5.8 [AI]** Settings: raw recording toggle, ACC rate, classifier sensitivity presets,
   optional alerts (off by default), data export (CSV) and delete.
-- [ ] **P5.10 [YOU+AI]** **Actions and events** (idea from the owner, 2026-10-29: see why the per-hour numbers change, e.g. during a
+- [x] **P5.10 [YOU+AI]** **Actions and events** (idea from the owner, 2026-10-29: see why the per-hour numbers change, e.g. during a
   workout or in the middle of the day). Design agreed in outline, details to settle when building:
   - *Two kinds.* **Action** = a state with a duration (walking, running, sitting, eating, sleeping...): starts when pressed, ends when
     the next action starts, on "no action", or on the session's Stop. **Event** = a moment (dizzy, stress, palpitations...): a time and
@@ -688,6 +688,17 @@ Details in §7.5–7.6.
     - An action that is still running at a kill continues after the restart (same session); it ends only by the next mark.
   - **Done when:** a day of use shows correct bands and markers, an action left open at a kill is closed at the next Stop, and the export
     zip contains the annotations.
+- [x] **P5.6 closed 2026-11-12 (owner: "enough for the summary screen").** Added after the first build: a calendar button (pick any day with
+  data) and a Compare screen (two days, or Today / 24h); the hour labels of the charts sit under their own bars; a tap on a chart
+  opens it **full screen in landscape**, where **pinch zooms** (bar width 1 h, 30, 15, 10, 5 min; least 30 min on the screen), a drag
+  scrolls inside the recorded time and a double tap shows it all (`HourChart`/`FullScreenChart`, `bucketsOf` in `:core-dsp`).
+  Not done: the longest run, burden per action on the phone.
+- [x] **P5.10 closed 2026-11-12 (owner).** Actions and events are drawn on the full-screen chart in two rows (`MarkRows`): actions as
+  regions in two alternating colours with a line at each start and end and the icon in the middle, events as an icon on a line. Each name
+  has an emoji (presets, or chosen when a name is added; long press a name in the picker to change it; stored per phone in
+  `annotation_types.json`). A tap on a mark in the rows opens `EditMarkDialog`: other name, time (steps of 10 s to 5 min), note, icon,
+  or **delete**; corrections and deletions are new lines in `annotations.jsonl` (`"deleted":true`, `docs/RAW_FORMAT.md`), also for finished
+  sessions. Not done: undo of a delete, a check of the time against the session's start and end.
 - [ ] **P5.11 [AI]** Show actions and events on the phone: bands (actions) and markers (events) on the review screen's timeline and in
   the event list; the summary (P5.6) gets "per action" figures (mean HR, V/S per hour, HRV).
 - [x] **P5.12 [AI]** Desktop: `analyze` reads `annotations.jsonl` and writes `activities.csv`, an `action` column in `windows.csv`, and a

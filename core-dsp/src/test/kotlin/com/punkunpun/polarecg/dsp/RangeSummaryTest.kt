@@ -2,6 +2,7 @@ package com.punkunpun.polarecg.dsp
 
 import com.punkunpun.polarecg.dsp.summary.HrvPoint
 import com.punkunpun.polarecg.dsp.summary.MinuteSummary
+import com.punkunpun.polarecg.dsp.summary.bucketsOf
 import com.punkunpun.polarecg.dsp.summary.shiftedBy
 import com.punkunpun.polarecg.dsp.summary.summarizeRange
 import kotlin.test.Test
@@ -96,5 +97,20 @@ class RangeSummaryTest {
         assertNull(r.hrMeanBpm)
         assertNull(r.rmssdMedianMs)
         assertEquals(0.0, r.coverage, 1e-9)
+    }
+
+    @Test fun finerBucketsSplitTheSameRows() {
+        // 20 minutes; the S beats are in minutes 3 and 12; one HRV window starts at minute 5
+        val minutes = (0 until 20).map { i -> minute(i, s = if (i == 3 || i == 12) 1 else 0, coverage = if (i < 10) 1.0 else 0.5) }
+        val hrv = listOf(HrvPoint(h0 + 5 * 60_000L, true, 40.0, 50.0))
+        val five = bucketsOf(minutes, hrv, 5 * 60_000L)
+        assertEquals(listOf(h0, h0 + 300_000L, h0 + 600_000L, h0 + 900_000L), five.map { it.startUtcMs })
+        assertEquals(listOf(1, 0, 1, 0), five.map { it.s })
+        assertEquals(listOf(1.0, 1.0, 0.5, 0.5), five.map { it.coverage })
+        assertEquals(listOf(null, 40.0, null, null), five.map { it.rmssdMs })
+        val hour = bucketsOf(minutes, hrv, 3_600_000L)
+        assertEquals(1, hour.size)
+        assertEquals(2, hour[0].s)
+        assertEquals(15.0 / 60, hour[0].coverage, 1e-9)
     }
 }

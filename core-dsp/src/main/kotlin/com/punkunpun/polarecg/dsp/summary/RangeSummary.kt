@@ -63,6 +63,9 @@ class RangeSummary(
     /** The lowest and highest per-minute mean heart rate of the range (a minute counts with its own mean, so one odd interval cannot move it much). */
     val hrMinuteLowBpm: Double? = null,
     val hrMinuteHighBpm: Double? = null,
+    /** The rows the figures come from, so a chart can regroup them into finer buckets ([bucketsOf]). */
+    val minuteRows: List<MinuteSummary> = emptyList(),
+    val hrvPoints: List<HrvPoint> = emptyList(),
 ) {
     private val judged: Int get() = n + s + v
     val sPercent: Double? get() = if (judged > 0) 100.0 * s / judged else null
@@ -93,17 +96,7 @@ fun summarizeRange(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, fromUtcMs:
     val covered = inRange.sumOf { it.coverage }
     val hrMean = weightedHrMean(inRange)
 
-    val buckets = LinkedHashMap<Long, MutableList<MinuteSummary>>()
-    for (m in inRange) buckets.getOrPut(Math.floorDiv(m.startUtcMs, HOUR_MS) * HOUR_MS) { ArrayList() } += m
-    val hours = buckets.map { (start, rows) ->
-        HourBucket(
-            start, rows.sumOf { it.n }, rows.sumOf { it.s }, rows.sumOf { it.v }, rows.sumOf { it.q }, rows.sumOf { it.vDoubt },
-            (rows.sumOf { it.coverage } / 60.0).coerceAtMost(1.0),
-            median(validHrv.filter { it.startUtcMs >= start && it.startUtcMs < start + HOUR_MS }.mapNotNull { it.rmssdMs }),
-            weightedHrMean(rows), rows.mapNotNull { it.hrMinBpm }.minOrNull(), rows.mapNotNull { it.hrMaxBpm }.maxOrNull(),
-            rows.mapNotNull { it.hrMeanBpm }.minOrNull(), rows.mapNotNull { it.hrMeanBpm }.maxOrNull(),
-        )
-    }.sortedBy { it.startUtcMs }
+    val hours = bucketsOf(inRange, validHrv, HOUR_MS)
 
     return RangeSummary(
         fromUtcMs, toUtcMs,
@@ -114,5 +107,26 @@ fun summarizeRange(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, fromUtcMs:
         validHrv.size, median(validHrv.mapNotNull { it.rmssdMs }), median(validHrv.mapNotNull { it.sdnnMs }),
         hours,
         inRange.mapNotNull { it.hrMeanBpm }.minOrNull(), inRange.mapNotNull { it.hrMeanBpm }.maxOrNull(),
+        minuteRows = inRange, hrvPoints = validHrv,
     )
+}
+
+/**
+ * The minute rows [minutes] and HRV windows [hrv] (the valid ones) grouped into buckets of [stepMs] (aligned to UTC), oldest first;
+ * a bucket with no minute row is left out. [stepMs] is 5 minutes at the finest (an HRV window is 5 minutes long) and an hour at the
+ * coarsest. A bucket's [HourBucket.coverage] is the recorded share of the whole step.
+ */
+fun bucketsOf(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, stepMs: Long): List<HourBucket> {
+    val groups = LinkedHashMap<Long, MutableList<MinuteSummary>>()
+    for (m in minutes) groups.getOrPut(Math.floorDiv(m.startUtcMs, stepMs) * stepMs) { ArrayList() } += m
+    val stepMinutes = stepMs / MINUTE_MS.toDouble()
+    return groups.map { (start, rows) ->
+        HourBucket(
+            start, rows.sumOf { it.n }, rows.sumOf { it.s }, rows.sumOf { it.v }, rows.sumOf { it.q }, rows.sumOf { it.vDoubt },
+            (rows.sumOf { it.coverage } / stepMinutes).coerceAtMost(1.0),
+            median(hrv.filter { it.startUtcMs >= start && it.startUtcMs < start + stepMs }.mapNotNull { it.rmssdMs }),
+            weightedHrMean(rows), rows.mapNotNull { it.hrMinBpm }.minOrNull(), rows.mapNotNull { it.hrMaxBpm }.maxOrNull(),
+            rows.mapNotNull { it.hrMeanBpm }.minOrNull(), rows.mapNotNull { it.hrMeanBpm }.maxOrNull(),
+        )
+    }.sortedBy { it.startUtcMs }
 }

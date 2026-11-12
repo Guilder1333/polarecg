@@ -139,6 +139,9 @@
     <string name="cmp_chart_hr">Mean heart rate per hour, bpm</string>
     <string name="cmp_chart_burden">S+V burden per hour, %%</string>
     <string name="sum_back">Back</string>
+    <string name="sum_close">Close</string>
+    <string name="sum_step">%1$d min per bar</string>
+    <string name="sum_chart_tap">Tap a chart to open it on the full screen: pinch to zoom, drag to scroll, double tap to see it all.</string>
     <string name="sum_pick_day">Pick a day</string>
     <string name="sum_ok">OK</string>
     <string name="sum_cancel">Cancel</string>
@@ -155,6 +158,13 @@
     <string name="ann_action">Action</string>
     <string name="ann_event">Event</string>
     <string name="ann_needs_recording">Start recording to mark actions and events.</string>
+    <string name="ann_longpress_hint">Long-press a name to change its icon.</string>
+    <string name="ann_icon">Icon (emoji)</string>
+    <string name="ann_edit_action">Edit action</string>
+    <string name="ann_edit_event">Edit event</string>
+    <string name="ann_was">was %1$s</string>
+    <string name="ann_save">Save</string>
+    <string name="ann_delete">Delete</string>
     <string name="ann_now">Now: %1$s since %2$s</string>
     <string name="ann_title_action">Action at %1$s</string>
     <string name="ann_title_event">Event at %1$s</string>

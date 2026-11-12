@@ -34,6 +34,8 @@ data class Annotation(
     val timeMs: Long,
     val note: String = "",
     val recordedMs: Long = timeMs,
+    /** A deleted mark is not shown or counted any more; its lines stay in the file. */
+    val deleted: Boolean = false,
 ) {
     fun toJsonLine(): String = JSONObject()
         .put("id", id)
@@ -43,6 +45,7 @@ data class Annotation(
         .put("timeMs", timeMs)
         .put("note", note)
         .put("recordedMs", recordedMs)
+        .apply { if (deleted) put("deleted", true) }
         .toString()
 }
 
@@ -59,6 +62,7 @@ fun parseAnnotationLine(line: String): Annotation? = try {
         timeMs = o.getLong("timeMs"),
         note = o.optString("note", ""),
         recordedMs = o.optLong("recordedMs", o.getLong("timeMs")),
+        deleted = o.optBoolean("deleted", false),
     )
 } catch (e: Exception) {
     null
@@ -68,7 +72,7 @@ fun parseAnnotationLine(line: String): Annotation? = try {
 fun foldAnnotations(lines: List<String>): List<Annotation> {
     val byId = LinkedHashMap<String, Annotation>()
     for (line in lines) parseAnnotationLine(line)?.let { byId[it.id] = it }
-    return byId.values.sortedBy { it.timeMs }
+    return byId.values.filter { !it.deleted }.sortedBy { it.timeMs }
 }
 
 /** The action that is running now (the last one started), or null if there is none or the last one was "no action". */

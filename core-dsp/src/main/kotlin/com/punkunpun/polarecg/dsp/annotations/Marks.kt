@@ -16,13 +16,18 @@ data class Mark(
     val pressedMs: Long,
     val timeMs: Long,
     val note: String,
+    /** The owner deleted it (a line with `"deleted":true`): [parseMarks] leaves such marks out. */
+    val deleted: Boolean = false,
 )
 
-/** Reads the lines of `annotations.jsonl`: the newest line of every id wins; damaged lines are skipped; sorted by [Mark.timeMs]. */
+/**
+ * Reads the lines of `annotations.jsonl`: the newest line of every id wins; damaged lines are skipped; marks whose newest line says
+ * `deleted` are left out; sorted by [Mark.timeMs].
+ */
 fun parseMarks(lines: List<String>): List<Mark> {
     val byId = LinkedHashMap<String, Mark>()
     for (line in lines) parseMark(line)?.let { byId[it.id] = it }
-    return byId.values.sortedBy { it.timeMs }
+    return byId.values.filter { !it.deleted }.sortedBy { it.timeMs }
 }
 
 private fun parseMark(line: String): Mark? {
@@ -35,7 +40,7 @@ private fun parseMark(line: String): Mark? {
     }
     val pressed = (o["pressedMs"] as? Double)?.toLong() ?: return null
     val time = (o["timeMs"] as? Double)?.toLong() ?: return null
-    return Mark(id, isAction, o["name"] as? String, pressed, time, o["note"] as? String ?: "")
+    return Mark(id, isAction, o["name"] as? String, pressed, time, o["note"] as? String ?: "", o["deleted"] == true)
 }
 
 /**

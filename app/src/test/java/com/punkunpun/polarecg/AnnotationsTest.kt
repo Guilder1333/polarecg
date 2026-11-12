@@ -127,4 +127,41 @@ class AnnotationsTest {
         assertTrue("Cycling" in reloaded.names(AnnotationKind.ACTION))
         assertEquals(1, reloaded.names(AnnotationKind.ACTION).count { it == "Running" })
     }
+
+    @Test
+    fun aMarkOfAFinishedSessionCanBeCorrectedAndDeleted() {
+        val root = tempDir()
+        val opened = newSession(root)
+        val store = AnnotationStore(root, AnnotationTypes(File(root, "types.json")))
+        val walk = store.record(AnnotationKind.ACTION, "Walking", t0 + 1000)!!
+        val sit = store.record(AnnotationKind.ACTION, "Sitting", t0 + 5000)!!
+        // the session is stopped: nothing is open any more, but the folder can still be corrected
+        val meta = SessionFolders.readMeta(opened.dir)!!.put("endUtc", SessionFolders.iso(t0 + 9000))
+        SessionFolders.writeMeta(opened.dir, meta)
+        assertNull(store.record(AnnotationKind.EVENT, "Coffee", t0 + 6000))
+        assertNotNull(store.correct(walk, timeMs = t0 + 2000, session = opened.dir))
+        assertEquals(t0 + 2000, store.readAll(opened.dir).first { it.id == walk.id }.timeMs)
+        assertEquals(t0 + 1000, store.readAll(opened.dir).first { it.id == walk.id }.pressedMs) // the press time stays
+        assertTrue(store.delete(sit, opened.dir))
+        assertEquals(listOf(walk.id), store.readAll(opened.dir).map { it.id }) // no longer shown
+        assertEquals(4, File(opened.dir, "annotations.jsonl").readLines().size)  // but nothing was removed from the file
+    }
+
+    @Test
+    fun aNameKeepsItsIconAndAPresetKeepsItsDefault() {
+        val f = File(tempDir(), "types.json")
+        val types = AnnotationTypes(f)
+        assertEquals("🚶", types.iconOf(AnnotationKind.ACTION, "Walking"))
+        types.add(AnnotationKind.ACTION, "Gardening", "🌱")
+        assertEquals("🌱", types.iconOf(AnnotationKind.ACTION, "Gardening"))
+        types.add(AnnotationKind.ACTION, "Cooking")
+        assertEquals("🔹", types.iconOf(AnnotationKind.ACTION, "Cooking"))
+        types.setIcon(AnnotationKind.ACTION, "Cooking", "🍳")
+        types.setIcon(AnnotationKind.ACTION, "Walking", "🐕")
+        val again = AnnotationTypes(f) // read back from the file
+        assertEquals("🍳", again.iconOf(AnnotationKind.ACTION, "Cooking"))
+        assertEquals("🐕", again.iconOf(AnnotationKind.ACTION, "Walking"))
+        again.setIcon(AnnotationKind.ACTION, "Walking", null)
+        assertEquals("🚶", again.iconOf(AnnotationKind.ACTION, "Walking"))
+    }
 }

@@ -141,4 +141,13 @@ class ActionStatsTest {
         assertEquals(2, ctx.ectopicBefore) // V at 100 s and S at 200 s; the N does not count
         assertEquals(1, ctx.ectopicAfter)
     }
+
+    @Test fun aDeletedMarkIsLeftOutAndTheActionBeforeItRunsOn() {
+        val walk = """{"id":"a","kind":"action","name":"Walking","pressedMs":1000,"timeMs":1000,"note":""}"""
+        val sit = """{"id":"b","kind":"action","name":"Sitting","pressedMs":5000,"timeMs":5000,"note":""}"""
+        val sitDeleted = """{"id":"b","kind":"action","name":"Sitting","pressedMs":5000,"timeMs":5000,"note":"","deleted":true}"""
+        val marks = parseMarks(listOf(walk, sit, sitDeleted))
+        assertEquals(listOf("a"), marks.map { it.id })
+        assertEquals(1000L to 9000L, actionSpans(marks, 9000).single().let { it.startMs to it.endMs })
+    }
 }

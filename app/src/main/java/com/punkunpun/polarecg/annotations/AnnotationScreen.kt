@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -64,7 +67,7 @@ fun AnnotationBar(app: PolarApp, onPress: (AnnotationKind, Long) -> Unit, modifi
         if (!enabled) {
             Text(stringResource(R.string.ann_needs_recording), style = MaterialTheme.typography.bodySmall)
         }
-        current?.let { Text(stringResource(R.string.ann_now, it.name.orEmpty(), clock(it.timeMs))) }
+        current?.let { Text(stringResource(R.string.ann_now, app.annotations.types.iconOf(AnnotationKind.ACTION, it.name) + " " + it.name.orEmpty(), clock(it.timeMs))) }
     }
 }
 
@@ -72,7 +75,7 @@ fun AnnotationBar(app: PolarApp, onPress: (AnnotationKind, Long) -> Unit, modifi
  * Choose what happened at [pressedMs]. An action: tap a name (or "No action" to end the running one). An event: tap a
  * name, with an optional note typed first. "New" adds a name; "Hide names" turns the next taps into hiding.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun AnnotationScreen(
     app: PolarApp,
@@ -89,6 +92,7 @@ fun AnnotationScreen(
     var hiding by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
+    var iconFor by remember { mutableStateOf<String?>(null) } // the name whose icon is being changed (long press)
     var changes by remember { mutableIntStateOf(0) } // bumped to re-read the names after hiding/adding
 
     LaunchedEffect(changes) { names = types.names(kind) }
@@ -115,16 +119,28 @@ fun AnnotationScreen(
             )
         }
         if (hiding) Text(stringResource(R.string.ann_hiding_hint), color = MaterialTheme.colorScheme.error)
+        else Text(stringResource(R.string.ann_longpress_hint), style = MaterialTheme.typography.bodySmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (name in names) {
-                Button(onClick = {
-                    if (hiding) {
-                        types.setHidden(kind, name, true)
-                        changes++
-                    } else {
-                        save(name)
-                    }
-                }) { Text(name) }
+                // A Button has no long press, so the same look is made from a Surface: tap = choose, long press = change the icon.
+                Surface(
+                    shape = ButtonDefaults.shape,
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.combinedClickable(
+                        onClick = {
+                            if (hiding) {
+                                types.setHidden(kind, name, true)
+                                changes++
+                            } else {
+                                save(name)
+                            }
+                        },
+                        onLongClick = { iconFor = name },
+                    ),
+                ) {
+                    Text(types.iconOf(kind, name) + " " + name, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
+                }
             }
             if (kind == AnnotationKind.ACTION && !hiding) {
                 OutlinedButton(onClick = { save(null) }) { Text(stringResource(R.string.ann_no_action)) }
@@ -139,15 +155,34 @@ fun AnnotationScreen(
         }
     }
 
+    iconFor?.let { n ->
+        var icon by remember(n) { mutableStateOf(types.iconOf(kind, n)) }
+        AlertDialog(
+            onDismissRequest = { iconFor = null },
+            title = { Text(n) },
+            text = { IconPicker(icon, onChange = { icon = it }) },
+            confirmButton = {
+                TextButton(onClick = { types.setIcon(kind, n, icon.ifEmpty { null }); iconFor = null; changes++ }) { Text(stringResource(R.string.ann_save)) }
+            },
+            dismissButton = { TextButton(onClick = { iconFor = null }) { Text(stringResource(R.string.ann_cancel)) } },
+        )
+    }
+
     if (adding) {
         var text by remember { mutableStateOf("") }
+        var icon by remember { mutableStateOf(markIcon(kind, null)) }
         AlertDialog(
             onDismissRequest = { adding = false },
             title = { Text(stringResource(R.string.ann_new)) },
-            text = { OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true)
+                    IconPicker(icon, onChange = { icon = it })
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    val added = types.add(kind, text)
+                    val added = types.add(kind, text, icon.ifEmpty { null })
                     adding = false
                     // A new name is a deliberate choice for this moment: record it straight away.
                     if (added != null) save(added)
