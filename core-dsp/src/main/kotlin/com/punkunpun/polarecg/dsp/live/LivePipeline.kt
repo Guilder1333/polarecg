@@ -146,6 +146,8 @@ class LivePipeline(
             b.features = f
             b.cls = classifier.classify(f, b.quality)
             b.vDoubt = classifier.vNeedsReview(f, b.quality)
+            // A questionable V counts as what its timing says (S / SS / N); `vDoubt` stays true to mark it.
+            if (b.vDoubt && classifier.config.questionableVAsTiming) b.cls = classifier.classifyWithoutV(f, b.quality)
             b.rescued = classifier.rescues(f, b.quality)
             out += b
         }

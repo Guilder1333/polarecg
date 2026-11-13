@@ -100,6 +100,11 @@ data class ClassifierConfig(
      * says "look at this one". Measured on one night: 32 of 37 normal beats called V were above 0.15, 2 of 24 real V.
      */
     val vDoubtDrift: Double = 0.15,
+    /**
+     * A questionable V (see [vDoubtDrift]) is stored as the class its timing gives (S, SS or N) instead of V; the `vDoubt` flag stays
+     * set so the beat can still be found and reviewed. On labelled nights 66 of 67 questionable V were not V for the owner.
+     */
+    val questionableVAsTiming: Boolean = true,
 )
 
 /**
@@ -118,7 +123,7 @@ data class ClassifierConfig(
  * weakest class; a ventricular beat that looks like the normal one (e.g. wearer with a bundle
  * branch block) is not found by shape.
  */
-class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) {
+class BeatClassifier(val config: ClassifierConfig = ClassifierConfig()) {
     /**
      * True for a V that may be a normal beat, so it is to be reviewed: the baseline drifts around it, or it comes
      * on time (prematurity at least [ClassifierConfig.sPrematurity]) and only the correlation/area rules call it V.
@@ -152,6 +157,22 @@ class BeatClassifier(private val config: ClassifierConfig = ClassifierConfig()) 
         if (f.polarityFlip || corr < config.vCorr || (wide && corr < config.vWideCorr) || big || (early && corr < config.vGreyCorr)) {
             return BeatClass.VENTRICULAR
         }
+        return timingClass(f)
+    }
+
+    /**
+     * The class [f] would get if the shape rules did not call it V: S, SS or N from the timing alone. Used for a questionable V
+     * (see [vNeedsReview]), which is mostly a normal beat on a drifting baseline: it should count as what it is without the
+     * doubtful shape (an early beat stays S), not vanish into Q. Same quality gate as [classify]: a poor beat is still Q.
+     */
+    fun classifyWithoutV(f: BeatFeatures, quality: BeatQuality? = null): String {
+        if (f.corr == null || (!f.good && !(quality != null && rescues(f, quality)))) return BeatClass.UNCLASSIFIABLE
+        return timingClass(f)
+    }
+
+    /** The timing rules (S, SS, otherwise N): everything in [classify] that comes after the V shape rules. */
+    private fun timingClass(f: BeatFeatures): String {
+        val early = f.prematurity?.let { it < config.sPrematurity } == true
         val steady = f.rrSpread?.let { it <= config.sMaxSpread } == true
         val abrupt = f.shortening?.let { it <= config.sShortening } == true
         // Followed by a pause: rrPre / rrPost (both exist or the beat cannot be called S).
