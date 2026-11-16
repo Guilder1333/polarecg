@@ -74,6 +74,10 @@
     <string name="ev_not_labelled">not labelled</string>
     <string name="ev_history">History</string>
     <string name="ev_select_beat">Select a beat on the trace.</string>
+    <string name="ev_motion">Motion at this beat: %1$s mG (the signal score starts to drop at %2$d mG)</string>
+    <string name="ev_acc_legend">Bottom band: how much the strap moved (accelerometer). Dashed lines at %1$d mG (below it the strap is still) and %2$d mG (the signal score starts to drop).</string>
+    <string name="ev_acc_loading">Loading the accelerometer...</string>
+    <string name="ev_acc_none">No accelerometer data for this stretch (the raw files are not on the phone, or the ACC has a gap here).</string>
     <string name="br_open">Browse beats</string>
     <string name="br_title">Browse beats</string>
     <string name="br_kind_s">S</string>

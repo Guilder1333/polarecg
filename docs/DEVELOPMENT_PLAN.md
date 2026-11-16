@@ -652,6 +652,18 @@ Details in §7.5–7.6.
   one row per label press in the order of writing, item = "B"+beat time, last row wins; `labelsCsv` in `:core-dsp`, tested to read back with `parseOwnerLabels`). It holds the labels of
   the beats in the session's time range. To use it: copy it to `data/labels/<session>/labels.csv`, then `analyze <session> --labels data/labels/<session>`. If you also label the
   same session with the PC tool, merge by hand; the two files are not combined automatically.)
+  Accelerometer in the beat window (owner's request, 2026-11-16, to tell motion artifacts from real V beats; **not yet tried on the phone**):
+  a band under the ECG strip shows how much the strap moved, per ACC sample: the distance of the acceleration vector from its average
+  over +-0.5 s (gravity and posture cancel; `AccWindow.movementMg` in `:core-dsp` `dsp/motion/AccWindow.kt`), on a square-root scale up
+  to 400 mG with dashed lines at 10 mG (still) and 100 mG (`motionOkMg`, where the signal score starts to drop), faint beat lines through
+  it; the details of a selected beat show the motion the quality used (`beat.motionMg`). The ACC is placed on the **ECG's own time line
+  through the strap's clock** (both streams carry the H10's timestamps: `cutWindowAnchored` gives the stretch's anchor, `cutAccWindow`
+  places each sample, spacing from the next frame's strap time rather than the nominal 50 Hz), so it lines up with the beat markers
+  without reading the ACC from the session's start; only the hourly ACC files around the window are read (`accFilesFor`). Tests in
+  `AccWindowTest.kt`. The event review reads it from the raw files after the clip is shown (event clips hold no ACC); without the raw
+  files the screen says there is no accelerometer data. Open check on a real recording: `MotionStream` times ACC samples with the
+  nominal rate inside a gap-free run; if the strap's real ACC rate differs from 50 Hz and frames count as contiguous, the per-second
+  motion of the quality could drift away from the beats over a long run (compare `motionMg` of the beats with this band).
 - [ ] **P5.8 [AI]** Settings: raw recording toggle, ACC rate, classifier sensitivity presets,
   optional alerts (off by default), data export (CSV) and delete.
 - [x] **P5.10 [YOU+AI]** **Actions and events** (idea from the owner, 2026-10-29: see why the per-hour numbers change, e.g. during a

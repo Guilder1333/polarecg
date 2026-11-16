@@ -36,6 +36,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -55,6 +56,8 @@ import com.punkunpun.polarecg.dsp.event.EventClip
 import com.punkunpun.polarecg.dsp.event.eventTitle
 import com.punkunpun.polarecg.dsp.event.nearestBeat
 import com.punkunpun.polarecg.dsp.event.neighbourIntervals
+import com.punkunpun.polarecg.dsp.motion.AccWindow
+import com.punkunpun.polarecg.dsp.quality.QualityConfig
 import com.punkunpun.polarecg.storage.EventEntity
 import com.punkunpun.polarecg.storage.LabelEntity
 import com.punkunpun.polarecg.storage.clipsDir
@@ -62,10 +65,14 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.sqrt
 
 private const val DP_PER_SECOND = 110   // horizontal scale of the trace: 1 s = 110 dp (a beat about every 90 dp at 75 bpm)
 private const val TAP_RANGE_MS = 450L   // a tap this close to a beat selects it
 private const val MIN_SPAN_UV = 600f
+private const val ACC_TOP_MG = 400.0     // top of the movement band; more is drawn at the top
+private const val ACC_GRID_LOW_MG = 10.0 // below this the strap is still (breathing, heartbeat)
+private val MOTION_OK_MG = QualityConfig().motionOkMg // from here on the signal quality counts motion against the beat
 
 /** The text shown for a label value: "N", "S", "V", "Q", "?" or "undone" for the empty one. */
 private fun labelText(label: String) = if (label.isEmpty()) "undone" else label
@@ -98,6 +105,8 @@ fun ReviewScreen(app: PolarApp, eventId: Long, onBack: () -> Unit, modifier: Mod
     var event by remember { mutableStateOf<EventEntity?>(null) }
     var clip by remember { mutableStateOf<EventClip?>(null) }
     var loaded by remember { mutableStateOf(false) }
+    var acc by remember { mutableStateOf<AccWindow?>(null) }
+    var accLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(eventId) {
         withContext(Dispatchers.IO) {
@@ -109,6 +118,14 @@ fun ReviewScreen(app: PolarApp, eventId: Long, onBack: () -> Unit, modifier: Mod
             }
         }
         loaded = true
+    }
+    // The clip file holds no accelerometer: it comes from the raw files, if they are still on the phone. That read is heavy (the
+    // ECG of the session is read to place the ACC on its clock), so the ECG is shown first and the movement band fills in later.
+    LaunchedEffect(clip) {
+        val c = clip ?: return@LaunchedEffect
+        val half = (c.ecg.endUtcMs - c.ecg.startUtcMs) / 2
+        acc = withContext(Dispatchers.IO) { runCatching { loadRawWindow(app.sessionsDir, c.ecg.startUtcMs + half, half)?.acc }.getOrNull() }
+        accLoading = false
     }
 
     Column(
@@ -130,7 +147,7 @@ fun ReviewScreen(app: PolarApp, eventId: Long, onBack: () -> Unit, modifier: Mod
             return@Column // leaves this Column block; nothing below is drawn
         }
 
-        ClipReviewBody(app, c, initialBeatMs = 0L)
+        ClipReviewBody(app, c, initialBeatMs = 0L, acc = acc, accLoading = accLoading)
     }
 }
 
@@ -146,11 +163,19 @@ private val PENDING_COLOR = Color(0xFFF57C00) // orange: a mark that is not save
 /**
  * The trace of [clip] with the beat details and the label buttons below it: shared by the event review and the beat browse.
  * [initialBeatMs] is the beat selected at first (0 = none). With [staging] the buttons only stage marks (shown in orange);
- * without it they save at once. Emits its children into the caller's Column.
+ * without it they save at once. [acc] is drawn as a movement band under the ECG (null = no ACC data, or [accLoading] while it is
+ * still being read). Emits its children into the caller's Column.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ClipReviewBody(app: PolarApp, c: EventClip, initialBeatMs: Long, staging: StagedLabels? = null) {
+internal fun ClipReviewBody(
+    app: PolarApp,
+    c: EventClip,
+    initialBeatMs: Long,
+    staging: StagedLabels? = null,
+    acc: AccWindow? = null,
+    accLoading: Boolean = false,
+) {
     val labelDao = app.database.labelDao()
     val scope = rememberCoroutineScope()
     var selectedBeatMs by rememberSaveable(c.ecg.startUtcMs) { mutableLongStateOf(initialBeatMs) } // 0 = none selected
@@ -165,7 +190,16 @@ internal fun ClipReviewBody(app: PolarApp, c: EventClip, initialBeatMs: Long, st
         labels = labelByBeat,
         staged = staging?.marks ?: emptyMap(),
         selectedBeatMs = selectedBeatMs,
+        acc = acc,
         onTap = { utcMs -> selectedBeatMs = nearestBeat(c.beats, utcMs, TAP_RANGE_MS)?.utcMs ?: 0L },
+    )
+    Text(
+        when {
+            acc != null -> stringResource(R.string.ev_acc_legend, ACC_GRID_LOW_MG.toInt(), MOTION_OK_MG.toInt())
+            accLoading -> stringResource(R.string.ev_acc_loading)
+            else -> stringResource(R.string.ev_acc_none)
+        },
+        style = MaterialTheme.typography.bodySmall,
     )
 
     val beat = c.beats.firstOrNull { it.utcMs == selectedBeatMs }
@@ -181,6 +215,10 @@ internal fun ClipReviewBody(app: PolarApp, c: EventClip, initialBeatMs: Long, st
         neighbourIntervals(c.beats, c.beats.indexOf(beat)).let { (before, after) ->
             Text(stringResource(R.string.ev_rr, before?.toString() ?: "-", after?.toString() ?: "-"))
         }
+        // the motion the signal quality used for this beat (saved with the beat; gone once the beat row is pruned after 90 days)
+        var motionMg by remember(beat.utcMs) { mutableStateOf<Double?>(null) }
+        LaunchedEffect(beat.utcMs) { motionMg = withContext(Dispatchers.IO) { app.database.beatDao().beatAt(beat.utcMs)?.motionMg } }
+        Text(stringResource(R.string.ev_motion, motionMg?.let { "%.0f".format(java.util.Locale.US, it) } ?: "-", MOTION_OK_MG.toInt()))
         val pending = staging?.marks?.get(beat.utcMs)
         val shownMark = if (pending != null) pending.ifEmpty { labelText("") } else ownerMark(current) ?: stringResource(R.string.ev_not_labelled)
         Text(
@@ -228,7 +266,14 @@ internal fun ClipReviewBody(app: PolarApp, c: EventClip, initialBeatMs: Long, st
  * `Canvas` draws with plain functions (no Compose element per beat), so 30 beats and 2 600 samples stay cheap.
  */
 @Composable
-private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, staged: Map<Long, String>, selectedBeatMs: Long, onTap: (Long) -> Unit) {
+private fun ClipTrace(
+    clip: EventClip,
+    labels: Map<Long, LabelEntity>,
+    staged: Map<Long, String>,
+    selectedBeatMs: Long,
+    acc: AccWindow?,
+    onTap: (Long) -> Unit,
+) {
     val density = LocalDensity.current
     val pxPerSecond = with(density) { DP_PER_SECOND.dp.toPx() }
     val scroll = rememberScrollState()
@@ -244,8 +289,11 @@ private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, staged: M
         "V" to MaterialTheme.colorScheme.error,
         "Q" to quiet,
     )
+    val accLine = MaterialTheme.colorScheme.primary
     val ecg = clip.ecg
     val seconds = ecg.size * ecg.msPerSample / 1000.0
+    // movement per ACC sample (mG), worked out once per window, not on every redraw
+    val movement = remember(acc) { acc?.movementMg() }
     val widthDp = (seconds * DP_PER_SECOND).toFloat().dp
 
     // Start with the event in view (a little before it), not at the very beginning of the clip.
@@ -269,15 +317,17 @@ private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, staged: M
         Canvas(
             modifier = Modifier
                 .width(widthDp)
-                .height(256.dp)
+                .height(if (acc != null) 326.dp else 256.dp)
                 .pointerInput(clip) {
                     // The tap position is in the strip's own pixels (it moves with the scroll): pixels -> seconds -> UTC.
                     detectTapGestures { p -> onTap(ecg.startUtcMs + (p.x / pxPerSecond * 1000).toLong()) }
                 },
         ) {
             val topBand = 38.dp.toPx() // two rows: the automatic class letters, and under them the intervals
-            val bottomBand = 26.dp.toPx()
-            val plotHeight = size.height - topBand - bottomBand
+            val bottomBand = 26.dp.toPx() // the owner's labels
+            val accBand = if (acc != null) 70.dp.toPx() else 0f // the movement band, at the very bottom
+            val plotHeight = size.height - topBand - bottomBand - accBand
+            val labelTop = topBand + plotHeight + 3.dp.toPx()
             val mid = (lo + hi) / 2
             val span = maxOf(hi - lo, MIN_SPAN_UV) * 1.15f
             fun yOf(uv: Int) = topBand + plotHeight / 2 - ((uv - mid) / span * plotHeight).coerceIn(-plotHeight / 2, plotHeight / 2)
@@ -330,8 +380,45 @@ private fun ClipTrace(clip: EventClip, labels: Map<Long, LabelEntity>, staged: M
                 if (mark != null) {
                     // the owner's label below the trace: blue when saved, orange while it is only staged; never confused with the automatic letter above
                     val own = textMeasurer.measure(mark, letterStyle.copy(color = if (pending != null) PENDING_COLOR else Color(0xFF1E88E5)))
-                    drawText(own, topLeft = Offset(x - own.size.width / 2f, size.height - bottomBand + 3.dp.toPx()))
+                    drawText(own, topLeft = Offset(x - own.size.width / 2f, labelTop))
                 }
+            }
+
+            if (acc != null && movement != null) {
+                // Movement band: a square-root scale (0 at the bottom, ACC_TOP_MG at the top), so a strap lying still (a few mG) is a
+                // low ripple, a small shift (10-50 mG) is clearly visible and walking (hundreds) still fits.
+                val accTop = size.height - accBand + 4.dp.toPx()
+                val accBottom = size.height - 2.dp.toPx()
+                fun yAcc(mg: Double) = accBottom - (sqrt(mg.coerceIn(0.0, ACC_TOP_MG) / ACC_TOP_MG) * (accBottom - accTop)).toFloat()
+                drawLine(grid, Offset(0f, accBottom), Offset(size.width, accBottom))
+                val dashes = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 6.dp.toPx()))
+                drawLine(grid, Offset(0f, yAcc(ACC_GRID_LOW_MG)), Offset(size.width, yAcc(ACC_GRID_LOW_MG)), pathEffect = dashes)
+                val okColor = colors.getValue("V").copy(alpha = 0.45f)
+                drawLine(okColor, Offset(0f, yAcc(MOTION_OK_MG)), Offset(size.width, yAcc(MOTION_OK_MG)), pathEffect = dashes)
+                // the scale, repeated every 5 s so it is in view wherever the strip is scrolled
+                val scaleStyle = TextStyle(fontSize = 9.sp, color = quiet)
+                var k = 0
+                while (k <= seconds) {
+                    val x = k * pxPerSecond + 2.dp.toPx()
+                    for (mg in listOf(ACC_GRID_LOW_MG, MOTION_OK_MG)) {
+                        val t = textMeasurer.measure(mg.toInt().toString(), scaleStyle)
+                        drawText(t, topLeft = Offset(x, yAcc(mg) - t.size.height))
+                    }
+                    k += 5
+                }
+                // where the beats are, faintly, so a jolt can be matched to a beat
+                for (b in clip.beats) {
+                    val x = (b.utcMs - ecg.startUtcMs) / 1000f * pxPerSecond
+                    drawLine((colors[b.cls] ?: quiet).copy(alpha = 0.3f), Offset(x, accTop), Offset(x, accBottom))
+                }
+                val accPath = Path()
+                for (i in 0 until acc.size) {
+                    val x = (acc.utcMs[i] - ecg.startUtcMs) / 1000f * pxPerSecond
+                    val y = yAcc(movement[i])
+                    // a hole in the ACC (more than 0.1 s without a sample) is left empty rather than bridged with a line
+                    if (i == 0 || acc.utcMs[i] - acc.utcMs[i - 1] > 100) accPath.moveTo(x, y) else accPath.lineTo(x, y)
+                }
+                drawPath(accPath, accLine, style = Stroke(width = 1.4.dp.toPx()))
             }
         }
     }

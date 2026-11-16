@@ -87,6 +87,12 @@ class EcgSegment(
         for (i in frameStartIndex.indices) clock.addFrame(frameStartIndex[i], frameSensorNs[i])
     }
 
+    /**
+     * Sensor time (ns) of the first sample, which is at [startUtcMs]. With it, any time of the strap's clock (also an ACC sample's)
+     * lands on this segment's time line: `startUtcMs + (sensorNs - firstSensorNs) / 1e6`.
+     */
+    val firstSensorNs: Long = frameSensorNs[0]
+
     val durationMs: Long get() = Math.round(clock.elapsedMs(samplesUv.size.toDouble()))
     val endUtcMs: Long get() = startUtcMs + durationMs
 
