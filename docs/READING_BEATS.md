@@ -1,0 +1,108 @@
+# Reading beats on the H10 ECG: PVC, PAC or noise?
+
+A practical guide for looking at single beats in the app (beat window, `polarecg://beat/<utcMs>`) or in
+`analysis/view_ecg.py`. Written from the questions that came up while reviewing real nights.
+
+> This explains how to read the *signal*. It is not medical advice. A single chest lead at 130 Hz
+> cannot settle every case; a doctor with a 12-lead ECG or a Holter can.
+
+## 1. What the beats are
+
+| Name | Where it starts | What it looks like on the ECG | App class |
+|---|---|---|---|
+| **Normal (sinus) beat** | Sinus node, at the top of the atria | Small P wave, then a narrow QRS spike (≈ 60–100 ms), then a smooth T wave. Same shape every beat, regular rhythm | `N` |
+| **PAC** (premature atrial contraction) | Somewhere else in the atria | **Early**, but the QRS usually looks **normal and narrow** (it travels down the normal wiring). P wave may be hidden or odd-shaped | `S` |
+| **PVC** (premature ventricular contraction) | In a ventricle | **Early**, QRS **wide** (> ≈ 120 ms) and **different** from your normal beats, no P wave before it, big **T wave pointing the opposite way** to the main QRS deflection | `V` |
+| **Noise / artifact** | Not the heart: muscle, electrode contact, movement | Anything; often fuzzy/jagged, does not disturb the rhythm | `Q` |
+
+## 2. The rhythm tells you more than the shape
+
+**Always time the beats first ("march them out").** Take two clean normal beats, measure their RR interval,
+and step that interval forward. Then ask of each suspicious beat:
+
+1. **Is it early?** A PAC or PVC comes *before* the next normal beat was due. A beat that lands exactly where the
+   next sinus beat was due **is a sinus beat**, whatever its shape looks like on a messy baseline.
+2. **What happens after it? (the pause)**
+   - **Compensatory pause → typical of a PVC.** The sinus node keeps ticking undisturbed; the sinus beat that
+     would have come is blocked, so the next one comes on the *old* schedule.
+     Check: `coupling + pause ≈ 2 × normal RR`.
+   - **Non-compensatory pause → typical of a PAC.** The early atrial beat resets the sinus node, so the rhythm
+     restarts from the PAC. Check: `coupling + pause < 2 × normal RR`.
+   - **No pause at all (interpolated PVC).** At slow heart rates a PVC can squeeze between two sinus beats
+     without disturbing them. Even then, the next sinus QRS comes only **after the PVC's T wave has finished**,
+     often with a slightly longer PR.
+
+   The pause is a strong hint, not proof: there are exceptions both ways.
+
+## 3. The refractory rule (the most useful test against noise)
+
+After a real ventricular depolarisation (any QRS, normal or PVC) the ventricles **cannot fire again** for roughly
+250–300 ms and not during that beat's T wave (the ST–T segment is the refractory period).
+
+So:
+
+- If a **normal-looking narrow spike** appears inside, or within ~250–300 ms after, something you think is a wide PVC,
+  the "PVC" is **not cardiac**. It is noise.
+- If a "complex" sits 150–200 ms before a perfectly normal QRS, it cannot be ventricular either (the normal QRS
+  could not follow so closely).
+
+## 4. Signs of artifact
+
+- **Fuzzy, jagged texture** (many small spikes) on top of the wave. Heart signals are smooth at this scale;
+  muscle activity (EMG) is fuzzy.
+- **Straight ramps and sudden steps** in the baseline (an electrode recovering), not a QRS-then-T sequence.
+- **No T wave afterwards.** Every real ventricular beat leaves a T wave behind.
+- **The normal spikes keep marching through the mess** at the regular rhythm.
+- **The same odd shape appears where it cannot be cardiac** (e.g. right before a normal QRS).
+
+**A still accelerometer does not rule out artifact.** Tensing chest muscles, a deep breath or sigh, swallowing,
+or a change in electrode contact (strap pressure, sweat) all make noise without any body movement.
+
+## 5. Checklist for one beat
+
+1. March out the rhythm. Early or on time?
+2. If on time → almost certainly **sinus (N)**, even if the shape looks odd.
+3. If early → look at the QRS: narrow and like your normal beats → **PAC (S)** likely; wide and different → **PVC (V)** likely.
+4. Check the pause: compensatory (PVC-like) or reset (PAC-like)?
+5. Look for a T wave of opposite polarity after a suspected PVC.
+6. Apply the refractory rule: any normal spike too close to the "PVC"? → noise.
+7. Fuzzy, ramps, steps, no T wave → **noise (Q)**.
+8. Cannot decide → it is fine to leave it undecided. One lead at 130 Hz has limits.
+
+## 6. How the app's labels can mislead
+
+- **A false detection poisons the next beat.** If noise is detected as a beat (`Q`), the next *real* beat gets a
+  short `rrMs` and looks premature, so it can be called `V` or `S`. Measure prematurity from the last good beat.
+- **`vDoubt = 1`** means a V resting only on the drift-sensitive shape rules while the baseline drifts
+  ("questionable V"). Treat those with extra suspicion.
+- **Low `corr`** (shape match to your normal template) can come from a drifting baseline, not a different beat.
+- **`qrsWidthMs`** at 130 Hz is coarse (one sample ≈ 7.7 ms).
+
+## 7. Worked example: session 20261116T140043Z, 2026-11-17 06:44:39–42 JST
+
+Context: lying perfectly still (accelerometer flat apart from the heartbeat bump); sinus rate had just slowed
+from ≈ 105 to ≈ 50 bpm in about 10 s.
+
+| Time (JST) | App | Reading |
+|---|---|---|
+| 06:44:39.964 | N | Sinus beat; a jagged +600 µV step 160 ms before it is noise (refractory rule: no ventricular event can sit that close before a normal QRS) |
+| 06:44:40.894 | Q, 238 ms, sqi 0.18 | **Noise**: broad dip to −470 µV and a quick swing; a normal narrow spike follows only ≈ 220 ms later |
+| 06:44:41.117 | **V**, RR 223 ms | **Sinus beat**: 1153 ms after the previous sinus beat, exactly on schedule (1214 → 1204 → 1153 → 1111 → 1079 ms), normal narrow spike. Called V only because of the false Q before it |
+| 06:44:41.7–42.2 | (no beat) | **Noise**: dip, straight slow ramp, vertical +530 µV step with fuzzy plateau, no T wave after; the same step shape as at 39.80. The H10's own RR stream also saw no beat |
+| 06:44:42.228 | N | Sinus beat, on time |
+
+Fuzziness measured between beats: ≈ 3–9 in clean stretches, 22–42 inside this burst.
+
+Same night, the app's 50 most confident `V` beats: early (≈ 500 ms) but the pause after them is **not**
+compensatory (average `(coupling + pause) / (2 × previous RR)` = 0.88; only 1 of 50 ≥ 0.95), which is more
+typical of PACs than PVCs. Not proof; to be rechecked with the learned classifier (plan P7.1).
+
+## 8. Where real ground truth could come from
+
+- **Artifact test recording:** lie still, awake, and do one thing at a time with written clock times
+  (tense chest, deep breath / sigh, swallow, hold breath, press the strap, cough). This shows what *your* noise
+  looks like with a flat accelerometer.
+- **H10 worn during a clinical Holter:** the cardiologist's reading of the Holter gives trustworthy labels for the
+  same moments in the H10 data.
+- **Expert-labelled public databases** (MIT-BIH, INCART, svdb): what the learned classifier is trained on
+  (plan P7.1); good for "what does a PVC usually look like", not for your exact lead.

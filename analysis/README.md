@@ -22,6 +22,8 @@ Contents now:
 | `test_label_data.py`, `test_label_beats.py` | Tests of the labeling tool |
 | `premature_beats.py` | Rough PAC-like / PVC-like counts per hour, before P4 (see below) |
 | `test_premature_beats.py` | Tests of the rough count |
+| `build_dataset.py` | Training data for the learned classifier (P7.1a): all leads, 130 Hz, app filter, patient split → `data/dataset/` |
+| `test_build_dataset.py` | Offline tests of the dataset builder |
 | `requirements.txt` | Python packages |
 
 ## Setup on Windows (once)

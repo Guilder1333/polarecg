@@ -739,9 +739,40 @@ Details in §7.5–7.6.
 ### Phase 7 — Optional: learned classifier
 
 Only if rules plateau (e.g. S beats or noise misclassified too often).
+**Started 2026-11-17 (owner):** the rules plateaued; the owner cannot label PVC/PAC/noise reliably, so a model
+trained on expert-labelled databases is the way forward. Finding that day (session 20261116T140043Z): the 50
+most confident rule V beats are early (~500 ms) but the pause after them is not compensatory
+((coupling + post) / 2·pre = 0.88 on average, 1 of 50 ≥ 0.95), more typical of PACs than PVCs — to be rechecked
+with the model.
 
-- [ ] **P7.1 [AI]** PyTorch 1D-CNN: input ≈ 1 s ECG around the beat (130 samples) + RR features;
-  pre-train on MIT-BIH + INCART (130 Hz), fine-tune on your labeled beats.
+- [ ] **P7.1 [AI]** PyTorch 1D-CNN trained **only on expert-labelled public databases**.
+  Decided with the owner 2026-11-17: the owner's own labels are **not** ground truth (the owner cannot reliably tell
+  PVC from PAC from noise, and no doctor-labelled Holter is available), so no fine-tuning on them; they may be used
+  only as a sanity check. Consequence: accuracy on the owner's H10 cannot be measured directly, only on held-out
+  database patients plus the label-free checks of P7.1d.
+  - [x] **P7.1a** Dataset builder `analysis/build_dataset.py` → `data/dataset/`: every lead of every record
+    (H10's lead matches none, so the model must be lead-agnostic), resampled to 130 Hz, µV, filtered with the app's
+    causal morphology chain (0.5–40 Hz, `EcgFilters`), beat positions shifted by its group delay (1 sample); AAMI classes
+    N/S/V/F/Q; RR context per beat; split **by patient** (MIT-BIH: de Chazal DS1 = train/val, DS2 = test; paced records
+    102/104/107/217 left out; INCART by the `# patient N` header line, 75 records / 32 patients). NSTDB `bw`/`em`/`ma`
+    stored as noise for augmentation and a "not a beat" class. Signals are stored continuous, windows are cut at
+    training time (`cut_window`). The split lives only in `manifest.csv`.
+    Done when: the builder runs on MIT-BIH + INCART + NSTDB, has unit tests, prints per-split class counts.
+    (Done 2026-11-17. A random patient split gave validation only 21 S beats (S sits in few patients; INCART
+    patient 15 has 1127 of 1960), so the split of non-standard pools is a seeded search over whole-patient splits
+    closest to the target shares of N, S, V and patients (INCART 60/15/25 %, MIT-BIH DS1 80/20 % train/val).
+    Result, beats: train 36 patients, N 124,345 / S 1,968 / V 14,978 / F 523; val 10 patients, 33,382 / 484 /
+    2,915 / 108; test 30 patients, 86,069 / 2,289 / 9,127 / 391. ×leads = 1.29 M / 0.35 M / 0.68 M windows; 284 MB.
+    Known caveat: MIT-BIH 201 (DS1) and 202 (DS2) are the same patient, kept for comparability with the literature.)
+  - [ ] **P7.1b** More data closer to the H10: MIT-BIH Supraventricular Arrhythmia DB (`svdb`, many PACs, for S vs V);
+    look at Icentia11k (≈11k patients, single-lead chest patch, N/S/V labels; very large — check size/licence first).
+  - [ ] **P7.1c** Model: input ≈ 3 s of ECG (previous beat, beat, next beat) + RR features; classes N/S/V(+F)/noise;
+    training-time augmentation: random polarity flip, amplitude scale, NSTDB noise, baseline wander.
+    Done when: patient-split test figures (Se/+P per class) are reported next to the rule-based ones.
+  - [ ] **P7.1d** Label-free checks on own nights: deliberate-artifact recording (tense chest, deep breath, swallow,
+    cough, press strap, with written times) must come out as noise; model V should mostly be early with a compensatory
+    pause, model S should mostly reset the rhythm; detections where the H10's own RR shows no beat are reviewed;
+    known case 2026-11-17 06:44:40.894 JST = noise, 06:44:41.117 = N (session 20261116T140043Z).
   Cases for the learned classifier (owner, 2026-11-11): a beat the detector MISSED in baseline drift leaves a long interval that the rules call SS (6 of 65 labelled SS were N, 5 of them after a Q or V; the clean one is 2026-11-11 21:09:35 JST, `utcMs` 1794398975850, a beat exactly in the middle of the gap). Rules cannot tell it from a suppressed beat without looking at the ECG inside the gap (template search in the gap); the model can be given the gap's signal.
 - [ ] **P7.2 [AI]** Export to TFLite / ONNX, run in `:app` (model input prepared by `:core-dsp`).
 - [ ] **P7.3 [YOU+AI]** Compare with rule-based on held-out nights; keep rules as fallback.

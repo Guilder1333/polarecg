@@ -10,6 +10,8 @@ premature beat (PVC/PAC) detection and HRV. Everything runs on the phone; no clo
 - The owner is still learning Kotlin: explain non-obvious Kotlin/Android constructs briefly
   when you write them.
 - Never commit recordings or health data; they belong in `data/` (git-ignored).
+- `docs/READING_BEATS.md` is the owner's guide to telling PVC / PAC / noise apart. Add new explanations and worked
+  examples there when reviewing beats with the owner.
 
 ## Raw recording rules (decided with the owner; details in `docs/RAW_FORMAT.md` and plan §8)
 
