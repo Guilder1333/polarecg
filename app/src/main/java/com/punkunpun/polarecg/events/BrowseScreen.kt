@@ -285,13 +285,12 @@ fun BrowseWindowScreen(
                 FilledTonalIconButton(enabled = !saving && nextMs != null, onClick = { save(true) }) { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.br_next)) }
             }
         }
-        Text(localTimeMs(beatUtcMs), style = MaterialTheme.typography.titleMedium)
         if (c == null) {
             Text(stringResource(if (loaded) R.string.br_no_ecg else R.string.br_loading))
         } else {
             Text(stringResource(R.string.br_hint), style = MaterialTheme.typography.bodySmall)
             ClipReviewBody(
-                app, c, initialBeatMs = beatUtcMs, acc = window?.acc, showBeatTime = false,
+                app, c, initialBeatMs = beatUtcMs, acc = window?.acc,
                 staging = StagedLabels(staged) { beat, label -> staged = if (label == null) staged - beat else staged + (beat to label) },
             )
         }

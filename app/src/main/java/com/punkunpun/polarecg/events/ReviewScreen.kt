@@ -175,7 +175,6 @@ internal fun ClipReviewBody(
     staging: StagedLabels? = null,
     acc: AccWindow? = null,
     accLoading: Boolean = false,
-    showBeatTime: Boolean = true, // the beat browse shows the time of its beat in its own title
 ) {
     val labelDao = app.database.labelDao()
     val scope = rememberCoroutineScope()
@@ -211,20 +210,25 @@ internal fun ClipReviewBody(
         var history by remember(beat.utcMs) { mutableStateOf(emptyList<LabelEntity>()) }
         LaunchedEffect(beat.utcMs, current?.id) { history = withContext(Dispatchers.IO) { labelDao.historyOf(beat.utcMs) } }
 
-        if (showBeatTime) Text(localTimeMs(beat.utcMs), style = MaterialTheme.typography.titleSmall)
-        Text(stringResource(R.string.ev_auto, autoText(beat)))
-        neighbourIntervals(c.beats, c.beats.indexOf(beat)).let { (before, after) ->
-            Text(stringResource(R.string.ev_rr, before?.toString() ?: "-", after?.toString() ?: "-"))
-        }
-        // the motion the signal quality used for this beat (saved with the beat; gone once the beat row is pruned after 90 days)
-        var motionMg by remember(beat.utcMs) { mutableStateOf<Double?>(null) }
-        LaunchedEffect(beat.utcMs) { motionMg = withContext(Dispatchers.IO) { app.database.beatDao().beatAt(beat.utcMs)?.motionMg } }
-        Text(stringResource(R.string.ev_motion, motionMg?.let { "%.0f".format(java.util.Locale.US, it) } ?: "-"))
+        // The details of the selected beat: a little smaller than body text and with no gap between the lines
+        val info = MaterialTheme.typography.bodyMedium.copy(lineHeight = 18.sp)
         val pending = staging?.marks?.get(beat.utcMs)
-        val shownMark = if (pending != null) pending.ifEmpty { labelText("") } else ownerMark(current) ?: stringResource(R.string.ev_not_labelled)
-        Text(
-            stringResource(R.string.ev_yours, shownMark) + if (pending != null) " " + stringResource(R.string.br_pending) else "",
-        )
+        Column {
+            Text(localTimeMs(beat.utcMs), style = info.copy(fontWeight = FontWeight.Bold))
+            Text(stringResource(R.string.ev_auto, autoText(beat)), style = info)
+            neighbourIntervals(c.beats, c.beats.indexOf(beat)).let { (before, after) ->
+                Text(stringResource(R.string.ev_rr, before?.toString() ?: "-", after?.toString() ?: "-"), style = info)
+            }
+            // the motion the signal quality used for this beat (saved with the beat; gone once the beat row is pruned after 90 days)
+            var motionMg by remember(beat.utcMs) { mutableStateOf<Double?>(null) }
+            LaunchedEffect(beat.utcMs) { motionMg = withContext(Dispatchers.IO) { app.database.beatDao().beatAt(beat.utcMs)?.motionMg } }
+            Text(stringResource(R.string.ev_motion, motionMg?.let { "%.0f".format(java.util.Locale.US, it) } ?: "-"), style = info)
+            val shownMark = if (pending != null) pending.ifEmpty { labelText("") } else ownerMark(current) ?: stringResource(R.string.ev_not_labelled)
+            Text(
+                stringResource(R.string.ev_yours, shownMark) + if (pending != null) " " + stringResource(R.string.br_pending) else "",
+                style = info,
+            )
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (choice in OwnerLabel.CHOICES) {
                 val chosen = choice.isNotEmpty() && (pending ?: current?.label) == choice
