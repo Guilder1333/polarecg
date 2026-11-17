@@ -58,5 +58,33 @@ class ConversionTest(unittest.TestCase):
         self.assertEqual(ecg.frame_phone_ms[1], fp.START_PHONE_MS + round(139 * 1000 / 130))
 
 
+class PassesTest(unittest.TestCase):
+    def test_failed_records_are_retried_in_later_rounds(self):
+        calls = []
+        flaky = {"801": 2}  # fails twice, then works
+
+        def convert(db, rec, out, raw):
+            calls.append(rec)
+            if flaky.get(rec, 0) > 0:
+                flaky[rec] -= 1
+                raise OSError("network down")
+            return "ok"
+
+        left = fp.run_passes([("svdb", "800"), ("svdb", "801")], Path("o"), Path("r"), 3,
+                             convert=convert, wait_s=0)
+        self.assertEqual(left, [])
+        self.assertEqual(calls, ["800", "801", "801", "801"])
+
+    def test_still_failing_after_all_rounds_is_returned(self):
+        def convert(db, rec, out, raw):
+            raise OSError("gone")
+
+        left = fp.run_passes([("svdb", "800")], Path("o"), Path("r"), 2, convert=convert, wait_s=0)
+        self.assertEqual(left, [("svdb", "800")])
+
+    def test_svdb_is_known(self):
+        self.assertIn("svdb", fp.DATABASES)
+
+
 if __name__ == "__main__":
     unittest.main()

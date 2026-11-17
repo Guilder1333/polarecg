@@ -1,6 +1,7 @@
 """Download reference ECG databases from PhysioNet and convert them to PolarECG's raw format.
 
-    python analysis/fetch_physionet.py                       # all three databases (slow, large)
+    python analysis/fetch_physionet.py                       # all databases (slow, large)
+    python analysis/fetch_physionet.py --db svdb             # one database
     python analysis/fetch_physionet.py --db mitdb --records 100 101
     python analysis/fetch_physionet.py --db mitdb --limit 3  # quick try
 
@@ -11,7 +12,10 @@ For every record this writes ``data/reference/<db>/<record>/``:
     reference.json             where it came from (db, record, lead, original rate)
 
 The original PhysioNet files (all leads, original rate) are kept in ``data/physionet/<db>/``, so
-the conversion can be redone without downloading again. Downloaded files are never overwritten. Converted
+the conversion can be redone without downloading again. Downloaded files are never overwritten.
+Slow or failing downloads: each file is fetched into ``<file>.part`` and resumed where it stopped,
+with retries and growing waits; records that still fail are tried again in up to ``--passes``
+rounds at the end. Interrupting (Ctrl+C) and running the same command again continues the work. Converted
 records are skipped, unless they were made by an older converter version (then they are redone
 from the local originals). ``data/`` is git-ignored.
 Data come from https://physionet.org (ODC-By / Open Data Commons licences; cite the databases).
@@ -48,6 +52,8 @@ DATABASES = {
     "mitdb": ("mitdb", "atr", ("MLII", "II")),
     "incartdb": ("incartdb", "atr", ("II",)),
     "nstdb": ("nstdb", "atr", ("MLII", "II")),
+    # MIT-BIH Supraventricular Arrhythmia DB: 78 half-hour records, 2 leads, 128 Hz, many PACs (P7.1b)
+    "svdb": ("svdb", "atr", ("ECG1",)),
 }
 
 # AAMI EC57 classes of MIT-BIH beat symbols. Anything else that is a beat becomes Q.
@@ -204,22 +210,45 @@ def main(argv=None) -> int:
     p.add_argument("--limit", type=int, help="only the first N records of each database")
     p.add_argument("--out", type=Path, default=Path("data/reference"), help="converted records")
     p.add_argument("--raw", type=Path, default=Path("data/physionet"), help="original downloads")
+    p.add_argument("--passes", type=int, default=3, help="rounds for records that fail (default 3)")
     args = p.parse_args(argv)
 
-    failures = 0
+    todo = []
     for db_key in args.db:
         records = args.records or list_records(DATABASES[db_key][0])
         if args.limit:
             records = records[: args.limit]
-        for record in records:
+        todo += [(db_key, r) for r in records]
+    failed = run_passes(todo, args.out, args.raw, args.passes)
+    if failed:
+        print(f"{len(failed)} record(s) still failing; run the same command again to continue: "
+              + " ".join(f"{d}/{r}" for d, r in failed), file=sys.stderr)
+    return 1 if failed else 0
+
+
+def run_passes(todo, out_root: Path, raw_root: Path, passes: int, convert=None, wait_s: float = 60.0):
+    """Converts every (db, record); the ones that fail are tried again in later rounds.
+
+    One bad record never stops the run. A failure can be a network outage that outlasted the
+    per-file retries, so each extra round starts after a pause. Returns what still fails."""
+    convert = convert or convert_record
+    for round_ in range(1, max(passes, 1) + 1):
+        if round_ > 1:
+            print(f"round {round_}/{passes}: retrying {len(todo)} failed record(s) in {wait_s:.0f}s",
+                  flush=True)
+            time.sleep(wait_s)
+        failed = []
+        for db_key, record in todo:
             try:
-                status = convert_record(db_key, record, args.out, args.raw)
+                status = convert(db_key, record, out_root, raw_root)
             except Exception as e:  # keep going: one bad record should not stop a long download
-                failures += 1
+                failed.append((db_key, record))
                 status = f"FAILED: {type(e).__name__}: {e}"
             print(f"{db_key}/{record}: {status}", flush=True)
-    return 1 if failures else 0
-
+        todo = failed
+        if not todo:
+            break
+    return todo
 
 if __name__ == "__main__":
     sys.exit(main())
