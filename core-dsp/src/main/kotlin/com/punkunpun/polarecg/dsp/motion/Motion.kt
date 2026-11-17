@@ -45,7 +45,7 @@ class MotionStream(private val rateHz: Int = ACC_SAMPLE_RATE_HZ, private val ret
     private val bins = TreeMap<Long, Sums>()
     private val mapper = TimeMapper()
     private var runStartUtc = 0L
-    private var runIndex = 0 // samples since the start of the current gap-free run
+    private var runStartSensorNs = 0L
     private var expectedNextNs: Long? = null
     private var lastSensorNs = Long.MIN_VALUE
 
@@ -64,18 +64,21 @@ class MotionStream(private val rateHz: Int = ACC_SAMPLE_RATE_HZ, private val ret
         val contiguous = expected != null && abs(sensorTimeNs - expected) <= CONTIGUOUS_TOLERANCE_MS * 1_000_000L
         if (!contiguous) {
             runStartUtc = mapper.toUtcMs(sensorTimeNs) ?: phoneTimeMs
-            runIndex = 0
+            runStartSensorNs = sensorTimeNs
         }
+        // Each frame is placed by the strap's own clock, not by counting samples at the nominal rate: the real rate is a little
+        // off 50 Hz (about 50.9 on the owner's strap), and counting would drift the bins away from the beats by minutes per hour.
+        // Inside one frame (about 0.7 s) the nominal spacing is accurate enough.
+        val frameUtc = runStartUtc + (sensorTimeNs - runStartSensorNs) / 1_000_000L
         for (i in 0 until n) {
-            val utc = runStartUtc + (runIndex + i) * 1000L / rateHz
+            val utc = frameUtc + i * 1000L / rateHz
             val s = bins.getOrPut(Math.floorDiv(utc, MOTION_BIN_MS)) { Sums() }
             val x = xMg[i].toDouble(); val y = yMg[i].toDouble(); val z = zMg[i].toDouble()
             s.n++
             s.sx += x; s.sy += y; s.sz += z
             s.qx += x * x; s.qy += y * y; s.qz += z * z
         }
-        watermarkUtcMs = runStartUtc + (runIndex + n - 1) * 1000L / rateHz
-        runIndex += n
+        watermarkUtcMs = frameUtc + (n - 1) * 1000L / rateHz
         expectedNextNs = sensorTimeNs + n * 1_000_000_000L / rateHz
         if (retainMs != Long.MAX_VALUE) bins.headMap(Math.floorDiv(watermarkUtcMs!! - retainMs, MOTION_BIN_MS)).clear()
     }

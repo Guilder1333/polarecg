@@ -60,6 +60,26 @@ class MotionTest {
     }
 
     @Test
+    fun binsFollowTheStrapClockWhenItsRateIsNotExactly50Hz() {
+        // The real H10 samples at about 51 Hz while we ask for 50: counting samples at 50 Hz would put a bump 10 min into one
+        // gap-free run 12 s away from where it happened. The bump (one frame of 300 mG) is at strap time 600 s.
+        val realHz = 51.0
+        val framePeriodMs = 36 / realHz * 1000
+        val rnd = Random(3)
+        val frames = (0 until 1000).map { k ->
+            val startMs = t0 + (k * framePeriodMs).toLong()
+            val bump = startMs in (t0 + 600_000)..(t0 + 600_700)
+            val x = IntArray(36) { (if (bump && it % 2 == 0) 300 else 0) + (rnd.nextGaussian() * 2).toInt() }
+            val y = IntArray(36) { (rnd.nextGaussian() * 2).toInt() }
+            val z = IntArray(36) { 1000 }
+            RawRecord.Acc(startMs + 800, (startMs - POLAR_EPOCH_UNIX_MS) * 1_000_000, x, y, z)
+        }
+        val bins = buildMotionBins(frames)
+        val loudest = bins.maxByOrNull { it.motionMg }!!
+        assertTrue(abs(loudest.startUtcMs - (t0 + 600_000)) <= 1_000, "loudest bin at +${(loudest.startUtcMs - t0) / 1000.0} s, expected 600 s")
+    }
+
+    @Test
     fun gravityAloneIsNotMotion() {
         // z = 1000 mG constant: a large DC value must not count, only the variation
         val bins = buildMotionBins(frames(10))
@@ -130,5 +150,36 @@ class MotionTest {
         assertNotNull(q.motionMg)
         assertEquals(0.8 * q.motionScore, q.sqi, 1e-12)
         assertTrue(q.sqi < 0.6) // 400 mG is above the good cut-off for an otherwise good beat
+    }
+}
+
+class MotionRefitTest {
+    @Test
+    fun theEcgPartIsKeptAndTheMotionScoreReplaced() {
+        // saved with 350 mG: score 0.5, sqi 0.8 * 0.5 = 0.4 (not good); the real motion was 3 mG: score 1, sqi 0.8 (good)
+        val r = com.punkunpun.polarecg.dsp.motion.refitMotion(oldSqi = 0.4, oldMotionMg = 350.0, oldGood = false, newMotionMg = 3.0)!!
+        assertEquals(0.8, r.sqi, 1e-9)
+        assertTrue(r.good)
+        assertEquals(3.0, r.motionMg)
+    }
+
+    @Test
+    fun aBeatThatWasWronglyQuietGetsTheLowerScore() {
+        val r = com.punkunpun.polarecg.dsp.motion.refitMotion(oldSqi = 0.9, oldMotionMg = 5.0, oldGood = true, newMotionMg = 600.0)!!
+        assertEquals(0.0, r.sqi, 1e-9)
+        assertTrue(!r.good)
+    }
+
+    @Test
+    fun withoutOldScoreOnlyTheMotionIsReplaced() {
+        val r = com.punkunpun.polarecg.dsp.motion.refitMotion(oldSqi = 0.0, oldMotionMg = 900.0, oldGood = false, newMotionMg = 4.0)!!
+        assertEquals(0.0, r.sqi)
+        assertTrue(!r.good)
+        assertEquals(4.0, r.motionMg)
+    }
+
+    @Test
+    fun noNewMotionMeansNoChange() {
+        assertNull(com.punkunpun.polarecg.dsp.motion.refitMotion(0.5, 10.0, true, null))
     }
 }

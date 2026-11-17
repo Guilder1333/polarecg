@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -27,6 +28,10 @@ import androidx.compose.ui.unit.dp
 import com.punkunpun.polarecg.PolarApp
 import com.punkunpun.polarecg.R
 import com.punkunpun.polarecg.service.AcquisitionService
+import com.punkunpun.polarecg.storage.refitSessionMotion
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Speed factors offered; 0 = as fast as the pipeline can go. */
 private val SPEEDS = listOf(1.0, 10.0, 60.0, 0.0)
@@ -91,6 +96,31 @@ fun ReplayScreen(app: PolarApp, onBack: () -> Unit, onOpenLive: () -> Unit, modi
             OutlinedButton(onClick = onOpenLive) { Text(stringResource(R.string.live_open)) }
             OutlinedButton(onClick = onBack) { Text(stringResource(R.string.diag_back)) }
         }
+
+        // One-off repair of the motion saved with the beats of a session recorded before the ACC timing fix.
+        val scope = rememberCoroutineScope()
+        var refitting by remember { mutableStateOf(false) }
+        var refitText by remember { mutableStateOf<String?>(null) }
+        OutlinedButton(
+            onClick = {
+                val dir = selected?.let { java.io.File(it) } ?: return@OutlinedButton
+                refitting = true
+                refitText = null
+                scope.launch {
+                    refitText = try {
+                        val r = withContext(Dispatchers.IO) { refitSessionMotion(dir, app.database.beatDao()) }
+                        if (r.noAcc) app.getString(R.string.refit_no_acc) else app.getString(R.string.refit_done, r.checked, r.changed)
+                    } catch (e: Exception) {
+                        app.getString(R.string.refit_failed, e.message ?: e.javaClass.simpleName)
+                    }
+                    refitting = false
+                }
+            },
+            enabled = selected != null && !sessionRunning && !state.running && !state.loading && !refitting,
+        ) { Text(stringResource(R.string.refit_button)) }
+        Text(stringResource(R.string.refit_hint), style = MaterialTheme.typography.bodySmall)
+        if (refitting) Text(stringResource(R.string.refit_running))
+        refitText?.let { Text(it) }
 
         if (state.loading) Text(stringResource(R.string.replay_loading))
         if (state.running) LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())

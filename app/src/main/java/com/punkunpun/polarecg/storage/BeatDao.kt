@@ -23,6 +23,10 @@ interface BeatDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(beats: List<BeatEntity>)
 
+    /** Same as [insertAll], blocking, for work that already runs on a background thread (the motion repair). */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAllBlocking(beats: List<BeatEntity>)
+
     /** The beat at exactly this time, or null (deep link to a beat). Blocking, like [beatsBetween]. */
     @Query("SELECT * FROM beat WHERE utcMs = :utcMs")
     fun beatAt(utcMs: Long): BeatEntity?

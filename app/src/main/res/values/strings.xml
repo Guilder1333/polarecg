@@ -194,6 +194,12 @@
     <string name="replay_start">Start</string>
     <string name="replay_stop">Stop</string>
     <string name="replay_loading">Reading the session…</string>
+    <string name="refit_button">Fix saved motion of this session</string>
+    <string name="refit_hint">Beats saved before the accelerometer timing fix show the motion of the wrong second. This recomputes it from the raw files for the session above: motion, signal score and good/bad of the saved beats. Classes, labels and the long-term summaries are not touched. Safe to run twice.</string>
+    <string name="refit_running">Recomputing…</string>
+    <string name="refit_done">Looked at %1$d beats, fixed %2$d.</string>
+    <string name="refit_no_acc">This session has no accelerometer data: nothing to fix.</string>
+    <string name="refit_failed">Failed: %1$s</string>
     <string name="replay_errors">Frames that failed: %1$d</string>
     <string name="live_scale_hint">Last 5 s, vertical lines are 1 s apart. The vertical scale adapts automatically.</string>
 
