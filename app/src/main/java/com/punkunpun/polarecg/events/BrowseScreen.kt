@@ -52,6 +52,7 @@ import com.punkunpun.polarecg.dsp.annotations.labelsToSave
 import com.punkunpun.polarecg.dsp.classify.ClassifierConfig
 import com.punkunpun.polarecg.dsp.event.ClipBeat
 import com.punkunpun.polarecg.dsp.event.EventClip
+import com.punkunpun.polarecg.dsp.motion.AccWindow
 import com.punkunpun.polarecg.storage.BeatEntity
 import com.punkunpun.polarecg.storage.LabelEntity
 import com.punkunpun.polarecg.storage.toRecord
@@ -225,13 +226,13 @@ fun BrowseWindowScreen(
     /** The ids of all beats of the list being browsed, in time order (for loading the neighbours ahead). */
     browseList: suspend () -> List<Long>,
     /** Windows of the beats near this one, loaded ahead (see [ClipCache]); kept by the caller across the beats. */
-    cache: ClipCache<EventClip>,
+    cache: ClipCache<BeatWindow>,
     onOpenBeat: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack) // Back = Cancel: nothing was saved
     val scope = rememberCoroutineScope()
-    var clip by remember(beatUtcMs) { mutableStateOf<EventClip?>(null) }
+    var window by remember(beatUtcMs) { mutableStateOf<BeatWindow?>(null) }
     var loaded by remember(beatUtcMs) { mutableStateOf(false) }
     var staged by rememberSaveable(beatUtcMs, stateSaver = StagedSaver) { mutableStateOf(emptyMap<Long, String>()) }
     var saving by remember(beatUtcMs) { mutableStateOf(false) }
@@ -243,7 +244,7 @@ fun BrowseWindowScreen(
     }
 
     LaunchedEffect(beatUtcMs) {
-        clip = cache.open(beatUtcMs).await() // at once when Next or Previous had it ready
+        window = cache.open(beatUtcMs).await() // at once when Next or Previous had it ready
         loaded = true
         // the window is on the screen: now start the next two beats and the previous one (and forget the others)
         cache.prefetch(beatUtcMs, browseList)
@@ -253,7 +254,7 @@ fun BrowseWindowScreen(
         modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val c = clip
+        val c = window?.clip
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (c == null) {
                 OutlinedButton(onClick = onBack) { Text(stringResource(R.string.ev_back)) }
@@ -290,7 +291,7 @@ fun BrowseWindowScreen(
         } else {
             Text(stringResource(R.string.br_hint), style = MaterialTheme.typography.bodySmall)
             ClipReviewBody(
-                app, c, initialBeatMs = beatUtcMs,
+                app, c, initialBeatMs = beatUtcMs, acc = window?.acc,
                 staging = StagedLabels(staged) { beat, label -> staged = if (label == null) staged - beat else staged + (beat to label) },
             )
         }
@@ -299,10 +300,14 @@ fun BrowseWindowScreen(
 
 private const val WINDOW_HALF_MS = 10_000L
 
-/** The window of [beatUtcMs] for the beat screen: raw ECG from the files and the beats of the database around it; null = no ECG. */
-internal fun loadBeatClip(app: PolarApp, beatUtcMs: Long): EventClip? {
-    val ecg = loadRawWindow(app.sessionsDir, beatUtcMs, WINDOW_HALF_MS) ?: return null
+/** What the beat screen shows: the ECG with the beats ([clip]) and the accelerometer of the same time ([acc], null without ACC data). */
+class BeatWindow(val clip: EventClip, val acc: AccWindow?)
+
+/** The window of [beatUtcMs] for the beat screen: raw ECG and ACC from the files and the beats of the database around it; null = no ECG. */
+internal fun loadBeatClip(app: PolarApp, beatUtcMs: Long): BeatWindow? {
+    val raw = loadRawWindow(app.sessionsDir, beatUtcMs, WINDOW_HALF_MS) ?: return null
+    val ecg = raw.ecg
     val beats = app.database.beatDao().beatsBetween(ecg.startUtcMs, ecg.endUtcMs + 1)
         .map { ClipBeat(it.utcMs, it.cls, it.good, it.vDoubt, it.rescued) }
-    return EventClip(ecg, beats, eventStartUtcMs = beatUtcMs, eventEndUtcMs = beatUtcMs)
+    return BeatWindow(EventClip(ecg, beats, eventStartUtcMs = beatUtcMs, eventEndUtcMs = beatUtcMs), raw.acc)
 }

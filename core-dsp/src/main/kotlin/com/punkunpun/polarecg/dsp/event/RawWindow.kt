@@ -3,6 +3,7 @@ package com.punkunpun.polarecg.dsp.event
 import com.punkunpun.polarecg.dsp.analysis.EcgSegment
 import com.punkunpun.polarecg.dsp.analysis.buildSegments
 import com.punkunpun.polarecg.dsp.live.EcgClip
+import com.punkunpun.polarecg.dsp.motion.cutAccWindow
 import com.punkunpun.polarecg.dsp.raw.RawRecord
 import java.io.File
 import java.time.LocalDateTime
@@ -20,9 +21,28 @@ private val STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
  * Start time (UTC ms) from the name of a finished ECG file, `ecg_20261105T201459Z.bin` (a counter or `_empty` suffix is
  * allowed); null for anything else, including the current file `ecg.bin`, which has no stamp.
  */
-fun ecgFileStampMs(name: String): Long? {
-    if (!name.startsWith("ecg_") || !name.endsWith(".bin") || name.length < 4 + 16 + 4) return null
-    return runCatching { LocalDateTime.parse(name.substring(4, 20), STAMP).toInstant(ZoneOffset.UTC).toEpochMilli() }.getOrNull()
+fun ecgFileStampMs(name: String): Long? = fileStampMs(name, "ecg")
+
+/** Like [ecgFileStampMs] for the files of any stream: `<prefix>_<stamp>.bin`. */
+fun fileStampMs(name: String, prefix: String): Long? {
+    val start = prefix.length + 1
+    if (!name.startsWith("${prefix}_") || !name.endsWith(".bin") || name.length < start + 16 + 4) return null
+    return runCatching { LocalDateTime.parse(name.substring(start, start + 16), STAMP).toInstant(ZoneOffset.UTC).toEpochMilli() }.getOrNull()
+}
+
+/**
+ * The ACC files of one session that can hold samples of `[fromUtcMs, toUtcMs]`, oldest first: the last finished file that starts
+ * at or before [fromUtcMs], every finished file that starts inside the range, and the current `acc.bin` when no finished file starts
+ * after the range (then it may hold the end of it). Unlike the ECG ([ecgFilesFor]) the ACC needs no reading from the session's start:
+ * its samples are put on the ECG's time line through the strap's clock ([cutAccWindow]). Callers widen the range by a few seconds,
+ * because a file's stamp is the phone time of its first frame, which arrives a little after its samples.
+ */
+fun accFilesFor(files: List<File>, fromUtcMs: Long, toUtcMs: Long): List<File> {
+    val finished = files.mapNotNull { f -> fileStampMs(f.name, "acc")?.let { it to f } }.sortedBy { it.first }
+    val firstIndex = finished.indexOfLast { it.first <= fromUtcMs }.coerceAtLeast(0)
+    val chosen = finished.drop(firstIndex).filter { it.first <= toUtcMs }.map { it.second }
+    val current = files.firstOrNull { it.name == "acc.bin" }
+    return if (current != null && finished.none { it.first > toUtcMs }) chosen + current else chosen
 }
 
 /**
@@ -47,7 +67,18 @@ fun ecgFilesFor(files: List<File>, centerUtcMs: Long, halfWidthMs: Long): List<F
  * The samples of `center ± halfWidthMs` from the gap-free stretch of [frames] that contains [centerUtcMs]; null if the center
  * is in no stretch (a hole in the recording, or no data) or the piece is shorter than [MIN_WINDOW_SAMPLES]. Never spans a hole.
  */
-fun cutWindow(frames: List<RawRecord.Ecg>, centerUtcMs: Long, halfWidthMs: Long): EcgClip? {
+fun cutWindow(frames: List<RawRecord.Ecg>, centerUtcMs: Long, halfWidthMs: Long): EcgClip? =
+    cutWindowAnchored(frames, centerUtcMs, halfWidthMs)?.clip
+
+/**
+ * An ECG window ([clip]) and the point that ties its time line to the strap's clock: the strap time [anchorSensorNs] is at
+ * [anchorUtcMs] (the first sample of the stretch the window was cut from). The accelerometer has the same clock, so its
+ * samples can be placed on exactly the same time line as the ECG and the beats ([cutAccWindow]).
+ */
+class RawEcgWindow(val clip: EcgClip, val anchorUtcMs: Long, val anchorSensorNs: Long)
+
+/** [cutWindow], also giving the clock anchor of the stretch (see [RawEcgWindow]). */
+fun cutWindowAnchored(frames: List<RawRecord.Ecg>, centerUtcMs: Long, halfWidthMs: Long): RawEcgWindow? {
     val seg = buildSegments(frames).firstOrNull { centerUtcMs >= it.startUtcMs && centerUtcMs <= it.endUtcMs } ?: return null
     val last = seg.samplesUv.size - 1
     val i0 = firstAtOrAfter(seg, centerUtcMs - halfWidthMs, last)
@@ -55,7 +86,8 @@ fun cutWindow(frames: List<RawRecord.Ecg>, centerUtcMs: Long, halfWidthMs: Long)
     if (i1 - i0 + 1 < MIN_WINDOW_SAMPLES) return null
     val out = seg.samplesUv.copyOfRange(i0, i1 + 1)
     val span = (seg.sampleUtcMs(i1) - seg.sampleUtcMs(i0)).toDouble()
-    return EcgClip(seg.sampleUtcMs(i0), if (out.size > 1) span / (out.size - 1) else 0.0, out)
+    val clip = EcgClip(seg.sampleUtcMs(i0), if (out.size > 1) span / (out.size - 1) else 0.0, out)
+    return RawEcgWindow(clip, seg.startUtcMs, seg.firstSensorNs)
 }
 
 const val MIN_WINDOW_SAMPLES = 130
