@@ -24,6 +24,8 @@ Contents now:
 | `test_premature_beats.py` | Tests of the rough count |
 | `build_dataset.py` | Training data for the learned classifier (P7.1a): all leads, 130 Hz, app filter, patient split → `data/dataset/` |
 | `test_build_dataset.py` | Offline tests of the dataset builder |
+| `train_beats.py` | Learned beat classifier (P7.1c): `train` a 1D-CNN on `data/dataset/`, `evaluate` it on the test split → `data/models/<run>/` |
+| `test_train_beats.py` | Offline tests of the training script |
 | `requirements.txt` | Python packages |
 
 ## Setup on Windows (once)
