@@ -766,6 +766,9 @@ with the model.
     Known caveat: MIT-BIH 201 (DS1) and 202 (DS2) are the same patient, kept for comparability with the literature.)
   - [ ] **P7.1b** More data closer to the H10: MIT-BIH Supraventricular Arrhythmia DB (`svdb`, many PACs, for S vs V);
     look at Icentia11k (≈11k patients, single-lead chest patch, N/S/V labels; very large — check size/licence first).
+    (2026-11-17: svdb done — `fetch_physionet.py --db svdb` (now with retry rounds), 78 records / patients, 2 leads,
+    128 Hz; in the dataset: S 3,074 test / 7,167 train / 1,957 val. Whole dataset now train 82 patients, N 220,637 /
+    S 9,135 / V 20,719; val 22, 59,120 / 2,441 / 4,502; test 50, 126,376 / 5,363 / 11,742. Icentia11k still open.)
   - [ ] **P7.1c** Model: input ≈ 3 s of ECG (previous beat, beat, next beat) + RR features; classes N/S/V(+F)/noise;
     training-time augmentation: random polarity flip, amplitude scale, NSTDB noise, baseline wander.
     Done when: patient-split test figures (Se/+P per class) are reported next to the rule-based ones.
