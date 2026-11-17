@@ -80,7 +80,7 @@ private fun labelText(label: String) = if (label.isEmpty()) "undone" else label
 /** The owner's current mark on a beat, or null if there is none (never labelled, or undone). "?" counts as a mark. */
 private fun ownerMark(row: LabelEntity?): String? = row?.label?.takeIf { it.isNotEmpty() }
 
-private fun localTimeMs(utcMs: Long) = "${localTime(utcMs)}.${(utcMs % 1000).toString().padStart(3, '0')}"
+internal fun localTimeMs(utcMs: Long) = "${localTime(utcMs)}.${(utcMs % 1000).toString().padStart(3, '0')}"
 
 private fun autoText(b: ClipBeat): String {
     val notes = buildList {
@@ -175,6 +175,7 @@ internal fun ClipReviewBody(
     staging: StagedLabels? = null,
     acc: AccWindow? = null,
     accLoading: Boolean = false,
+    showBeatTime: Boolean = true, // the beat browse shows the time of its beat in its own title
 ) {
     val labelDao = app.database.labelDao()
     val scope = rememberCoroutineScope()
@@ -210,7 +211,7 @@ internal fun ClipReviewBody(
         var history by remember(beat.utcMs) { mutableStateOf(emptyList<LabelEntity>()) }
         LaunchedEffect(beat.utcMs, current?.id) { history = withContext(Dispatchers.IO) { labelDao.historyOf(beat.utcMs) } }
 
-        Text(localTimeMs(beat.utcMs), style = MaterialTheme.typography.titleSmall)
+        if (showBeatTime) Text(localTimeMs(beat.utcMs), style = MaterialTheme.typography.titleSmall)
         Text(stringResource(R.string.ev_auto, autoText(beat)))
         neighbourIntervals(c.beats, c.beats.indexOf(beat)).let { (before, after) ->
             Text(stringResource(R.string.ev_rr, before?.toString() ?: "-", after?.toString() ?: "-"))
@@ -218,7 +219,7 @@ internal fun ClipReviewBody(
         // the motion the signal quality used for this beat (saved with the beat; gone once the beat row is pruned after 90 days)
         var motionMg by remember(beat.utcMs) { mutableStateOf<Double?>(null) }
         LaunchedEffect(beat.utcMs) { motionMg = withContext(Dispatchers.IO) { app.database.beatDao().beatAt(beat.utcMs)?.motionMg } }
-        Text(stringResource(R.string.ev_motion, motionMg?.let { "%.0f".format(java.util.Locale.US, it) } ?: "-", MOTION_OK_MG.toInt()))
+        Text(stringResource(R.string.ev_motion, motionMg?.let { "%.0f".format(java.util.Locale.US, it) } ?: "-"))
         val pending = staging?.marks?.get(beat.utcMs)
         val shownMark = if (pending != null) pending.ifEmpty { labelText("") } else ownerMark(current) ?: stringResource(R.string.ev_not_labelled)
         Text(
