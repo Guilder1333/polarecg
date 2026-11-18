@@ -782,6 +782,22 @@ with the model.
     polarity flip, ±2 sample jitter, mild noise on beats; NSTDB noise split in time (70 % train). Model 471k
     parameters. Smoke test (2 short epochs, CPU): val Se N 97 / S 51 / V 92 / X 98 %. CPU speed ≈ 0.6 s per batch
     of 256 → a full run (20 × 200k windows) ≈ 3 h; the PC has a GTX 1650 Ti, a CUDA build of PyTorch would cut that.)
+    (2026-11-18, first full run `data/models/20261118-220745` (GPU, torch 2.14.1+cu132, 27 min, best = epoch 7).
+    Validation mean Se swung 86–91 % between epochs (S 56–79 %): the validation set has few S patients, so the
+    pick of epoch 7 is partly luck. Test split, primary lead, Se / +P %:
+    | db | N | S | V |
+    |---|---|---|---|
+    | INCART (lead II) | 99.2 / 99.8 | 88.1 / 46.1 | 95.9 / 99.3 |
+    | MIT-BIH DS2 (MLII) | 92.8 / 97.9 | 22.6 / 11.1 | 91.4 / 82.5 |
+    | svdb (ECG1) | 93.8 / 99.2 | 84.8 / 44.6 | 62.3 / 81.0 |
+    | all | 95.3 / 98.9 | 63.8 / 32.8 | 87.2 / 90.7 |
+    Rules on INCART lead II for comparison (P4.5 step 1, Q counted as a miss): V 63 / 81, S 52 / 59, N 83 / 99.
+    Not-a-beat windows (test part of NSTDB noise): 99.7 % called X; real beats called X: 0.05 %.
+    Where it fails: MIT-BIH 232 (1,367 of 1,382 S missed: that patient's S beats are not early, the rhythm is
+    mostly S) and N called S in irregular rhythms (213: 1,814, 219 (AF): 640, 222 (flutter/AF): 391, svdb 867/866/876).
+    svdb V called S in 866/841/842 (375/241/49). Next ideas: longer RR history so the model can recognise an
+    irregular rhythm (AF) instead of calling every beat S; steadier model selection (average of epochs or a
+    bigger validation set); then run it on own nights (P7.1d).)
   - [ ] **P7.1d** Label-free checks on own nights: deliberate-artifact recording (tense chest, deep breath, swallow,
     cough, press strap, with written times) must come out as noise; model V should mostly be early with a compensatory
     pause, model S should mostly reset the rhythm; detections where the H10's own RR shows no beat are reviewed;
