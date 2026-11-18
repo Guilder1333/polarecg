@@ -97,6 +97,19 @@ Same night, the app's 50 most confident `V` beats: early (≈ 500 ms) but the pa
 compensatory (average `(coupling + pause) / (2 × previous RR)` = 0.88; only 1 of 50 ≥ 0.95), which is more
 typical of PACs than PVCs. Not proof; to be rechecked with the learned classifier (plan P7.1).
 
+### What the first learned model said about this night (2026-11-18)
+
+- 06:44:40.894 → noise (98 %), as read above. 06:44:49.408 (app V) → normal.
+- 06:44:41.117 → noise (95 %): **the model is wrong here**. It never saw a real beat right after a false
+  detection; to be fixed in the next model.
+- The app's 50 most confident V beats are **one family**: early, a small upward then a deep downward deflection
+  (the opposite way round to the normal beats), a larger T wave after, and a pause that resets the rhythm.
+  A shape so different from normal points to the ventricles (PVC) *or* to a PAC conducted abnormally ("aberrant");
+  the reset pause points to a PAC, but a PVC that conducts backwards into the atria can also reset them.
+  The model itself is undecided (on average 57 % S, 39 % V). **This one beat type is exactly what to show a
+  doctor**: one clear strip of it (with normal beats either side) is often enough for a cardiologist to say
+  what it is, even without a Holter.
+
 ## 8. Where real ground truth could come from
 
 - **Artifact test recording:** lie still, awake, and do one thing at a time with written clock times

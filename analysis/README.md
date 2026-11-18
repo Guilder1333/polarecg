@@ -26,6 +26,8 @@ Contents now:
 | `test_build_dataset.py` | Offline tests of the dataset builder |
 | `train_beats.py` | Learned beat classifier (P7.1c): `train` a 1D-CNN on `data/dataset/`, `evaluate` it on the test split → `data/models/<run>/` |
 | `test_train_beats.py` | Offline tests of the training script |
+| `classify_session.py` | Runs a trained model on one of your sessions (at the app's beats) → `data/model-out/` (P7.1d) |
+| `test_classify_session.py` | Offline tests of it |
 | `requirements.txt` | Python packages |
 
 ## Setup on Windows (once)

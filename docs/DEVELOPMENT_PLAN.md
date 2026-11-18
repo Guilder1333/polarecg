@@ -802,6 +802,17 @@ with the model.
     cough, press strap, with written times) must come out as noise; model V should mostly be early with a compensatory
     pause, model S should mostly reset the rhythm; detections where the H10's own RR shows no beat are reviewed;
     known case 2026-11-17 06:44:40.894 JST = noise, 06:44:41.117 = N (session 20261116T140043Z).
+    (2026-11-18, first look with `analysis/classify_session.py` (model 20261118-220745 on session
+    20261116T140043Z, all 30,346 app beats → `data/model-out/`): app N → model N 99.9 %; app V (76) → model
+    V 28 / S 33 / N 14; app Q (160) → X 48 / N 73 / V 34. Known cases: 40.894 → X (0.98) ✓, 49.408 (app V) → N ✓,
+    **41.117 → X (0.95) ✗**: a real beat right after a false detection was never in training.
+    The 50 most confident app V are **one shape family** (early, small up then deep down, opposite to the normal
+    beats (shape corr −0.37 vs normal 0.96), larger T after); the model splits them S 29 / V 21 (mean pS 0.57,
+    pV 0.39): undecided. Pause after them non-compensatory for both model classes (median 0.87–0.90).
+    The 34 app Q → model V are wavy noise with no QRS (app sqi ≈ 0; 14 at the start of the night, 23:09 JST):
+    training had noise only on top of real ECG. For model v2: (1) beats after a false detection (short rr_pre,
+    noise before the beat) must stay beats; (2) more varied X: noise alone, strong slow waves, contact loss;
+    (3) longer RR history (AF); (4) steadier model selection.)
   Cases for the learned classifier (owner, 2026-11-11): a beat the detector MISSED in baseline drift leaves a long interval that the rules call SS (6 of 65 labelled SS were N, 5 of them after a Q or V; the clean one is 2026-11-11 21:09:35 JST, `utcMs` 1794398975850, a beat exactly in the middle of the gap). Rules cannot tell it from a suppressed beat without looking at the ECG inside the gap (template search in the gap); the model can be given the gap's signal.
 - [ ] **P7.2 [AI]** Export to TFLite / ONNX, run in `:app` (model input prepared by `:core-dsp`).
 - [ ] **P7.3 [YOU+AI]** Compare with rule-based on held-out nights; keep rules as fallback.
