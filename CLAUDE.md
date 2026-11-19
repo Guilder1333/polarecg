@@ -10,6 +10,8 @@ premature beat (PVC/PAC) detection and HRV. Everything runs on the phone; no clo
 - The owner is still learning Kotlin: explain non-obvious Kotlin/Android constructs briefly
   when you write them.
 - Never commit recordings or health data; they belong in `data/` (git-ignored).
+- Learned beat classifier (plan Phase 7): setup on a new PC and how to resume in `docs/ML_SETUP.md`;
+  next step is model v2 (plan P7.1e). The model must run on the phone (P7.2); the PC only trains it.
 - `docs/READING_BEATS.md` is the owner's guide to telling PVC / PAC / noise apart. Add new explanations and worked
   examples there when reviewing beats with the owner.
 

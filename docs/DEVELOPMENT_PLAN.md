@@ -814,7 +814,34 @@ with the model.
     noise before the beat) must stay beats; (2) more varied X: noise alone, strong slow waves, contact loss;
     (3) longer RR history (AF); (4) steadier model selection.)
   Cases for the learned classifier (owner, 2026-11-11): a beat the detector MISSED in baseline drift leaves a long interval that the rules call SS (6 of 65 labelled SS were N, 5 of them after a Q or V; the clean one is 2026-11-11 21:09:35 JST, `utcMs` 1794398975850, a beat exactly in the middle of the gap). Rules cannot tell it from a suppressed beat without looking at the ECG inside the gap (template search in the gap); the model can be given the gap's signal.
+  - [ ] **P7.1e [AI] Model v2 — NEXT STEP** (agreed with the owner 2026-11-18/19; to be trained on the owner's
+    other PC with an RTX 4070 Ti, setup in `docs/ML_SETUP.md`). Changes:
+    1. A real beat right after a false detection must stay a beat: augment beat examples with a short fake
+       `rr_pre` (as if noise was detected before it) and strong noise before the beat (fixes 06:44:41.117 → X).
+    2. More varied X ("not a beat"): noise alone without ECG, strong slow waves (`bw`, large), contact loss
+       (signal attenuated + noise), large-amplitude noise (fixes the 34 wavy-noise app Q called V at 23:09 JST).
+    3. Longer RR history (e.g. the last 8–10 RR ratios or an irregularity measure) so atrial fibrillation /
+       flutter is not called S beat by beat (MIT-BIH 213/219/222, svdb 866/867/876).
+    4. Steadier model selection: several seeds and/or average of the last epochs (SWA); validation S swung 56–79 %.
+    5. Parallel batch making (worker processes / prefetch): batch making on one CPU core (0.06 s per batch)
+       is now as slow as the GPU step on the GTX 1650 Ti (0.06 s); on a 4070 Ti it would be the whole cost.
+       Estimate: 20-epoch run 27 min now → ~13–15 min on the 1650 Ti, ~4–7 min on the 4070 Ti with it.
+    6. Keep the phone constraints of P7.2 (only basic layers; preprocessing reproducible in Kotlin).
+    Done when: test-split table and the own-night checks (P7.1d) are reported next to model v1
+    (`20261118-220745`), and 06:44:40.894 = X, 06:44:41.117 = N.
 - [ ] **P7.2 [AI]** Export to TFLite / ONNX, run in `:app` (model input prepared by `:core-dsp`).
+  The model must run **on the phone** (owner, 2026-11-19); the PC only trains it. Requirements found so far:
+  - Size/speed: v1 (width 32) = 471k parameters, 1.9 MB float32, 39 M multiply-adds per beat, 2.3 ms per beat on
+    one PC core → estimated 5–15 ms per beat on a phone core ≈ 1 % of a core live, a few CPU minutes per night.
+    Width 16: 123k parameters, 10 M multiply-adds, 1.3 ms on a PC core. int8 quantisation possible if needed.
+  - Only basic layers (Conv1d, BatchNorm, ReLU, MaxPool, mean, Linear, concat): supported by ONNX Runtime
+    Android and LiteRT (TFLite). Export PyTorch → ONNX (needs `pip install onnx onnxruntime`, not installed yet).
+  - Preprocessing in Kotlin (`:core-dsp`, no Android imports): app morphology filter (exists), window of
+    `PRE`/`POST` samples around the beat + filter delay, median / 99th-percentile scaling, RR features exactly as
+    `train_beats.rr_features`. Only the inference runtime is an Android/JVM library (separate module).
+  - Parity test: Python and Kotlin must give the same windows, features and outputs on saved examples (golden
+    files, as P6.4); ONNX Runtime also runs on a desktop JVM, so `:tools:cli` can check it on the PC.
+  - Live delay: the model uses 1.48 s after the beat and `rr_post`, so a beat's class is known about one beat late.
 - [ ] **P7.3 [YOU+AI]** Compare with rule-based on held-out nights; keep rules as fallback.
 
 - [ ] **P4.7 [AI]** *(moved here 2026-11-08 by the owner: no rule-based solution; wait for the learned classifier, P7.1-P7.3, and see whether it fixes this)* Baseline drift makes the shape rules call normal beats V. Found by labelling (P4.6, first night,

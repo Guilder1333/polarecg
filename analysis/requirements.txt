@@ -5,3 +5,4 @@ matplotlib>=3.8
 pandas>=2.1
 wfdb>=4.1      # reads MIT-BIH / INCART / NSTDB from PhysioNet (P2.3)
 PyQt6>=6.5     # window backend for matplotlib (view_ecg.py, label_beats.py); needed if Python has no tkinter
+# torch: install the CUDA build separately, see docs/ML_SETUP.md (train_beats.py, classify_session.py; P7.1)
