@@ -104,6 +104,38 @@ class MakerTest(unittest.TestCase):
         self.assertGreater(float(x[0, 0, tb.PRE]), 0)  # lead 0 (MLII) is the positive one
 
 
+class BatchLoaderTest(unittest.TestCase):
+    def setUp(self):
+        rng = np.random.default_rng(0)
+        self.maker = tb.WindowMaker([synthetic_record()], [rng.normal(0, 100, 20_000).astype(np.float32)])
+
+    def test_worker_rngs_differ_and_repeat(self):
+        a, b, a2 = (tb.worker_rng(5, w).integers(1 << 30, size=4) for w in (0, 1, 0))
+        np.testing.assert_array_equal(a, a2)
+        self.assertFalse(np.array_equal(a, b))
+
+    def _check(self, workers):
+        it = tb.batch_loader(self.maker, 64, seed=3, workers=workers)
+        batches = [next(it) for _ in range(4)]
+        x, rr, y = batches[0]
+        self.assertEqual(tuple(x.shape), (64, 1, tb.PRE + tb.POST))
+        self.assertEqual(tuple(rr.shape), (64, tb.N_RR))
+        self.assertEqual(tuple(y.shape), (64,))
+        return batches
+
+    def test_in_process_matches_maker(self):
+        x, _, y = self._check(workers=0)[0]
+        ex, _, ey = self.maker.batch(64, tb.worker_rng(3, 0))
+        np.testing.assert_array_equal(x.numpy(), ex)
+        np.testing.assert_array_equal(y.numpy(), ey)
+
+    def test_two_worker_processes_give_different_batches(self):
+        b = self._check(workers=2)   # DataLoader takes batches from worker 0, 1, 0, 1
+        self.assertFalse(np.array_equal(b[0][0].numpy(), b[1][0].numpy()))
+        ex, _, _ = self.maker.batch(64, tb.worker_rng(3, 1))
+        np.testing.assert_array_equal(b[1][0].numpy(), ex)
+
+
 class MetricsTest(unittest.TestCase):
     def test_confusion_and_se_ppv(self):
         m = tb.confusion(np.array([0, 0, 1, 2, 2]), np.array([0, 1, 1, 2, 0]))

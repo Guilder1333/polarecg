@@ -28,7 +28,8 @@ ambiguous.
 
 Training
 --------
-Batches are class-balanced (N 40 %, S 20 %, V 20 %, X 20 %), a random lead each time.
+Batches are class-balanced (N 40 %, S 20 %, V 20 %, X 20 %), a random lead each time. They are made in
+``--workers`` separate processes (default up to 6) while the GPU trains on the previous ones.
 Augmentation on training windows only: random polarity flip (H10's lead can be upside down
 compared with any standard lead), centre jitter of ±2 samples (detector timing), and mild
 NSTDB noise on some beats (a real beat in noise must stay a beat). The NSTDB noise records are
@@ -234,6 +235,64 @@ class WindowMaker:
         return (np.stack(xs)[order][:, None, :], np.stack(rs)[order], np.array(ys, dtype=np.int64)[order])
 
 
+def worker_rng(seed: int, worker: int) -> np.random.Generator:
+    """Random generator of one batch worker: different, reproducible streams per (seed, worker)."""
+    return np.random.default_rng(np.random.SeedSequence([seed, worker]))
+
+
+try:  # torch is optional for the pure helpers of this file (tests, build_dataset users)
+    from torch.utils.data import IterableDataset as _IterableDataset
+except ImportError:
+    _IterableDataset = object
+
+
+class BatchStream(_IterableDataset):
+    """Endless training batches, made in DataLoader worker processes (P7.1e item 5).
+
+    PyTorch notes: an ``IterableDataset`` is anything that yields examples; a ``DataLoader`` with
+    ``num_workers=k`` runs ``k`` copies of it in separate processes and hands their output to the
+    training loop in turn, with a few batches made in advance (``prefetch_factor``). On Windows each
+    worker is a fresh Python process that receives a pickled copy of the stream (so the class must be
+    at module level), and the stream carries only the dataset *path*: each worker loads the records
+    itself, once (``persistent_workers`` keeps the workers alive between epochs).
+    """
+
+    def __init__(self, source, batch: int, seed: int):
+        super().__init__()
+        self.source = source        # dataset folder (Path) or an already made WindowMaker (tests)
+        self.batch = batch
+        self.seed = seed
+
+    def _maker(self) -> WindowMaker:
+        if isinstance(self.source, WindowMaker):
+            return self.source
+        return WindowMaker(load_records(self.source, {"train"}), load_noise(self.source, "train"))
+
+    def __iter__(self):
+        import torch
+        info = torch.utils.data.get_worker_info()   # None in the training process itself
+        rng = worker_rng(self.seed, info.id if info else 0)
+        maker = self._maker()
+        while True:
+            yield maker.batch(self.batch, rng)
+
+
+def batch_loader(source, batch: int, seed: int, workers: int):
+    """Iterator over training batches as torch tensors; ``workers`` = 0 makes them in this process."""
+    import torch
+    stream = BatchStream(source, batch, seed)
+    extra = {"prefetch_factor": 4, "persistent_workers": True} if workers > 0 else {}
+    # batch_size=None: the stream already yields whole batches. pin_memory speeds up the copy to the GPU.
+    loader = torch.utils.data.DataLoader(stream, batch_size=None, num_workers=workers,
+                                         pin_memory=torch.cuda.is_available(), **extra)
+    return iter(loader)
+
+
+def default_workers() -> int:
+    import os
+    return max(0, min(6, (os.cpu_count() or 1) - 2))
+
+
 def fixed_set(maker: WindowMaker, per_class: int, seed: int):
     """A fixed, balanced validation set (same windows every epoch): up to ``per_class`` per class."""
     rng = np.random.default_rng(seed)
@@ -348,9 +407,10 @@ def train(args) -> int:
     device = _device()
     t0 = time.time()
     train_maker = WindowMaker(load_records(args.dataset, {"train"}), load_noise(args.dataset, "train"))
+    batches = batch_loader(args.dataset, args.batch, args.seed, args.workers)
     val_maker = WindowMaker(load_records(args.dataset, {"val"}), load_noise(args.dataset, "eval"))
     val = fixed_set(val_maker, args.val_per_class, args.seed + 1)
-    print(f"data loaded in {time.time() - t0:.0f}s on {device}; train beats per class "
+    print(f"data loaded in {time.time() - t0:.0f}s on {device}, {args.workers} batch workers; train beats per class "
           f"{[len(p) for p in train_maker.by_class]}, val set {len(val[2])} windows", flush=True)
 
     run = args.out / time.strftime("%Y%m%d-%H%M%S")
@@ -366,7 +426,6 @@ def train(args) -> int:
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args.lr, total_steps=args.epochs * steps_per_epoch)
     loss_fn = nn.CrossEntropyLoss(label_smoothing=0.05)
-    rng = np.random.default_rng(args.seed)
     print(f"model {n_params:,} parameters; run folder {run}", flush=True)
 
     best = -1.0
@@ -375,8 +434,7 @@ def train(args) -> int:
         model.train()
         t_epoch, total = time.time(), 0.0
         for _ in range(steps_per_epoch):
-            x, rr, y = train_maker.batch(args.batch, rng)
-            x, rr, y = (torch.from_numpy(a).to(device) for a in (x, rr, y))
+            x, rr, y = (a.to(device, non_blocking=True) for a in next(batches))
             opt.zero_grad()
             loss = loss_fn(model(x, rr), y)
             loss.backward()
@@ -463,6 +521,8 @@ def main(argv=None) -> int:
     t.add_argument("--width", type=int, default=32, help="channels of the first conv block")
     t.add_argument("--val-per-class", type=int, default=3000)
     t.add_argument("--seed", type=int, default=0)
+    t.add_argument("--workers", type=int, default=default_workers(),
+                   help="processes making training batches (0 = in the training process)")
     t.set_defaults(func=train)
     e = sub.add_parser("evaluate", help="figures on a split (default: test)")
     e.add_argument("run", type=Path, help="run folder with model.pt and config.json")

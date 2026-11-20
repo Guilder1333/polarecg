@@ -62,8 +62,12 @@ py analysis\classify_session.py data\models\<run> data\sessions\<session>   # ow
 `classify_session.py` needs a recorded session (`beats.csv` + `ecg_*.bin`); run it on the PC that has the
 recordings, copying only the model folder there.
 
-Timing on the first PC (GTX 1650 Ti): 20 epochs × 200k windows ≈ 27 min; batch making on one CPU core takes as
-long as the GPU step, so a faster GPU only helps fully once batch making is parallel (plan P7.1e item 5).
+Timing: 20 epochs × 200k windows ≈ 27 min on the first PC (GTX 1650 Ti, batches made on one core);
+**113 s** on the second PC (RTX 4070 Ti, 24 cores) with batches made in 6 worker processes (`--workers`, default
+up to 6; each worker loads the training set, ≈ 280 MB of memory). `--workers 0` makes batches in the training process.
+
+Model folders store the dataset path of the PC that trained them; `evaluate` uses `--dataset` (default
+`data\dataset` of this repository) instead, so a model folder copied from another PC works.
 
 ## 5. Where things are written down
 

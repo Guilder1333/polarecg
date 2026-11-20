@@ -826,6 +826,10 @@ with the model.
     5. Parallel batch making (worker processes / prefetch): batch making on one CPU core (0.06 s per batch)
        is now as slow as the GPU step on the GTX 1650 Ti (0.06 s); on a 4070 Ti it would be the whole cost.
        Estimate: 20-epoch run 27 min now → ~13–15 min on the 1650 Ti, ~4–7 min on the 4070 Ti with it.
+       **Done 2026-11-20:** `BatchStream` + `DataLoader` worker processes (`--workers`, default up to 6, each loads
+       the training set itself, ≈ 280 MB). On the 4070 Ti PC (24 cores): one batch 16 ms on one core, GPU step 6 ms;
+       with 6 workers an epoch takes 5 s (GPU-bound), a full 20-epoch run with v1 settings **113 s** (was 27 min).
+       That run (`20261120-182941`, v1 code) showed the S swing of item 4 again: val S 51–81 % between epochs.
     6. Keep the phone constraints of P7.2 (only basic layers; preprocessing reproducible in Kotlin).
     Done when: test-split table and the own-night checks (P7.1d) are reported next to model v1
     (`20261118-220745`), and 06:44:40.894 = X, 06:44:41.117 = N.
