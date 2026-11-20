@@ -843,6 +843,11 @@ with the model.
     N 90 / V 23 / X 47; 40.894 → X (0.95) ✓, 41.117 → X ✗ (item 1 not done yet). The app-V family that v1 split
     S/V (early ≈ 0.55, pause after ≈ 1.15, flipped shape) is now split N/V: **owner to judge whether these are PVCs**
     (e.g. `polarecg://beat/1794842709115` model N 0.97, `…/1794854893271` model V 0.94, `…/1794848846446` 50/50).
+    Owner's reading (2026-11-20): S, V, V (the third looks the same as the second; details and why the model was
+    unsure in `docs/READING_BEATS.md` §7): the family holds both PACs and PVCs; the model misses small flipped PVCs.
+    **Decision 2026-11-20 (owner): the old own labels (`data/labels/*`, P4.6 onwards, about 9,800 beats) are not
+    trusted** and are not used to train or test the model. Instead: several independent checks per beat, and the
+    owner makes the final decision on the beats where they disagree.
     Done when: test-split table (N/V/X) and the own-night checks (P7.1d) are reported next to model v1
     (`20261118-220745`), and 06:44:40.894 = X, 06:44:41.117 = N.
 - [ ] **P7.2 [AI]** Export to TFLite / ONNX, run in `:app` (model input prepared by `:core-dsp`).
