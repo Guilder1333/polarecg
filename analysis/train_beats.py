@@ -426,7 +426,9 @@ def evaluate(args) -> int:
     config = json.loads((args.run / "config.json").read_text(encoding="utf-8"))
     model = build_model(config["width"]).to(device)
     model.load_state_dict(torch.load(args.run / "model.pt", map_location=device))
-    records = load_records(Path(config["dataset"]), {args.split})
+    # The dataset path stored in config.json is absolute and only valid on the PC that trained the model,
+    # so evaluation uses --dataset (default: this repository's data/dataset).
+    records = load_records(args.dataset, {args.split})
     report = [f"split {args.split}, model {args.run.name}, primary lead of each database, all beats "
               f"(natural class mix, F and Q left out)"]
     x, rr, y, dbs = beat_windows(records, primary_only=True)
@@ -435,7 +437,7 @@ def evaluate(args) -> int:
         sel = np.ones(len(y), bool) if db == "all" else dbs == db
         report += ["", f"== {db}: {sel.sum()} beats", format_confusion(confusion(y[sel], pred[sel]))]
     # Not-a-beat windows: how many are recognised, from the evaluation part of the noise records.
-    maker = WindowMaker(records, load_noise(Path(config["dataset"]), "eval"))
+    maker = WindowMaker(records, load_noise(args.dataset, "eval"))
     rng = np.random.default_rng(12345)
     xn = [maker.not_a_beat(rng, augment=False) for _ in range(args.noise_windows)]
     pn = predict(model, np.stack([w for w, _, _ in xn])[:, None, :], np.stack([f for _, f, _ in xn]), device)
@@ -466,6 +468,7 @@ def main(argv=None) -> int:
     e.add_argument("run", type=Path, help="run folder with model.pt and config.json")
     e.add_argument("--split", default="test", choices=("train", "val", "test"))
     e.add_argument("--noise-windows", type=int, default=5000)
+    e.add_argument("--dataset", type=Path, default=DATASET, help="dataset folder (default: data/dataset)")
     e.set_defaults(func=evaluate)
     args = ap.parse_args(argv)
     return args.func(args)
