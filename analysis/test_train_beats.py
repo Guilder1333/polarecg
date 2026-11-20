@@ -64,23 +64,29 @@ class MakerTest(unittest.TestCase):
         rng = np.random.default_rng(0)
         self.maker = tb.WindowMaker([synthetic_record()], [rng.normal(0, 100, 20_000).astype(np.float32)])
 
-    def test_classes_indexed(self):
-        cls = self.maker.records[0].beat_class
-        self.assertEqual(len(self.maker.by_class[2]), int((cls == 2).sum()))
+    def test_kinds_indexed(self):
+        kind = self.maker.records[0].beat_kind
+        self.assertEqual(len(self.maker.by_kind[2]), int((kind == 2).sum()))
         self.assertGreater(len(self.maker.gaps), 0)
+
+    def test_targets_s_is_trained_as_n(self):
+        self.assertEqual(tb.CLASSES, ("N", "V", "X"))
+        self.assertEqual([tb.CLASSES[t] for t in tb.TARGET], ["N", "N", "V", "X"])
+        self.assertEqual(tb.target_of(("N", "S", "V", "X")).tolist(), [0, 1, 2, 3])  # model v1
 
     def test_batch_shapes_and_mix(self):
         x, rr, y = self.maker.batch(400, np.random.default_rng(1))
         self.assertEqual(x.shape, (400, 1, tb.PRE + tb.POST))
         self.assertEqual(rr.shape, (400, tb.N_RR))
-        share = np.bincount(y, minlength=4) / 400
-        np.testing.assert_allclose(share, tb.BATCH_MIX, atol=0.08)
+        share = np.bincount(y, minlength=len(tb.CLASSES)) / 400   # N + S kinds both in class N
+        mix = tb.BATCH_MIX
+        np.testing.assert_allclose(share, [mix[0] + mix[1], mix[2], mix[3]], atol=0.08)
 
     def test_not_a_beat_sits_between_real_beats(self):
         rng = np.random.default_rng(2)
         for _ in range(20):
             w, f, y = self.maker.not_a_beat(rng, augment=False)
-            self.assertEqual(y, tb.X_CLASS)
+            self.assertEqual(y, tb.X_KIND)
             # rr_pre and rr_post of a centre between two beats 1000 ms apart: both >= 200 ms, sum 1000
             rr_pre = f[0] * 1000  # rr_local is 1000 ms here
             rr_post = f[1] * 1000
@@ -100,7 +106,7 @@ class MakerTest(unittest.TestCase):
 
     def test_beat_windows_primary_lead_only(self):
         x, rr, y, dbs = tb.beat_windows(self.maker.records, primary_only=True)
-        self.assertEqual(len(y), int((self.maker.records[0].beat_class >= 0).sum()))
+        self.assertEqual(len(y), int((self.maker.records[0].beat_kind >= 0).sum()))
         self.assertGreater(float(x[0, 0, tb.PRE]), 0)  # lead 0 (MLII) is the positive one
 
 
@@ -138,13 +144,22 @@ class BatchLoaderTest(unittest.TestCase):
 
 class MetricsTest(unittest.TestCase):
     def test_confusion_and_se_ppv(self):
-        m = tb.confusion(np.array([0, 0, 1, 2, 2]), np.array([0, 1, 1, 2, 0]))
-        self.assertEqual(m[0].tolist(), [1, 1, 0, 0])
+        # kinds N N S S V V X; predicted classes N V N V V N X
+        m = tb.confusion(np.array([0, 0, 1, 1, 2, 2, 3]), np.array([0, 1, 0, 1, 1, 0, 2]))
+        self.assertEqual(m.shape, (4, 3))
+        self.assertEqual(m[1].tolist(), [1, 1, 0])          # one S called N (right), one V (wrong)
         se, ppv = tb.se_ppv(m)
-        self.assertAlmostEqual(se[0], 50.0)
-        self.assertAlmostEqual(ppv[1], 50.0)
-        self.assertTrue(np.isnan(se[3]))
-        self.assertAlmostEqual(tb.score(m), np.mean([50, 100, 50]))
+        np.testing.assert_allclose(se, [50, 50, 50, 100])
+        np.testing.assert_allclose(ppv, [200 / 3, 100 / 3, 100])  # N calls: N, S right, V wrong
+        np.testing.assert_allclose(tb.class_se(m), [50, 50, 100])  # N pools the N and S rows
+        self.assertAlmostEqual(tb.score(m), np.mean([50, 50, 100]))
+
+    def test_four_class_model_v1(self):
+        v1 = ("N", "S", "V", "X")
+        m = tb.confusion(np.array([1, 1, 2]), np.array([1, 0, 2]), len(v1))
+        se, _ = tb.se_ppv(m, v1)
+        self.assertAlmostEqual(se[1], 50.0)                 # v1 had to call S beats S
+        self.assertIn("S", tb.format_confusion(m, v1).splitlines()[0])
 
 
 class ModelTest(unittest.TestCase):
@@ -153,6 +168,8 @@ class ModelTest(unittest.TestCase):
         model = tb.build_model(8)
         out = model(torch.zeros(3, 1, tb.PRE + tb.POST), torch.zeros(3, tb.N_RR))
         self.assertEqual(tuple(out.shape), (3, len(tb.CLASSES)))
+        self.assertEqual(tuple(tb.build_model(8, 4)(torch.zeros(2, 1, tb.PRE + tb.POST),
+                                                    torch.zeros(2, tb.N_RR)).shape), (2, 4))
 
 
 if __name__ == "__main__":

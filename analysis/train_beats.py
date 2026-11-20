@@ -19,7 +19,12 @@ What the model sees for one beat
 
 Classes
 -------
-``N`` normal, ``S`` supraventricular (PAC), ``V`` ventricular (PVC) and ``X`` = **not a beat**.
+The model outputs ``N`` normal-shaped beat, ``V`` ventricular (PVC) and ``X`` = **not a beat**.
+**S (PAC) beats are trained as N** (owner, 2026-11-20): on one chest lead a PAC differs from a normal
+beat mostly by being early, which the app's rules already see from the RR intervals; the model's job
+is to tell noise, V and normal-shaped beats apart. Keeping the S beats as N examples teaches the model
+that "early" alone does not mean V. The app then calls an early N an S. Each example keeps its true
+*kind* (``KINDS``: N, S, V from the database, or X), so the figures still show where PACs end up.
 X windows are made from training ECG with strong NSTDB noise added, centred on the steepest
 point *between* two real beats: what the app's detector does when it fires on noise (as at
 2026-11-17 06:44:40.894 JST). Their RR features are what the app would compute for such a false
@@ -28,13 +33,14 @@ ambiguous.
 
 Training
 --------
-Batches are class-balanced (N 40 %, S 20 %, V 20 %, X 20 %), a random lead each time. They are made in
+Batches are balanced by kind (N 40 %, S 10 %, V 25 %, X 25 %), a random lead each time. They are made in
 ``--workers`` separate processes (default up to 6) while the GPU trains on the previous ones.
 Augmentation on training windows only: random polarity flip (H10's lead can be upside down
 compared with any standard lead), centre jitter of ±2 samples (detector timing), and mild
 NSTDB noise on some beats (a real beat in noise must stay a beat). The NSTDB noise records are
 split in time: the first 70 % for training, the rest for validation/test.
-The model with the best validation score (mean sensitivity over N, S, V, X) is kept.
+The model with the best validation score (mean sensitivity over the classes N, V, X; the N
+sensitivity counts the S beats too) is kept.
 
 PyTorch notes for reading the code: an ``nn.Module`` is a layer or a network; ``forward`` is what
 runs on a batch. Tensors have shape (batch, channels, samples). ``model.train()`` /
@@ -60,10 +66,20 @@ ROOT = Path(__file__).resolve().parent.parent
 DATASET = ROOT / "data" / "dataset"
 MODELS = ROOT / "data" / "models"
 
-CLASSES = ("N", "S", "V", "X")
-CLASS_OF_AAMI = {"N": 0, "S": 1, "V": 2}          # F and Q: not used (-1)
-X_CLASS = 3
-BATCH_MIX = (0.4, 0.2, 0.2, 0.2)                  # share of N, S, V, X in a training batch
+KINDS = ("N", "S", "V", "X")                      # what an example truly is: AAMI N/S/V beat, or X = not a beat
+CLASSES = ("N", "V", "X")                         # what the model outputs
+KIND_OF_AAMI = {"N": 0, "S": 1, "V": 2}           # F and Q: not used (-1)
+X_KIND = 3
+BATCH_MIX = (0.4, 0.1, 0.25, 0.25)                # share of the kinds N, S, V, X in a training batch
+
+
+def target_of(classes=CLASSES) -> np.ndarray:
+    """Class index each kind should be called: its own name if the model has that class, else N
+    (S -> N for this model; the 4-class model v1 had S as its own class)."""
+    return np.array([classes.index(k if k in classes else "N") for k in KINDS], dtype=np.int64)
+
+
+TARGET = target_of()                              # kind -> class index (N, S -> N; V -> V; X -> X)
 
 PRE, POST = 192, 192                              # window: 1.48 s before, 1.48 s after the beat
 N_RR = 5
@@ -87,7 +103,7 @@ class Record:
     signal: np.ndarray      # (leads, n) int16 µV
     leads: list[str]
     beat_sample: np.ndarray  # int32
-    beat_class: np.ndarray   # index into CLASSES, -1 = not used
+    beat_kind: np.ndarray    # index into KINDS, -1 = not used (F, Q)
     rr: np.ndarray           # (beats, 4) ms: rr_pre, rr_post, rr_pre2, rr_local (-1 = none)
 
     @property
@@ -108,7 +124,7 @@ def load_records(dataset: Path, splits: set[str]) -> list[Record]:
             out.append(Record(
                 r["db"], r["record"], r["patient"], r["split"], z["signal"], [str(x) for x in z["leads"]],
                 z["beat_sample"].astype(np.int64),
-                np.array([CLASS_OF_AAMI.get(a, -1) for a in aami], dtype=np.int64),
+                np.array([KIND_OF_AAMI.get(a, -1) for a in aami], dtype=np.int64),
                 np.stack([z["rr_pre"], z["rr_post"], z["rr_pre2"], z["rr_local"]], 1).astype(np.float32),
             ))
     return out
@@ -172,11 +188,11 @@ class WindowMaker:
     def __init__(self, records: list[Record], noise: list[np.ndarray]):
         self.records = records
         self.noise = noise
-        # (record index, beat index) per class
-        self.by_class = []
-        for c in range(len(CLASSES) - 1):
-            pairs = [(ri, bi) for ri, r in enumerate(records) for bi in np.flatnonzero(r.beat_class == c)]
-            self.by_class.append(np.array(pairs, dtype=np.int64).reshape(-1, 2))
+        # (record index, beat index) per beat kind N, S, V
+        self.by_kind = []
+        for k in range(X_KIND):
+            pairs = [(ri, bi) for ri, r in enumerate(records) for bi in np.flatnonzero(r.beat_kind == k)]
+            self.by_kind.append(np.array(pairs, dtype=np.int64).reshape(-1, 2))
         # gaps wide enough for an X centre: (record, beat i) with beat i+1 far enough away
         gaps = []
         for ri, r in enumerate(records):
@@ -195,7 +211,7 @@ class WindowMaker:
             w = w + scaled_to(w, noise_piece(self.noise, len(w), rng), rng.uniform(0.05, 0.6))
         if augment and rng.random() < 0.5:
             w = -w
-        return normalize_window(w), rr_features(*r.rr[bi]), int(r.beat_class[bi])
+        return normalize_window(w), rr_features(*r.rr[bi]), int(r.beat_kind[bi])
 
     def not_a_beat(self, rng: np.random.Generator, augment: bool):
         """X: strong noise on real ECG, centred on the steepest point between two real beats."""
@@ -214,17 +230,18 @@ class WindowMaker:
         rr_local = r.rr[bi + 1][3]
         feats = rr_features((c - (b0 - lo)) * 1000 / ECG_RATE_HZ, ((b1 - lo) - c) * 1000 / ECG_RATE_HZ,
                             rr_pre2, rr_local)
-        return normalize_window(w), feats, X_CLASS
+        return normalize_window(w), feats, X_KIND
 
     def batch(self, size: int, rng: np.random.Generator, augment: bool = True, mix=BATCH_MIX):
+        """(windows, rr features, target classes); ``mix`` is the share of each kind."""
         counts = rng.multinomial(size, mix)
         xs, rs, ys = [], [], []
-        for c, k in enumerate(counts):
+        for kind, k in enumerate(counts):
             for _ in range(k):
-                if c == X_CLASS:
+                if kind == X_KIND:
                     w, f, y = self.not_a_beat(rng, augment)
                 else:
-                    pairs = self.by_class[c]
+                    pairs = self.by_kind[kind]
                     ri, bi = pairs[rng.integers(len(pairs))]
                     lead = int(rng.integers(len(self.records[ri].leads)))
                     w, f, y = self.beat(int(ri), int(bi), lead, rng, augment)
@@ -232,7 +249,8 @@ class WindowMaker:
                 rs.append(f)
                 ys.append(y)
         order = rng.permutation(size)
-        return (np.stack(xs)[order][:, None, :], np.stack(rs)[order], np.array(ys, dtype=np.int64)[order])
+        return (np.stack(xs)[order][:, None, :], np.stack(rs)[order],
+                TARGET[np.array(ys, dtype=np.int64)][order])
 
 
 def worker_rng(seed: int, worker: int) -> np.random.Generator:
@@ -294,14 +312,15 @@ def default_workers() -> int:
 
 
 def fixed_set(maker: WindowMaker, per_class: int, seed: int):
-    """A fixed, balanced validation set (same windows every epoch): up to ``per_class`` per class."""
+    """A fixed, balanced validation set (same windows every epoch): up to ``per_class`` per kind.
+    Returns (windows, rr features, kinds)."""
     rng = np.random.default_rng(seed)
     xs, rs, ys = [], [], []
-    for c in range(len(CLASSES)):
-        if c == X_CLASS:
+    for kind in range(len(KINDS)):
+        if kind == X_KIND:
             items = [maker.not_a_beat(rng, augment=False) for _ in range(per_class)]
         else:
-            pairs = maker.by_class[c]
+            pairs = maker.by_kind[kind]
             pick = pairs[rng.choice(len(pairs), size=min(per_class, len(pairs)), replace=False)]
             items = [maker.beat(int(ri), int(bi), int(rng.integers(len(maker.records[ri].leads))), None, False)
                      for ri, bi in pick]
@@ -314,34 +333,44 @@ def fixed_set(maker: WindowMaker, per_class: int, seed: int):
 
 # ---------------------------------------------------------------- metrics (pure)
 
-def confusion(y_true: np.ndarray, y_pred: np.ndarray, n: int = len(CLASSES)) -> np.ndarray:
-    """``m[true, predicted]`` counts."""
-    m = np.zeros((n, n), dtype=np.int64)
-    np.add.at(m, (y_true, y_pred), 1)
+def confusion(kinds: np.ndarray, pred: np.ndarray, n_classes: int = len(CLASSES)) -> np.ndarray:
+    """``m[true kind, predicted class]`` counts (rows N, S, V, X; columns the model's classes)."""
+    m = np.zeros((len(KINDS), n_classes), dtype=np.int64)
+    np.add.at(m, (kinds, pred), 1)
     return m
 
 
-def se_ppv(m: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Sensitivity (recall) and positive predictivity (precision) per class, in %; NaN if undefined."""
+def se_ppv(m: np.ndarray, classes=CLASSES) -> tuple[np.ndarray, np.ndarray]:
+    """In %, NaN if undefined. Sensitivity per kind (share called its target class, S -> N) and
+    positive predictivity per class (share of the class's calls whose kind has it as target)."""
+    target = target_of(classes)
+    rows = np.arange(len(KINDS))
     with np.errstate(invalid="ignore", divide="ignore"):
-        se = 100.0 * np.diag(m) / m.sum(1)
-        ppv = 100.0 * np.diag(m) / m.sum(0)
+        se = 100.0 * m[rows, target] / m.sum(1)
+        ppv = np.array([100.0 * m[target == j, j].sum() / m[:, j].sum() for j in range(len(classes))])
     return se, ppv
 
 
-def format_confusion(m: np.ndarray) -> str:
-    se, ppv = se_ppv(m)
-    lines = ["true\\pred " + "".join(f"{c:>9}" for c in CLASSES) + "     Se %    +P %"]
-    for i, c in enumerate(CLASSES):
-        if m[i].sum() == 0 and m[:, i].sum() == 0:
-            continue
-        lines.append(f"{c:<10}" + "".join(f"{v:>9}" for v in m[i]) + f"{se[i]:>9.1f}{ppv[i]:>8.1f}")
+def class_se(m: np.ndarray, classes=CLASSES) -> np.ndarray:
+    """Sensitivity per class in %, pooling the kinds with the same target (N counts the S beats)."""
+    target = target_of(classes)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.array([100.0 * m[target == j, j].sum() / m[target == j].sum() for j in range(len(classes))])
+
+
+def format_confusion(m: np.ndarray, classes=CLASSES) -> str:
+    se, ppv = se_ppv(m, classes)
+    lines = ["true\\pred " + "".join(f"{c:>9}" for c in classes) + "     Se %"]
+    for i, k in enumerate(KINDS):
+        if m[i].sum():
+            lines.append(f"{k:<10}" + "".join(f"{v:>9}" for v in m[i]) + f"{se[i]:>9.1f}")
+    lines.append(f"{'+P %':<10}" + "".join(f"{v:>9.1f}" for v in ppv))
     return "\n".join(lines)
 
 
 # ---------------------------------------------------------------- model
 
-def build_model(width: int = 32):
+def build_model(width: int = 32, n_classes: int = len(CLASSES)):
     import torch
     from torch import nn
 
@@ -362,7 +391,7 @@ def build_model(width: int = 32):
                                           block(2 * width, 4 * width), block(4 * width, 4 * width))
             self.rr = nn.Sequential(nn.Linear(N_RR, 16), nn.ReLU())
             self.head = nn.Sequential(nn.Linear(8 * width + 16, 64), nn.ReLU(), nn.Dropout(0.2),
-                                      nn.Linear(64, len(CLASSES)))
+                                      nn.Linear(64, n_classes))
 
         def forward(self, x, rr):
             f = self.features(x)                      # (batch, 4w, 24)
@@ -387,9 +416,8 @@ def predict(model, x: np.ndarray, rr: np.ndarray, device, batch: int = 2048) -> 
 
 
 def score(m: np.ndarray) -> float:
-    """Model selection: mean sensitivity over the classes (the validation set is balanced)."""
-    se, _ = se_ppv(m)
-    return float(np.nanmean(se))
+    """Model selection: mean sensitivity over the classes N (incl. S beats), V, X."""
+    return float(np.nanmean(class_se(m)))
 
 
 # ---------------------------------------------------------------- commands
@@ -410,13 +438,13 @@ def train(args) -> int:
     batches = batch_loader(args.dataset, args.batch, args.seed, args.workers)
     val_maker = WindowMaker(load_records(args.dataset, {"val"}), load_noise(args.dataset, "eval"))
     val = fixed_set(val_maker, args.val_per_class, args.seed + 1)
-    print(f"data loaded in {time.time() - t0:.0f}s on {device}, {args.workers} batch workers; train beats per class "
-          f"{[len(p) for p in train_maker.by_class]}, val set {len(val[2])} windows", flush=True)
+    print(f"data loaded in {time.time() - t0:.0f}s on {device}, {args.workers} batch workers; train beats N/S/V "
+          f"{[len(p) for p in train_maker.by_kind]}, val set {len(val[2])} windows", flush=True)
 
     run = args.out / time.strftime("%Y%m%d-%H%M%S")
     run.mkdir(parents=True, exist_ok=False)
     config = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items() if k != "func"}
-    config.update({"classes": CLASSES, "pre": PRE, "post": POST, "nRr": N_RR, "rateHz": ECG_RATE_HZ,
+    config.update({"classes": CLASSES, "kinds": KINDS, "pre": PRE, "post": POST, "nRr": N_RR, "rateHz": ECG_RATE_HZ,
                    "batchMix": BATCH_MIX})
     (run / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
@@ -445,7 +473,7 @@ def train(args) -> int:
         s = score(m)
         se, _ = se_ppv(m)
         history.append({"epoch": epoch, "loss": total / steps_per_epoch, "valScore": s,
-                        "valSe": dict(zip(CLASSES, np.round(se, 1).tolist()))})
+                        "valSe": dict(zip(KINDS, np.round(se, 1).tolist()))})
         mark = ""
         if s > best:
             best = s
@@ -453,7 +481,7 @@ def train(args) -> int:
             (run / "val_confusion.txt").write_text(format_confusion(m) + "\n", encoding="utf-8")
             mark = "  * saved"
         print(f"epoch {epoch}/{args.epochs} loss {total / steps_per_epoch:.3f} val mean Se {s:.1f} "
-              f"(" + ", ".join(f"{c} {v:.1f}" for c, v in zip(CLASSES, se)) + f") "
+              f"(" + ", ".join(f"{k} {v:.1f}" for k, v in zip(KINDS, se)) + f") "
               f"{time.time() - t_epoch:.0f}s{mark}", flush=True)
         (run / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
     print(f"\nbest validation mean Se {best:.1f}; validation confusion of the saved model:\n"
@@ -463,16 +491,16 @@ def train(args) -> int:
 
 
 def beat_windows(records: list[Record], primary_only: bool):
-    """All usable beats of the records, unaugmented: (x, rr, y, db) in record order."""
+    """All usable beats of the records, unaugmented: (x, rr, kind, db) in record order."""
     xs, rs, ys, dbs = [], [], [], []
     for r in records:
         leads = [r.primary_lead] if primary_only else range(len(r.leads))
-        use = np.flatnonzero(r.beat_class >= 0)
+        use = np.flatnonzero(r.beat_kind >= 0)
         for lead in leads:
             for bi in use:
                 xs.append(normalize_window(cut_window(r.signal[lead], int(r.beat_sample[bi]), PRE, POST)))
                 rs.append(rr_features(*r.rr[bi]))
-                ys.append(int(r.beat_class[bi]))
+                ys.append(int(r.beat_kind[bi]))
                 dbs.append(r.db)
     return (np.stack(xs)[:, None, :], np.stack(rs), np.array(ys, dtype=np.int64), np.array(dbs))
 
@@ -482,7 +510,8 @@ def evaluate(args) -> int:
 
     device = _device()
     config = json.loads((args.run / "config.json").read_text(encoding="utf-8"))
-    model = build_model(config["width"]).to(device)
+    classes = tuple(config["classes"])            # model v1 had N, S, V, X
+    model = build_model(config["width"], len(classes)).to(device)
     model.load_state_dict(torch.load(args.run / "model.pt", map_location=device))
     # The dataset path stored in config.json is absolute and only valid on the PC that trained the model,
     # so evaluation uses --dataset (default: this repository's data/dataset).
@@ -493,15 +522,16 @@ def evaluate(args) -> int:
     pred = predict(model, x, rr, device)
     for db in sorted(set(dbs)) + ["all"]:
         sel = np.ones(len(y), bool) if db == "all" else dbs == db
-        report += ["", f"== {db}: {sel.sum()} beats", format_confusion(confusion(y[sel], pred[sel]))]
+        m = confusion(y[sel], pred[sel], len(classes))
+        report += ["", f"== {db}: {sel.sum()} beats", format_confusion(m, classes)]
     # Not-a-beat windows: how many are recognised, from the evaluation part of the noise records.
     maker = WindowMaker(records, load_noise(args.dataset, "eval"))
     rng = np.random.default_rng(12345)
     xn = [maker.not_a_beat(rng, augment=False) for _ in range(args.noise_windows)]
     pn = predict(model, np.stack([w for w, _, _ in xn])[:, None, :], np.stack([f for _, f, _ in xn]), device)
-    counts = np.bincount(pn, minlength=len(CLASSES))
+    counts = np.bincount(pn, minlength=len(classes))
     report += ["", f"== {args.noise_windows} not-a-beat windows (noise between real beats): called "
-               + ", ".join(f"{c} {100 * k / len(pn):.1f}%" for c, k in zip(CLASSES, counts))]
+               + ", ".join(f"{c} {100 * k / len(pn):.1f}%" for c, k in zip(classes, counts))]
     text = "\n".join(report)
     print(text)
     (args.run / f"eval_{args.split}.txt").write_text(text + "\n", encoding="utf-8")

@@ -820,8 +820,8 @@ with the model.
        `rr_pre` (as if noise was detected before it) and strong noise before the beat (fixes 06:44:41.117 → X).
     2. More varied X ("not a beat"): noise alone without ECG, strong slow waves (`bw`, large), contact loss
        (signal attenuated + noise), large-amplitude noise (fixes the 34 wavy-noise app Q called V at 23:09 JST).
-    3. Longer RR history (e.g. the last 8–10 RR ratios or an irregularity measure) so atrial fibrillation /
-       flutter is not called S beat by beat (MIT-BIH 213/219/222, svdb 866/867/876).
+    3. ~~Longer RR history so AF is not called S beat by beat~~ — dropped with the S class (see below);
+       AF / flutter is now a question for the rules (an early N in irregular rhythm is not a PAC).
     4. Steadier model selection: several seeds and/or average of the last epochs (SWA); validation S swung 56–79 %.
     5. Parallel batch making (worker processes / prefetch): batch making on one CPU core (0.06 s per batch)
        is now as slow as the GPU step on the GTX 1650 Ti (0.06 s); on a 4070 Ti it would be the whole cost.
@@ -831,7 +831,19 @@ with the model.
        with 6 workers an epoch takes 5 s (GPU-bound), a full 20-epoch run with v1 settings **113 s** (was 27 min).
        That run (`20261120-182941`, v1 code) showed the S swing of item 4 again: val S 51–81 % between epochs.
     6. Keep the phone constraints of P7.2 (only basic layers; preprocessing reproducible in Kotlin).
-    Done when: test-split table and the own-night checks (P7.1d) are reported next to model v1
+    **Decision 2026-11-20 (owner): the model has no S class.** On one chest lead a PAC differs from a normal beat
+    mostly by being early, which the rules already see; the model's job is N / V / X (noise) on everything.
+    Database S beats are kept as **N examples** (so "early" alone is not V); the app calls an early model-N an S.
+    Classes `N, V, X`; batch mix by true kind N 40 % / S 10 % / V 25 % / X 25 %; selection = mean Se over N (S beats
+    counted in N), V, X; reports keep rows N/S/V/X so PACs called V stay visible. Old 4-class runs still load.
+    First N/V/X run `20261120-185445` (code of item 5, no other v2 change), test split, all three databases vs v1:
+    V Se 87.2 → **93.4 %**, V +P 90.7 → **95.6 %**, PAC → V 755 → **345**, N → not N 4.7 % → **0.1 %**, noise windows
+    99.7 % X (same). Weak spot: svdb V Se 77.9 % (574 V called N). Validation score now 91.6–95.4 between epochs
+    (v1 code: 83–92). Own night 20261116T140043Z: app N → N 100 %; app V (76) → N 55 / V 20 / X 1; app Q (160) →
+    N 90 / V 23 / X 47; 40.894 → X (0.95) ✓, 41.117 → X ✗ (item 1 not done yet). The app-V family that v1 split
+    S/V (early ≈ 0.55, pause after ≈ 1.15, flipped shape) is now split N/V: **owner to judge whether these are PVCs**
+    (e.g. `polarecg://beat/1794842709115` model N 0.97, `…/1794854893271` model V 0.94, `…/1794848846446` 50/50).
+    Done when: test-split table (N/V/X) and the own-night checks (P7.1d) are reported next to model v1
     (`20261118-220745`), and 06:44:40.894 = X, 06:44:41.117 = N.
 - [ ] **P7.2 [AI]** Export to TFLite / ONNX, run in `:app` (model input prepared by `:core-dsp`).
   The model must run **on the phone** (owner, 2026-11-19); the PC only trains it. Requirements found so far:

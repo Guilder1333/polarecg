@@ -65,27 +65,28 @@ def session_windows(session: Path, beats: list[dict]):
 def load_model(run: Path, device):
     import torch
     config = json.loads((run / "config.json").read_text(encoding="utf-8"))
-    model = tb.build_model(config["width"]).to(device)
+    classes = tuple(config["classes"])   # v1: N, S, V, X; v2: N, V, X
+    model = tb.build_model(config["width"], len(classes)).to(device)
     model.load_state_dict(torch.load(run / "model.pt", map_location=device))
     model.eval()
-    return model
+    return model, classes
 
 
-def predict_proba(model, x: np.ndarray, rr: np.ndarray, device, batch: int = 2048) -> np.ndarray:
+def predict_proba(model, x: np.ndarray, rr: np.ndarray, device, n_classes: int, batch: int = 2048) -> np.ndarray:
     import torch
     out = []
     with torch.no_grad():
         for i in range(0, len(x), batch):
             logits = model(torch.from_numpy(x[i:i + batch]).to(device), torch.from_numpy(rr[i:i + batch]).to(device))
             out.append(torch.softmax(logits, 1).cpu().numpy())
-    return np.concatenate(out) if out else np.zeros((0, len(tb.CLASSES)), np.float32)
+    return np.concatenate(out) if out else np.zeros((0, n_classes), np.float32)
 
 
-def crosstab(app: list[str], model: list[str]) -> str:
+def crosstab(app: list[str], model: list[str], classes=tb.CLASSES) -> str:
     app_classes = sorted(set(app), key=lambda c: ("NSVQ".find(c) if c in "NSVQ" else 9, c))
-    lines = ["app\\model" + "".join(f"{c:>9}" for c in tb.CLASSES) + "    total"]
+    lines = ["app\\model" + "".join(f"{c:>9}" for c in classes) + "    total"]
     for a in app_classes:
-        row = [sum(1 for x, y in zip(app, model) if x == a and y == c) for c in tb.CLASSES]
+        row = [sum(1 for x, y in zip(app, model) if x == a and y == c) for c in classes]
         lines.append(f"{a:<9}" + "".join(f"{v:>9}" for v in row) + f"{sum(row):>9}")
     return "\n".join(lines)
 
@@ -101,7 +102,8 @@ def main(argv=None) -> int:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     beats = read_beats(args.session)
     x, rr, seg_of = session_windows(args.session, beats)
-    proba = predict_proba(load_model(args.run, device), x, rr, device)
+    model_, classes = load_model(args.run, device)
+    proba = predict_proba(model_, x, rr, device, len(classes))
     pred = proba.argmax(1)
     ok = seg_of >= 0
 
@@ -109,16 +111,16 @@ def main(argv=None) -> int:
     out = args.out / f"{args.session.name}_{args.run.name}.csv"
     with open(out, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["utcMs", "utc", "appClass", "vDoubt", "model", *(f"p{c}" for c in tb.CLASSES),
+        w.writerow(["utcMs", "utc", "appClass", "vDoubt", "model", *(f"p{c}" for c in classes),
                     "rrPreRatio", "rrPostRatio", "rrLocalMs"])
         for b, p, pr, f_, good in zip(beats, pred, proba, rr, ok):
             w.writerow([b["utcMs"], b["utc"], b["class"], b.get("vDoubt", ""),
-                        tb.CLASSES[p] if good else "", *(f"{v:.3f}" for v in pr),
+                        classes[p] if good else "", *(f"{v:.3f}" for v in pr),
                         f"{f_[0]:.3f}", f"{f_[1]:.3f}", round(float(f_[3]) * 1000)])
     app = [b["class"] for b, g in zip(beats, ok) if g]
-    model = [tb.CLASSES[p] for p, g in zip(pred, ok) if g]
+    model = [classes[p] for p, g in zip(pred, ok) if g]
     print(f"{len(beats)} app beats, {int((~ok).sum())} outside the ECG segments; written {out}\n")
-    print(crosstab(app, model))
+    print(crosstab(app, model, classes))
     return 0
 
 
