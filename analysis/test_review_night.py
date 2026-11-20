@@ -77,6 +77,49 @@ class QueueTest(unittest.TestCase):
         self.assertEqual(rn.latest_decisions(rows, 100), {1: "N"})   # 2 undone, 3 too old
 
 
+class StretchTest(unittest.TestCase):
+    def setUp(self):
+        self.t = np.arange(0, 60_000, 1000, dtype=np.int64)          # one beat a second
+
+    def marks(self, t, paired=None):
+        paired = paired if paired is not None else [None] + [True] * (len(t) - 1)
+        return rn.mark_stretches(t, np.zeros(len(t), np.int64), np.full(len(t), 1000.0), paired)
+
+    def test_clean_rhythm_has_no_stretch(self):
+        self.assertEqual(set(self.marks(self.t)), {""})
+
+    def test_one_false_detection_stays_reviewable(self):
+        t = np.sort(np.append(self.t, 30_400))                        # 2 short intervals only
+        self.assertEqual(set(self.marks(t)), {""})
+
+    def test_burst_is_crowded_with_margin(self):
+        t = np.sort(np.concatenate([self.t, [30_200, 30_450, 30_700]]))
+        m = self.marks(t)
+        crowded = t[[k for k, x in enumerate(m) if x == "crowded"]]
+        self.assertLessEqual(crowded.min(), 28_000)
+        self.assertGreaterEqual(crowded.max(), 32_000)
+        self.assertEqual(m[0], "")
+
+    def test_long_interval_strap_does_not_have_is_missed_beats(self):
+        t = np.delete(self.t, [30, 31])                               # 3 s gap
+        paired = [None] + [True] * (len(t) - 1)
+        paired[30] = False                                            # the gap's interval: no strap pair
+        self.assertEqual(self.marks(t, paired)[30], "missed beats")
+        paired[30] = True                                             # strap has it too: a real pause
+        self.assertEqual(set(self.marks(t, paired)), {""})
+
+    def test_summary(self):
+        marks = [""] * 5 + ["crowded"] * 3 + [""] * 2 + ["missed beats"] * 2
+        t = np.arange(12) * 60_000
+        s = rn.stretch_summary(t, marks)
+        self.assertEqual(s["crowded"], (1, 2.0))
+        self.assertEqual(s["missed beats"], (1, 1.0))
+
+    def test_nearest_decision(self):
+        self.assertEqual(rn.nearest_decision(1000, {1410: "Q", 5000: "N", 1000: "V"}), (410, "Q"))
+        self.assertIsNone(rn.nearest_decision(1000, {3000: "N"}))
+
+
 class TimeTest(unittest.TestCase):
     def test_local_time(self):
         from datetime import timedelta

@@ -835,6 +835,18 @@ with the model.
        **seed disagreement is a good check for the review**.
     **Order agreed with the owner (2026-11-20): item 4 → the review of own nights (several checks, owner decides,
     see below) → items 1 and 2**, so that items 1 and 2 can learn from the real cases the review finds.
+    **Review tool (2026-11-20): `analysis/review_night.py`** (build / next / status; checks app, model with all seeds,
+    timing + pause, shape vs nearby normal beats, H10 strap RR, motion; the owner decides on the phone via
+    `polarecg://beat`, decisions read back from the phone's `label` table, only rows after the first build).
+    First night `20261119T151402Z` (33,217 beats): queue of 100 (12 per disagreement group, 4 per agreed class).
+    Owner's first impression: most disagreements are hard — clusters of detections that cannot all be beats, and
+    stretches where the app **skipped visible beats** (no marker at all). So crowded stretches (≥ 3 impossibly short
+    intervals within 3 s) and missed-beat stretches (a long interval of ours the strap does not have) are now left
+    out and only counted: 25 crowded (2.5 min) and 10 missed-beat stretches on that night. Missed beats are a
+    **detector** problem (not the classifier's); note for later. Status at the pause: 5 queue beats decided
+    (owner: Q, V, Q, N, Q, all called V by the model), queue rebuilt after the change (decisions kept).
+    To resume: `py analysis/review_night.py next data/sessions/20261119T151402Z` (phone on USB);
+    `next --skip` leaves out a beat that cannot be judged; `status` shows decisions against the checks.
     5. Parallel batch making (worker processes / prefetch): batch making on one CPU core (0.06 s per batch)
        is now as slow as the GPU step on the GTX 1650 Ti (0.06 s); on a 4070 Ti it would be the whole cost.
        Estimate: 20-epoch run 27 min now → ~13–15 min on the 1650 Ti, ~4–7 min on the 4070 Ti with it.

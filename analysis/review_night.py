@@ -19,6 +19,13 @@ beat the app detected gets six checks that do not depend on each other:
                with nothing;
 * **motion**   the app's accelerometer movement at the beat.
 
+Two kinds of stretches are left out of the review, because single beats there cannot be judged
+(owner, 2026-11-20): **crowded** stretches (3 or more impossibly short intervals within a few seconds: a
+burst of noise or movement, not beats; one false detection between two real beats gives only 2 short
+intervals and stays reviewable) and **missed beats** (a long interval of ours that the strap does not
+have: the strap counted beats there that the app skipped, so the RR-based checks around it mean nothing).
+They are counted in the summary instead.
+
 Beats where the checks disagree are sorted into groups (``GROUPS``); a few of each group, spread over the
 night, form the review queue, plus a few beats where all checks agree (to catch checks that are wrong
 together). ``next`` opens the beat on the phone (``polarecg://beat/<utcMs>``); the owner labels it there
@@ -60,6 +67,13 @@ SHAPE_DIFFERENT = 0.6
 MOVING_MG = 30.0        # as compare_rr.py
 TEMPLATE_SIDE = 15      # clean normal beats taken on each side for the local template
 SHAPE_SPAN = (-13, 26)  # samples around the beat for shape: -100 .. +200 ms at 130 Hz
+SHORT_RR = 0.5          # an interval below this x the usual one (or below 300 ms) is impossibly short
+SHORT_MIN_MS = 300
+CROWDED_COUNT = 3       # this many short intervals ...
+CROWDED_WINDOW_MS = 3000  # ... within this time: a crowded stretch
+LONG_RR = 1.7           # an interval above this x usual that the strap does not have: missed beats
+STRETCH_MARGIN_MS = 2000  # beats this close to a stretch are left out too (their RR and windows touch it)
+NEAR_MS = 600           # a decision this close to a queue beat is reported by `next`
 
 APP_VOTE = {"N": "N", "S": "S", "SS": "S", "V": "V", "Q": "X"}
 
@@ -108,6 +122,53 @@ def strap_verdict(pre_paired: bool | None, post_paired: bool | None) -> str:
     if not any(known):
         return "no beat"
     return "unclear"
+
+
+def mark_stretches(t_ms: np.ndarray, seg: np.ndarray, usual_ms: np.ndarray, pre_paired: list) -> list[str]:
+    """Per beat: "crowded", "missed beats" or "" (see the module docstring).
+
+    ``t_ms`` beat times, ``seg`` segment per beat, ``usual_ms`` the usual RR at each beat, ``pre_paired[i]``
+    whether the interval ending at beat i paired with a strap interval (None: no interval)."""
+    n = len(t_ms)
+    out = [""] * n
+    if n < 2:
+        return out
+    same = seg[1:] == seg[:-1]
+    rr = np.diff(t_ms).astype(float)
+    usual = usual_ms[1:]
+    short_end = np.flatnonzero(same & (rr < np.maximum(SHORT_MIN_MS, SHORT_RR * usual))) + 1
+    long_end = [e for e in np.flatnonzero(same & (rr > LONG_RR * usual)) + 1 if pre_paired[e] is False]
+    spans = []
+    st = t_ms[short_end].astype(float)
+    for k in range(len(short_end)):
+        j = np.searchsorted(st, st[k] + CROWDED_WINDOW_MS, side="right")
+        if j - k >= CROWDED_COUNT:
+            spans.append((st[k] - rr[short_end[k] - 1], st[j - 1], "crowded"))
+    for e in long_end:
+        spans.append((float(t_ms[e - 1]), float(t_ms[e]), "missed beats"))
+    for lo, hi, kind in spans:
+        a = np.searchsorted(t_ms, lo - STRETCH_MARGIN_MS, side="left")
+        b = np.searchsorted(t_ms, hi + STRETCH_MARGIN_MS, side="right")
+        for i in range(a, b):
+            if out[i] != "crowded":          # crowded wins when both apply
+                out[i] = kind
+    return out
+
+
+def stretch_summary(t_ms: np.ndarray, marks: list[str]) -> dict[str, tuple[int, float]]:
+    """Per kind: (number of stretches = runs of consecutive marked beats, their total length in minutes)."""
+    out = {}
+    for kind in ("crowded", "missed beats"):
+        runs, total, start = 0, 0.0, None
+        for i, m in enumerate(marks + [""]):
+            if m == kind and start is None:
+                start = i
+            elif m != kind and start is not None:
+                runs += 1
+                total += (t_ms[i - 1] - t_ms[start]) / 60000
+                start = None
+        out[kind] = (runs, total)
+    return out
 
 
 def group_of(check: dict) -> str | None:
@@ -254,6 +315,8 @@ def compute_checks(session: Path, run: Path) -> list[dict]:
     clean = (np.array(app) == "N") & (model == 0) & agree & good & (seg_of >= 0)
     corr, height = local_shape(x, clean)
     pre_p, post_p = strap_pairs(beats, session)
+    t_ms = np.array([int(b["utcMs"]) for b in beats], dtype=np.int64)
+    stretch = mark_stretches(t_ms, np.array([int(b["segment"]) for b in beats]), rr[:, 3] * 1000.0, pre_p)
     checks = []
     for i, b in enumerate(beats):
         timing, pause = timing_verdict(float(rr[i, 0]), float(rr[i, 1]))
@@ -266,9 +329,9 @@ def compute_checks(session: Path, run: Path) -> list[dict]:
             "corr": corr[i], "height": height[i], "shape": shape_verdict(corr[i]),
             "strap": strap_verdict(pre_p[i], post_p[i]), "motionMg": motion,
             "motion": "moving" if motion >= MOVING_MG else "still" if np.isfinite(motion) else "-",
-            "inEcg": bool(seg_of[i] >= 0),
+            "inEcg": bool(seg_of[i] >= 0), "stretch": stretch[i],
         }
-        if not c["inEcg"]:
+        if not c["inEcg"] or c["stretch"]:
             c["group"], c["agreed"] = "", ""
         else:
             c["group"] = group_of(c) or ""
@@ -372,16 +435,22 @@ def cmd_build(args) -> int:
     sizes = {name: sum(c["group"] == name for c in checks) for name, _ in GROUPS}
     sizes.update({name: sum(c["agreed"] == k for c in checks) for name, k in AGREED})
     in_ecg = sum(c["inEcg"] for c in checks)
+    stretches = stretch_summary(np.array([c["utcMs"] for c in checks]), [c["stretch"] for c in checks])
     # Decisions count from the FIRST build on, so rebuilding (new model, other caps) keeps them.
     meta.setdefault("builtAtUtcMs", int(time.time() * 1000))
     meta.update({"session": args.session.name, "model": str(args.model), "beats": len(checks), "inEcg": in_ecg,
-                 "groupSizes": sizes, "queue": len(queue), "lastBuildUtcMs": int(time.time() * 1000)})
+                 "groupSizes": sizes, "queue": len(queue),
+                 "stretches": {k: {"count": n, "minutes": round(m, 1)} for k, (n, m) in stretches.items()}, "lastBuildUtcMs": int(time.time() * 1000)})
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"{len(checks)} beats ({in_ecg} with ECG), checks in {time.time() - t0:.0f}s -> {folder}")
+    print("\nleft out (single beats cannot be judged there):")
+    for kind, (n, minutes) in stretches.items():
+        beats_in = sum(c["stretch"] == kind for c in checks)
+        print(f"  {kind:<26}{n:>5} stretches, {minutes:.1f} min, {beats_in} beats (incl. 2 s margin)")
     print("\nbeats per group (the queue takes a few of each, spread over the night):")
     for name, n in sizes.items():
         print(f"  {name:<26}{n:>7}   in queue {sum(q['group'] == name for q in queue)}")
-    rest = in_ecg - sum(sizes.values())
+    rest = in_ecg - sum(sizes.values()) - sum(c["stretch"] != "" for c in checks)
     print(f"  {'no disagreement, not all agreeing':<26}{rest:>7}   (not reviewed)")
     print(f"\nqueue: {len(queue)} beats. Next: python analysis/review_night.py next {args.session}")
     return 0
@@ -393,13 +462,31 @@ def decisions_for(args, folder: Path) -> dict[int, str]:
     return latest_decisions(rows, meta["builtAtUtcMs"])
 
 
+def read_skipped(folder: Path) -> set[int]:
+    path = folder / "skipped.txt"
+    return {int(x) for x in path.read_text(encoding="utf-8").split()} if path.exists() else set()
+
+
+def nearest_decision(utc_ms: int, decided: dict[int, str]) -> tuple[int, str] | None:
+    """(signed distance in ms, label) of the closest decided beat within NEAR_MS, other than the beat itself."""
+    near = [(b - utc_ms, lab) for b, lab in decided.items() if b != utc_ms and abs(b - utc_ms) <= NEAR_MS]
+    return min(near, key=lambda d: abs(d[0])) if near else None
+
+
 def cmd_next(args) -> int:
     folder = folder_of(args.session)
     queue = read_csv(folder / "queue.csv")
     checks = load_checks(folder)
     decided = decisions_for(args, folder)
     offset = jst_offset(args.session)
-    todo = [q for q in queue if int(q["utcMs"]) not in decided]
+    skipped = read_skipped(folder)
+    if args.skip:
+        first = next((q for q in queue if int(q["utcMs"]) not in decided and int(q["utcMs"]) not in skipped), None)
+        if first:
+            skipped.add(int(first["utcMs"]))
+            (folder / "skipped.txt").write_text("\n".join(map(str, sorted(skipped))) + "\n", encoding="utf-8")
+            print(f"skipped item {first['item']}")
+    todo = [q for q in queue if int(q["utcMs"]) not in decided and int(q["utcMs"]) not in skipped]
     done = len(queue) - len(todo)
     if not todo:
         print(f"all {len(queue)} beats of the queue are decided. See: python analysis/review_night.py status {args.session}")
@@ -409,6 +496,10 @@ def cmd_next(args) -> int:
     k = in_group.index(q) + 1
     print(f"[{done + 1}/{len(queue)}]  group \"{q['group']}\" ({k} of {len(in_group)})")
     print(describe(checks[int(q["utcMs"])], offset))
+    near = nearest_decision(int(q["utcMs"]), decided)
+    if near:
+        print(f"\n  note: you marked a beat {near[0] / 1000:+.2f} s from this one ({near[1]}), not this beat itself.\n"
+              f"  Mark the selected beat, or run `next --skip` to leave this one out.")
     if not args.no_open:
         open_on_phone(int(q["utcMs"]))
         print("\nopened on the phone: label it there (N S SS V Q X ?) and press Accept, then run `next` again.")
@@ -420,7 +511,9 @@ def cmd_status(args) -> int:
     queue = read_csv(folder / "queue.csv")
     checks = load_checks(folder)
     decided = decisions_for(args, folder)
-    print(f"{sum(int(q['utcMs']) in decided for q in queue)} of {len(queue)} queue beats decided\n")
+    skipped = read_skipped(folder)
+    print(f"{sum(int(q['utcMs']) in decided for q in queue)} of {len(queue)} queue beats decided, "
+          f"{sum(int(q['utcMs']) in skipped for q in queue)} skipped\n")
     print(f"{'group':<26}{'decided':>9}   owner's decisions")
     for name in [g for g, _ in GROUPS] + [g for g, _ in AGREED]:
         items = [q for q in queue if q["group"] == name]
@@ -459,6 +552,7 @@ def main(argv=None) -> int:
     n = sub.add_parser("next", help="show the next undecided beat and open it on the phone")
     n.add_argument("session", type=Path)
     n.add_argument("--no-open", action="store_true", help="only print the checks")
+    n.add_argument("--skip", action="store_true", help="leave out the current beat (cannot be judged) and go on")
     n.set_defaults(func=cmd_next)
     s = sub.add_parser("status", help="decisions so far, per group and against the checks")
     s.add_argument("session", type=Path)
