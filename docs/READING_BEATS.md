@@ -110,6 +110,29 @@ typical of PACs than PVCs. Not proof; to be rechecked with the learned classifie
   doctor**: one clear strip of it (with normal beats either side) is often enough for a cardiologist to say
   what it is, even without a Holter.
 
+### The family is not one beat type: owner's reading of three of them (2026-11-20)
+
+The N/V/X model (`20261120-185445`, no S class: an early "N" is a PAC) split the family N 32 / V 20. Three
+of them, looked at on the phone:
+
+| beat (JST) | link | timing: early · pause after · sum | model | owner |
+|---|---|---|---|---|
+| 2026-11-17 00:25:09.115 | `polarecg://beat/1794842709115` | 0.56 · 1.06 · 1.62 (resets) | N 0.97 → PAC | **S** |
+| 2026-11-17 03:48:13.271 | `polarecg://beat/1794854893271` | 0.63 · 1.38 · 2.01 (compensatory) | V 0.94 | **V** |
+| 2026-11-17 02:07:26.446 | `polarecg://beat/1794848846446` | 0.54 · 1.21 · 1.74 (in between) | N 0.49 / V 0.47 | **V**, looks the same as the one above |
+
+What this shows:
+
+- **PACs and PVCs both occur in this family,** and the pause after them tells them apart better than the shape
+  of the early beat on this lead: the S resets the rhythm (sum 1.62), the clear V is fully compensatory (2.01).
+- **A PVC's pause is not always fully compensatory.** The third beat is a V with a sum of 1.74: a pause can
+  come out shorter when the sinus rhythm speeds up a little, or when the PVC conducts back into the atria.
+  So "pause in between" means: decide by the shape.
+- Its QRS matches the clear V almost exactly (correlation 0.97). The model was unsure because the beat is
+  **smaller than the normal beats around it** (the clear V is as tall as them): in the training databases
+  PVCs are usually taller than normal beats, so a small flipped PVC on the H10 chest lead is new to the model.
+  Swapping in the clear V's timing only moved it to V 0.59. On-time, the same shape is called normal (0.96).
+
 ## 8. Where real ground truth could come from
 
 - **Artifact test recording:** lie still, awake, and do one thing at a time with written clock times
