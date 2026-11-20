@@ -823,6 +823,18 @@ with the model.
     3. ~~Longer RR history so AF is not called S beat by beat~~ — dropped with the S class (see below);
        AF / flutter is now a question for the rules (an early N in irregular rhythm is not a PAC).
     4. Steadier model selection: several seeds and/or average of the last epochs (SWA); validation S swung 56–79 %.
+       **Done 2026-11-20:** `--seeds` (one model per seed in `seed<k>/`, `evaluate` prints each + mean ± sd of the
+       key figures) and `model.pt` = weights averaged over the last 5 epochs (SWA, every 50 steps, batch-norm
+       re-measured); `best_epoch.pt` kept. Run `20261120-230114` (N/V/X, 5 seeds, 9 min), test split, averaged vs
+       best epoch, mean ± sd: V Se 92.9 ± 0.6 vs 90.3 ± 1.8, V +P 93.6 ± 1.0 vs 94.2 ± 3.9, PAC→V 328 ± 45 vs
+       266 ± 67, N→V 420 ± 126 vs 410 ± 471, noise X 99.83 vs 99.60 %. Same level, spread 2–4× smaller.
+       The single run `20261120-185445` (V Se 93.4, +P 95.6) was on the lucky side. **Rule for comparing changes:**
+       5 seeds, a change counts if it moves a figure by more than about 2 sd (V Se ~1 point, V +P ~2, PAC→V ~90).
+       Ensemble (mean of the 5 seeds' probabilities): V Se 92.9, V +P 95.1, PAC→V 263, N→V 302. The 5 seeds agree
+       on 98.6 % of test beats with 0.5 % errors there; the 1.4 % they disagree on hold 31 % errors, so
+       **seed disagreement is a good check for the review**.
+    **Order agreed with the owner (2026-11-20): item 4 → the review of own nights (several checks, owner decides,
+    see below) → items 1 and 2**, so that items 1 and 2 can learn from the real cases the review finds.
     5. Parallel batch making (worker processes / prefetch): batch making on one CPU core (0.06 s per batch)
        is now as slow as the GPU step on the GTX 1650 Ti (0.06 s); on a 4070 Ti it would be the whole cost.
        Estimate: 20-epoch run 27 min now → ~13–15 min on the 1650 Ti, ~4–7 min on the 4070 Ti with it.

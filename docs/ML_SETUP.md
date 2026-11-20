@@ -56,6 +56,8 @@ py -m unittest discover -s analysis -p "test_*.py"
 ```powershell
 py analysis\train_beats.py train                                  # → data\models\<time>\ (model.pt, config.json, history.json)
 py analysis\train_beats.py evaluate data\models\<run>             # test split, per database
+py analysis\train_beats.py train --seeds 0 1 2 3 4                # 5 models (~2 min each): compare changes on mean ± sd
+py analysis\train_beats.py evaluate data\models\<run> --weights best_epoch.pt   # best single epoch instead of the average
 py analysis\classify_session.py data\models\<run> data\sessions\<session>   # own night → data\model-out\
 ```
 

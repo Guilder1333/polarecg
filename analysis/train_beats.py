@@ -3,6 +3,8 @@
     python analysis/train_beats.py train                       # train, writes data/models/<time>/
     python analysis/train_beats.py train --epochs 2 --samples-per-epoch 20000   # quick try
     python analysis/train_beats.py evaluate data/models/<run>  # test-split figures per database
+    python analysis/train_beats.py train --seeds 0 1 2 3 4     # 5 models (seed0/ .. seed4/), ~2 min each
+    python analysis/train_beats.py evaluate data/models/<run>  # on a multi-seed run: each seed + mean ± sd
 
 Input: ``data/dataset/`` from ``build_dataset.py`` (all leads, 130 Hz, filtered like the app,
 split by patient in ``manifest.csv``).
@@ -39,8 +41,13 @@ Augmentation on training windows only: random polarity flip (H10's lead can be u
 compared with any standard lead), centre jitter of ±2 samples (detector timing), and mild
 NSTDB noise on some beats (a real beat in noise must stay a beat). The NSTDB noise records are
 split in time: the first 70 % for training, the rest for validation/test.
-The model with the best validation score (mean sensitivity over the classes N, V, X; the N
-sensitivity counts the S beats too) is kept.
+The saved model (``model.pt``) is the **average of the weights over the last epochs** (SWA,
+``--swa-epochs``, sampled every ``SWA_EVERY`` steps), with the batch-norm statistics measured again on
+training batches afterwards: a single epoch's weights jump around (validation S swung 51-81 %), the
+average is steadier and needs no choice of epoch. The epoch with the best validation score (mean
+sensitivity over the classes N, V, X; N counts the S beats too) is kept as ``best_epoch.pt`` for comparison.
+``--seeds`` trains several models that differ only in their random start and batches; changes to the
+training are compared on the mean ± sd over the seeds (P7.1e item 4), not on one lucky run.
 
 PyTorch notes for reading the code: an ``nn.Module`` is a layer or a network; ``forward`` is what
 runs on a batch. Tensors have shape (batch, channels, samples). ``model.train()`` /
@@ -87,6 +94,8 @@ MIN_AMPLITUDE_UV = 50.0                           # window scale never below thi
 NOISE_TRAIN_PART = 0.7                            # first 70 % of each noise record: training
 GAP_MARGIN = 26                                   # X centre at least 200 ms from a real beat
 JITTER = 2                                        # ± samples of centre jitter in training
+SWA_EVERY = 50                                    # steps between two weight samples of the average
+BN_BATCHES = 100                                  # training batches to re-measure batch-norm after averaging
 
 # The lead each database is usually evaluated on (MIT-BIH MLII, INCART II, svdb ECG1).
 PRIMARY_LEAD = {"mitdb": ("MLII",), "incartdb": ("II",), "svdb": ("ECG1",)}
@@ -420,6 +429,33 @@ def score(m: np.ndarray) -> float:
     return float(np.nanmean(class_se(m)))
 
 
+KEY_FIGURES = ("V Se %", "V +P %", "PAC->V", "N->V", "N->other %", "noise X %")
+
+
+def key_figures(m: np.ndarray, noise_counts: np.ndarray, classes=CLASSES) -> dict:
+    """The figures runs are compared on: V found / V calls right (beats), PACs and normal beats
+    called V (counts), normal beats called anything but N (%), noise windows called X (%)."""
+    se, ppv = se_ppv(m, classes)
+    v, n, k_n, k_s = classes.index("V"), classes.index("N"), KINDS.index("N"), KINDS.index("S")
+    return {"V Se %": float(se[KINDS.index("V")]), "V +P %": float(ppv[v]),
+            "PAC->V": int(m[k_s, v]), "N->V": int(m[k_n, v]),
+            "N->other %": float(100.0 * (1 - m[k_n, n] / m[k_n].sum())),
+            "noise X %": float(100.0 * noise_counts[classes.index("X")] / noise_counts.sum())}
+
+
+def format_key_figures(rows: dict[str, dict]) -> str:
+    """One line per run, then mean and sd (sample standard deviation) if there are several."""
+    lines = [f"{'':<14}" + "".join(f"{k:>12}" for k in KEY_FIGURES)]
+    fmt = lambda k, v: f"{v:>12.0f}" if k in ("PAC->V", "N->V") else f"{v:>12.2f}"  # noqa: E731
+    for name, f in rows.items():
+        lines.append(f"{name:<14}" + "".join(fmt(k, f[k]) for k in KEY_FIGURES))
+    if len(rows) > 1:
+        a = np.array([[f[k] for k in KEY_FIGURES] for f in rows.values()], dtype=float)
+        lines.append(f"{'mean':<14}" + "".join(f"{v:>12.2f}" for v in a.mean(0)))
+        lines.append(f"{'sd':<14}" + "".join(f"{v:>12.2f}" for v in a.std(0, ddof=1)))
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------- commands
 
 def _device():
@@ -427,41 +463,58 @@ def _device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def train(args) -> int:
+def recompute_batchnorm(model, batches, device, steps: int = BN_BATCHES) -> None:
+    """Measure the batch-norm mean / variance again on training batches. Needed after averaging
+    weights: the averaged layers see different activations than any single epoch did.
+    (momentum=None makes PyTorch keep a plain average over all the batches instead of a running one.)"""
+    import torch
+    bns = [m for m in model.modules() if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)]
+    saved = [bn.momentum for bn in bns]
+    for bn in bns:
+        bn.reset_running_stats()
+        bn.momentum = None
+    model.train()
+    with torch.no_grad():
+        for _ in range(steps):
+            x, rr, _ = (a.to(device, non_blocking=True) for a in next(batches))
+            model(x, rr)
+    for bn, mom in zip(bns, saved):
+        bn.momentum = mom
+
+
+def train_one(args, seed: int, run: Path, val, device) -> dict:
+    """Train one model with ``seed`` into ``run``; returns its final validation figures."""
     import torch
     from torch import nn
+    from torch.optim.swa_utils import AveragedModel
 
-    torch.manual_seed(args.seed)
-    device = _device()
-    t0 = time.time()
-    train_maker = WindowMaker(load_records(args.dataset, {"train"}), load_noise(args.dataset, "train"))
-    batches = batch_loader(args.dataset, args.batch, args.seed, args.workers)
-    val_maker = WindowMaker(load_records(args.dataset, {"val"}), load_noise(args.dataset, "eval"))
-    val = fixed_set(val_maker, args.val_per_class, args.seed + 1)
-    print(f"data loaded in {time.time() - t0:.0f}s on {device}, {args.workers} batch workers; train beats N/S/V "
-          f"{[len(p) for p in train_maker.by_kind]}, val set {len(val[2])} windows", flush=True)
-
-    run = args.out / time.strftime("%Y%m%d-%H%M%S")
+    torch.manual_seed(seed)
     run.mkdir(parents=True, exist_ok=False)
-    config = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items() if k != "func"}
-    config.update({"classes": CLASSES, "kinds": KINDS, "pre": PRE, "post": POST, "nRr": N_RR, "rateHz": ECG_RATE_HZ,
-                   "batchMix": BATCH_MIX})
+    plain = (str, int, float, bool, list, type(None))
+    config = {k: (v if isinstance(v, plain) else str(v)) for k, v in vars(args).items() if k not in ("func", "seeds")}
+    config.update({"seed": seed, "classes": CLASSES, "kinds": KINDS, "pre": PRE, "post": POST, "nRr": N_RR,
+                   "rateHz": ECG_RATE_HZ, "batchMix": BATCH_MIX, "swaEvery": SWA_EVERY,
+                   "modelPt": f"average of the weights over the last {args.swa_epochs} epochs (SWA)"})
     (run / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
+    batches = batch_loader(args.dataset, args.batch, seed, args.workers)
     model = build_model(args.width).to(device)
-    n_params = sum(p.numel() for p in model.parameters())
+    # AveragedModel keeps a copy of the network whose weights are the running mean of the samples given
+    # to update_parameters(); it is only filled during the last swa_epochs epochs.
+    swa = AveragedModel(model)
     steps_per_epoch = max(1, args.samples_per_epoch // args.batch)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args.lr, total_steps=args.epochs * steps_per_epoch)
     loss_fn = nn.CrossEntropyLoss(label_smoothing=0.05)
-    print(f"model {n_params:,} parameters; run folder {run}", flush=True)
+    swa_from = max(1, args.epochs - args.swa_epochs + 1)
+    print(f"seed {seed}: {sum(p.numel() for p in model.parameters()):,} parameters; averaging epochs "
+          f"{swa_from}-{args.epochs}; folder {run}", flush=True)
 
-    best = -1.0
-    history = []
+    best, history = -1.0, []
     for epoch in range(1, args.epochs + 1):
         model.train()
         t_epoch, total = time.time(), 0.0
-        for _ in range(steps_per_epoch):
+        for step in range(steps_per_epoch):
             x, rr, y = (a.to(device, non_blocking=True) for a in next(batches))
             opt.zero_grad()
             loss = loss_fn(model(x, rr), y)
@@ -469,24 +522,56 @@ def train(args) -> int:
             opt.step()
             sched.step()
             total += loss.item()
+            if epoch >= swa_from and (step + 1) % SWA_EVERY == 0:
+                swa.update_parameters(model)
         m = confusion(val[2], predict(model, val[0], val[1], device))
-        s = score(m)
-        se, _ = se_ppv(m)
+        s, (se, _) = score(m), se_ppv(m)
         history.append({"epoch": epoch, "loss": total / steps_per_epoch, "valScore": s,
                         "valSe": dict(zip(KINDS, np.round(se, 1).tolist()))})
         mark = ""
         if s > best:
             best = s
-            torch.save(model.state_dict(), run / "model.pt")
-            (run / "val_confusion.txt").write_text(format_confusion(m) + "\n", encoding="utf-8")
-            mark = "  * saved"
-        print(f"epoch {epoch}/{args.epochs} loss {total / steps_per_epoch:.3f} val mean Se {s:.1f} "
+            torch.save(model.state_dict(), run / "best_epoch.pt")
+            (run / "val_confusion_best_epoch.txt").write_text(format_confusion(m) + "\n", encoding="utf-8")
+            mark = "  * best"
+        print(f"  epoch {epoch}/{args.epochs} loss {total / steps_per_epoch:.3f} val mean Se {s:.1f} "
               f"(" + ", ".join(f"{k} {v:.1f}" for k, v in zip(KINDS, se)) + f") "
               f"{time.time() - t_epoch:.0f}s{mark}", flush=True)
         (run / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
-    print(f"\nbest validation mean Se {best:.1f}; validation confusion of the saved model:\n"
-          + (run / "val_confusion.txt").read_text(encoding="utf-8"))
-    print(f"next: python analysis/train_beats.py evaluate {run}")
+
+    averaged = swa.module                 # the network inside AveragedModel, holding the mean weights
+    recompute_batchnorm(averaged, batches, device)
+    torch.save(averaged.state_dict(), run / "model.pt")
+    m = confusion(val[2], predict(averaged, val[0], val[1], device))
+    (run / "val_confusion.txt").write_text(format_confusion(m) + "\n", encoding="utf-8")
+    s, (se, _) = score(m), se_ppv(m)
+    print(f"seed {seed}: averaged model val mean Se {s:.1f} ("
+          + ", ".join(f"{k} {v:.1f}" for k, v in zip(KINDS, se)) + f"); best single epoch {best:.1f}", flush=True)
+    return {"valScore": s, "bestEpochScore": best, "valSe": dict(zip(KINDS, np.round(se, 1).tolist()))}
+
+
+def train(args) -> int:
+    device = _device()
+    t0 = time.time()
+    n_train = [len(p) for p in WindowMaker(load_records(args.dataset, {"train"}), []).by_kind]
+    val_maker = WindowMaker(load_records(args.dataset, {"val"}), load_noise(args.dataset, "eval"))
+    val = fixed_set(val_maker, args.val_per_class, 1)   # the same validation windows for every seed
+    print(f"data loaded in {time.time() - t0:.0f}s on {device}, {args.workers} batch workers; train beats N/S/V "
+          f"{n_train}, val set {len(val[2])} windows", flush=True)
+
+    run = args.out / time.strftime("%Y%m%d-%H%M%S")
+    if len(args.seeds) == 1:
+        train_one(args, args.seeds[0], run, val, device)
+    else:
+        results = {f"seed{seed}": train_one(args, seed, run / f"seed{seed}", val, device) for seed in args.seeds}
+        scores = np.array([r["valScore"] for r in results.values()])
+        best_ep = np.array([r["bestEpochScore"] for r in results.values()])
+        text = (f"validation mean Se of the averaged models: {np.round(scores, 1).tolist()} -> "
+                f"{scores.mean():.2f} ± {scores.std(ddof=1):.2f}\n"
+                f"best single epoch (for comparison):        {np.round(best_ep, 1).tolist()}")
+        (run / "seeds.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+        print("\n" + text)
+    print(f"\ntrained in {(time.time() - t0) / 60:.1f} min; next: python analysis/train_beats.py evaluate {run}")
     return 0
 
 
@@ -505,36 +590,61 @@ def beat_windows(records: list[Record], primary_only: bool):
     return (np.stack(xs)[:, None, :], np.stack(rs), np.array(ys, dtype=np.int64), np.array(dbs))
 
 
-def evaluate(args) -> int:
-    import torch
+def model_dirs(run: Path) -> list[Path]:
+    """The model folders of a run: the run itself, or its seed*/ subfolders (multi-seed run)."""
+    if (run / "config.json").exists():
+        return [run]
+    return sorted((d for d in run.glob("seed*") if (d / "config.json").exists()),
+                  key=lambda d: int(d.name[4:]) if d.name[4:].isdigit() else 0)
 
-    device = _device()
-    config = json.loads((args.run / "config.json").read_text(encoding="utf-8"))
+
+def evaluate_one(model_dir: Path, weights: str, split: str, data, device) -> tuple[str, dict]:
+    import torch
+    x, rr, y, dbs, xn, rn = data
+    config = json.loads((model_dir / "config.json").read_text(encoding="utf-8"))
     classes = tuple(config["classes"])            # model v1 had N, S, V, X
     model = build_model(config["width"], len(classes)).to(device)
-    model.load_state_dict(torch.load(args.run / "model.pt", map_location=device))
-    # The dataset path stored in config.json is absolute and only valid on the PC that trained the model,
-    # so evaluation uses --dataset (default: this repository's data/dataset).
-    records = load_records(args.dataset, {args.split})
-    report = [f"split {args.split}, model {args.run.name}, primary lead of each database, all beats "
+    model.load_state_dict(torch.load(model_dir / weights, map_location=device))
+    report = [f"split {split}, model {model_dir.name} ({weights}), primary lead of each database, all beats "
               f"(natural class mix, F and Q left out)"]
-    x, rr, y, dbs = beat_windows(records, primary_only=True)
     pred = predict(model, x, rr, device)
     for db in sorted(set(dbs)) + ["all"]:
         sel = np.ones(len(y), bool) if db == "all" else dbs == db
         m = confusion(y[sel], pred[sel], len(classes))
         report += ["", f"== {db}: {sel.sum()} beats", format_confusion(m, classes)]
-    # Not-a-beat windows: how many are recognised, from the evaluation part of the noise records.
+    pn = predict(model, xn, rn, device)
+    counts = np.bincount(pn, minlength=len(classes))
+    report += ["", f"== {len(pn)} not-a-beat windows (noise between real beats): called "
+               + ", ".join(f"{c} {100 * k / len(pn):.1f}%" for c, k in zip(classes, counts))]
+    return "\n".join(report), key_figures(m, counts, classes)
+
+
+def evaluate(args) -> int:
+    device = _device()
+    dirs = model_dirs(args.run)
+    if not dirs:
+        raise SystemExit(f"no config.json in {args.run} or its seed*/ folders")
+    # The dataset path stored in config.json is absolute and only valid on the PC that trained the model,
+    # so evaluation uses --dataset (default: this repository's data/dataset).
+    records = load_records(args.dataset, {args.split})
+    x, rr, y, dbs = beat_windows(records, primary_only=True)
+    # Not-a-beat windows: from the evaluation part of the noise records, the same ones for every model.
     maker = WindowMaker(records, load_noise(args.dataset, "eval"))
     rng = np.random.default_rng(12345)
     xn = [maker.not_a_beat(rng, augment=False) for _ in range(args.noise_windows)]
-    pn = predict(model, np.stack([w for w, _, _ in xn])[:, None, :], np.stack([f for _, f, _ in xn]), device)
-    counts = np.bincount(pn, minlength=len(classes))
-    report += ["", f"== {args.noise_windows} not-a-beat windows (noise between real beats): called "
-               + ", ".join(f"{c} {100 * k / len(pn):.1f}%" for c, k in zip(classes, counts))]
-    text = "\n".join(report)
-    print(text)
-    (args.run / f"eval_{args.split}.txt").write_text(text + "\n", encoding="utf-8")
+    data = (x, rr, y, dbs, np.stack([w for w, _, _ in xn])[:, None, :], np.stack([f for _, f, _ in xn]))
+    figures = {}
+    suffix = "" if args.weights == "model.pt" else "_" + Path(args.weights).stem
+    for d in dirs:
+        text, figures[d.name] = evaluate_one(d, args.weights, args.split, data, device)
+        (d / f"eval_{args.split}{suffix}.txt").write_text(text + "\n", encoding="utf-8")
+        if len(dirs) == 1:
+            print(text)
+    summary = (f"split {args.split}, {args.run.name} ({args.weights}), all databases, primary lead\n"
+               + format_key_figures(figures))
+    print("\n" + summary)
+    if len(dirs) > 1:
+        (args.run / f"eval_{args.split}{suffix}_summary.txt").write_text(summary + "\n", encoding="utf-8")
     return 0
 
 
@@ -550,12 +660,15 @@ def main(argv=None) -> int:
     t.add_argument("--lr", type=float, default=2e-3)
     t.add_argument("--width", type=int, default=32, help="channels of the first conv block")
     t.add_argument("--val-per-class", type=int, default=3000)
-    t.add_argument("--seed", type=int, default=0)
+    t.add_argument("--seeds", type=int, nargs="+", default=[0],
+                   help="one model per seed; several -> run/seed<k>/ folders and mean ± sd")
+    t.add_argument("--swa-epochs", type=int, default=5, help="average the weights over this many last epochs")
     t.add_argument("--workers", type=int, default=default_workers(),
                    help="processes making training batches (0 = in the training process)")
     t.set_defaults(func=train)
     e = sub.add_parser("evaluate", help="figures on a split (default: test)")
-    e.add_argument("run", type=Path, help="run folder with model.pt and config.json")
+    e.add_argument("run", type=Path, help="run folder with model.pt and config.json, or a multi-seed run")
+    e.add_argument("--weights", default="model.pt", help="model.pt (averaged) or best_epoch.pt")
     e.add_argument("--split", default="test", choices=("train", "val", "test"))
     e.add_argument("--noise-windows", type=int, default=5000)
     e.add_argument("--dataset", type=Path, default=DATASET, help="dataset folder (default: data/dataset)")

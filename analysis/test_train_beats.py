@@ -162,6 +162,75 @@ class MetricsTest(unittest.TestCase):
         self.assertIn("S", tb.format_confusion(m, v1).splitlines()[0])
 
 
+class KeyFiguresTest(unittest.TestCase):
+    def test_key_figures(self):
+        # rows N, S, V, X; columns N, V, X
+        m = np.array([[98, 2, 0], [8, 2, 0], [10, 90, 0], [0, 0, 0]])
+        f = tb.key_figures(m, np.array([1, 1, 98]))
+        self.assertAlmostEqual(f["V Se %"], 90.0)
+        self.assertAlmostEqual(f["V +P %"], 90 / 94 * 100)
+        self.assertEqual((f["PAC->V"], f["N->V"]), (2, 2))
+        self.assertAlmostEqual(f["N->other %"], 2.0)
+        self.assertAlmostEqual(f["noise X %"], 98.0)
+
+    def test_key_figures_four_class_v1(self):
+        v1 = ("N", "S", "V", "X")
+        m = np.array([[90, 8, 2, 0], [1, 7, 2, 0], [0, 1, 9, 0], [0, 0, 0, 0]])
+        f = tb.key_figures(m, np.array([0, 0, 1, 9]), v1)
+        self.assertAlmostEqual(f["N->other %"], 10.0)   # N called S counts as an error for v1 too
+        self.assertEqual(f["PAC->V"], 2)
+
+    def test_format_mean_and_sd(self):
+        rows = {f"seed{i}": dict.fromkeys(tb.KEY_FIGURES, float(v)) for i, v in enumerate((1, 3))}
+        lines = tb.format_key_figures(rows).splitlines()
+        self.assertEqual(lines[-2].split()[1], "2.00")
+        self.assertEqual(lines[-1].split()[1], f"{np.std([1, 3], ddof=1):.2f}")
+
+    def test_model_dirs(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            run = Path(t)
+            for name in ("seed10", "seed2", "other"):
+                (run / name).mkdir()
+            for name in ("seed10", "seed2"):
+                (run / name / "config.json").write_text("{}")
+            self.assertEqual([d.name for d in tb.model_dirs(run)], ["seed2", "seed10"])
+            (run / "config.json").write_text("{}")
+            self.assertEqual(tb.model_dirs(run), [run])
+
+
+class TrainTest(unittest.TestCase):
+    def setUp(self):
+        rng = np.random.default_rng(0)
+        self.maker = tb.WindowMaker([synthetic_record()], [rng.normal(0, 100, 20_000).astype(np.float32)])
+
+    def test_recompute_batchnorm_measures_the_batches(self):
+        import torch
+        model = tb.build_model(8)
+        bn = model.features[0][1]
+        tb.recompute_batchnorm(model, tb.batch_loader(self.maker, 32, 0, 0), torch.device("cpu"), steps=3)
+        self.assertEqual(int(bn.num_batches_tracked), 3)
+        self.assertGreater(float(bn.running_var.mean()), 0)
+        self.assertEqual(bn.momentum, 0.1)             # put back after measuring
+
+    def test_train_one_writes_averaged_and_best_model(self):
+        import argparse
+        import tempfile
+        import torch
+        val = tb.fixed_set(self.maker, 4, 1)
+        with tempfile.TemporaryDirectory() as t:
+            args = argparse.Namespace(dataset=self.maker, out=Path(t), epochs=2, samples_per_epoch=64 * 4,
+                                      batch=32, lr=1e-3, width=8, val_per_class=4, seeds=[0], swa_epochs=1,
+                                      workers=0)
+            run = Path(t) / "seed0"
+            r = tb.train_one(args, 0, run, val, torch.device("cpu"))
+            for name in ("model.pt", "best_epoch.pt", "config.json", "history.json", "val_confusion.txt"):
+                self.assertTrue((run / name).exists(), name)
+            self.assertIn("valScore", r)
+            model = tb.build_model(8)
+            model.load_state_dict(torch.load(run / "model.pt"))   # plain network weights, no SWA wrapper
+
+
 class ModelTest(unittest.TestCase):
     def test_forward_shape(self):
         import torch
