@@ -125,6 +125,7 @@ fun BrowseScreen(
         beats = withContext(Dispatchers.IO) {
             when (kind) {
                 BrowseKind.EARLY_N -> beatDao.earlyNormals(from, to, ClassifierConfig().sPrematurity, LIST_CAP)
+                BrowseKind.V -> beatDao.confidentV(from, to, LIST_CAP)
                 BrowseKind.V_DOUBT -> beatDao.questionableV(from, to, LIST_CAP)
                 else -> beatDao.byClass(from, to, kind.key, LIST_CAP)
             }

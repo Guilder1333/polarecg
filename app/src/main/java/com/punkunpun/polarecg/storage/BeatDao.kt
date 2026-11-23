@@ -59,6 +59,10 @@ interface BeatDao {
     @Query("SELECT * FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs AND (cls = :cls OR (:cls = 'S' AND cls = 'SS')) ORDER BY utcMs LIMIT :limit") // the S list also holds SS (suppressed beats)
     fun byClass(fromUtcMs: Long, toUtcMs: Long, cls: String, limit: Int): List<BeatEntity>
 
+    /** V beats the detector is confident about (not `vDoubt`) in a time range, oldest first: what the summary counts as V. */
+    @Query("SELECT * FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs AND cls = 'V' AND vDoubt = 0 ORDER BY utcMs LIMIT :limit")
+    fun confidentV(fromUtcMs: Long, toUtcMs: Long, limit: Int): List<BeatEntity>
+
     /** V beats the detector marked questionable (`vDoubt`) in a time range, oldest first. */
     @Query("SELECT * FROM beat WHERE utcMs >= :fromUtcMs AND utcMs < :toUtcMs AND cls = 'V' AND vDoubt = 1 ORDER BY utcMs LIMIT :limit")
     fun questionableV(fromUtcMs: Long, toUtcMs: Long, limit: Int): List<BeatEntity>

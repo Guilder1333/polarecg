@@ -76,6 +76,7 @@ fun BrowseRoute(
         val dao = app.database.beatDao()
         return when (kind) {
             BrowseKind.EARLY_N -> dao.earlyNormals(from, to, ClassifierConfig().sPrematurity, LIST_CAP)
+            BrowseKind.V -> dao.confidentV(from, to, LIST_CAP)
             BrowseKind.V_DOUBT -> dao.questionableV(from, to, LIST_CAP)
             else -> dao.byClass(from, to, kind.key, LIST_CAP)
         }
