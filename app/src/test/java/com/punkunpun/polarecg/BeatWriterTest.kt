@@ -34,6 +34,8 @@ class BeatWriterTest {
         override fun observeCountSince(fromUtcMs: Long): Flow<Int> = emptyFlow()
         override fun byClass(fromUtcMs: Long, toUtcMs: Long, cls: String, limit: Int): List<BeatEntity> = emptyList()
         override fun earlyNormals(fromUtcMs: Long, toUtcMs: Long, maxPrematurity: Double, limit: Int): List<BeatEntity> = emptyList()
+        override fun insertAllBlocking(beats: List<BeatEntity>) {}
+        override fun questionableV(fromUtcMs: Long, toUtcMs: Long, limit: Int): List<BeatEntity> = emptyList()
         override fun beatAt(utcMs: Long): BeatEntity? = null
         override suspend fun autoOfLabelled(fromUtcMs: Long, toUtcMs: Long): List<AutoClass> = emptyList()
     }

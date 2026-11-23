@@ -106,7 +106,8 @@
     <string name="sum_empty">Nothing recorded in this period yet.</string>
     <string name="sum_beats">Beats: %1$d (N %2$d, S %3$d, V %4$d, Q %5$d)</string>
     <string name="sum_burden">Burden: S %1$s, V %2$s, S+V %3$s</string>
-    <string name="sum_vdoubt">%1$d of the V beats are questionable (likely normal beats on a drifting baseline).</string>
+    <string name="sum_vdoubt">%1$d questionable V beats are not counted above (likely normal beats on a drifting baseline).</string>
+    <string name="br_kind_vq">V?</string>
     <string name="sum_hr">Heart rate (minute averages): lowest %1$s, mean %2$s, highest %3$s bpm</string>
     <string name="sum_hr_beats">Single intervals: slowest %1$s, fastest %2$s bpm (can include detector glitches)</string>
     <string name="sum_hrv">HRV: median RMSSD %1$s ms, SDNN %2$s ms (%3$d windows of 5 min)</string>

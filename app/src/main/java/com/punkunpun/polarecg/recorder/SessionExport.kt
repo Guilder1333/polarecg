@@ -25,9 +25,10 @@ fun latestSession(sessionsDir: File): File? =
 /**
  * Zips one session folder into the cache directory and returns the zip. Blocking: call off the UI thread.
  *
- * With [database] the zip also gets `polar.db` (a copy of the whole database) and `beats.csv` (the beats saved for the
+ * With [database] the zip also gets `beats.csv` (the beats saved for the
  * session's time range, to compare with `analyze` of the same raw files, P5.3), `events.csv`, `labels.csv` (the owner's labels, PC format) and the ECG clips of the session's
  * events in `clips/` (P5.4; read them with `cli`'s clip format, docs/RAW_FORMAT.md). Nothing is deleted by an export (P5.3b).
+ * The zip has no copy of `polar.db` (too big): it is read from the phone over adb when needed.
  */
 fun zipSession(context: Context, session: File, database: PolarDatabase? = null): File {
     val dir = File(context.cacheDir, "exports").apply { mkdirs() }
@@ -59,11 +60,7 @@ fun zipSession(context: Context, session: File, database: PolarDatabase? = null)
                 file.inputStream().use { it.copyTo(out) }
                 out.closeEntry()
             }
-            // Room keeps recent writes in a side file (-wal); a checkpoint moves them into polar.db before it is copied.
-            database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").close()
-            out.putNextEntry(ZipEntry("${session.name}/polar.db"))
-            context.getDatabasePath(PolarDatabase.FILE_NAME).inputStream().use { it.copyTo(out) }
-            out.closeEntry()
+            // polar.db is not exported any more (it made the zips too big); it is read from the phone over adb when needed.
         }
     }
     return zip

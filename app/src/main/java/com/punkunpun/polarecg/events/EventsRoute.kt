@@ -63,7 +63,7 @@ fun BrowseRoute(
     LaunchedEffect(deepBeatMs) {
         if (deepBeatMs != 0L) {
             val beat = withContext(Dispatchers.IO) { app.database.beatDao().beatAt(deepBeatMs) }
-            kindKey = when (beat?.cls) { "V" -> BrowseKind.V.key; "Q" -> BrowseKind.Q.key; "N" -> BrowseKind.EARLY_N.key; else -> BrowseKind.S.key }
+            kindKey = when (beat?.cls) { "V" -> if (beat.vDoubt) BrowseKind.V_DOUBT.key else BrowseKind.V.key; "Q" -> BrowseKind.Q.key; "N" -> BrowseKind.EARLY_N.key; else -> BrowseKind.S.key }
             epochDay = Instant.ofEpochMilli(deepBeatMs).atZone(ZoneId.systemDefault()).toLocalDate().toEpochDay()
             openBeatMs = deepBeatMs
             onDeepBeatHandled()
@@ -74,7 +74,11 @@ fun BrowseRoute(
         val kind = BrowseKind.fromKey(kindKey)
         val (from, to) = dayRangeUtc(LocalDate.ofEpochDay(epochDay))
         val dao = app.database.beatDao()
-        return if (kind == BrowseKind.EARLY_N) dao.earlyNormals(from, to, ClassifierConfig().sPrematurity, LIST_CAP) else dao.byClass(from, to, kind.key, LIST_CAP)
+        return when (kind) {
+            BrowseKind.EARLY_N -> dao.earlyNormals(from, to, ClassifierConfig().sPrematurity, LIST_CAP)
+            BrowseKind.V_DOUBT -> dao.questionableV(from, to, LIST_CAP)
+            else -> dao.byClass(from, to, kind.key, LIST_CAP)
+        }
     }
     // The windows of the beats around the open one, kept across Next / Previous (the screen below is rebuilt for every beat).
     val clipCache = remember { ClipCache(scope, { ms -> loadBeatClip(app, ms) }) }

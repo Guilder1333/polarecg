@@ -66,7 +66,7 @@ import kotlinx.coroutines.withContext
 
 /** Which beats the browse lists. [EARLY_N] = normal beats that came early: the ones that may really be S (P4.8). */
 enum class BrowseKind(val key: String) {
-    S("S"), EARLY_N("EARLY_N"), V("V"), Q("Q");
+    S("S"), EARLY_N("EARLY_N"), V("V"), V_DOUBT("V_DOUBT"), Q("Q");
 
     companion object {
         fun fromKey(key: String) = entries.firstOrNull { it.key == key } ?: S
@@ -125,6 +125,7 @@ fun BrowseScreen(
         beats = withContext(Dispatchers.IO) {
             when (kind) {
                 BrowseKind.EARLY_N -> beatDao.earlyNormals(from, to, ClassifierConfig().sPrematurity, LIST_CAP)
+                BrowseKind.V_DOUBT -> beatDao.questionableV(from, to, LIST_CAP)
                 else -> beatDao.byClass(from, to, kind.key, LIST_CAP)
             }
         }
@@ -157,6 +158,7 @@ fun BrowseScreen(
                 BrowseKind.S to R.string.br_kind_s,
                 BrowseKind.EARLY_N to R.string.br_kind_early,
                 BrowseKind.V to R.string.br_kind_v,
+                BrowseKind.V_DOUBT to R.string.br_kind_vq,
                 BrowseKind.Q to R.string.br_kind_q,
             )) {
                 FilterChip(selected = kind == k, onClick = { onKind(k) }, label = { Text(stringResource(label)) })

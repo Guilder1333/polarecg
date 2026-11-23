@@ -18,7 +18,7 @@ class HourBucket(
     val s: Int,
     val v: Int,
     val q: Int,
-    /** Of the [v] beats, how many are questionable. */
+    /** Questionable V beats: not counted in [v]. */
     val vDoubt: Int,
     /** Share of recorded time in this hour (0..1). */
     val coverage: Double,
@@ -100,7 +100,8 @@ fun summarizeRange(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, fromUtcMs:
 
     return RangeSummary(
         fromUtcMs, toUtcMs,
-        inRange.sumOf { it.beats }, inRange.sumOf { it.n }, inRange.sumOf { it.s }, inRange.sumOf { it.v }, inRange.sumOf { it.q },
+        // questionable V are not counted as V (they are listed apart in vDoubt, to be reviewed)
+        inRange.sumOf { it.beats }, inRange.sumOf { it.n }, inRange.sumOf { it.s }, inRange.sumOf { it.v - it.vDoubt }, inRange.sumOf { it.q },
         inRange.sumOf { it.vDoubt },
         inRange.mapNotNull { it.hrMinBpm }.minOrNull(), hrMean, inRange.mapNotNull { it.hrMaxBpm }.maxOrNull(),
         (covered / rangeMinutes).coerceAtMost(1.0),
@@ -122,7 +123,7 @@ fun bucketsOf(minutes: List<MinuteSummary>, hrv: List<HrvPoint>, stepMs: Long): 
     val stepMinutes = stepMs / MINUTE_MS.toDouble()
     return groups.map { (start, rows) ->
         HourBucket(
-            start, rows.sumOf { it.n }, rows.sumOf { it.s }, rows.sumOf { it.v }, rows.sumOf { it.q }, rows.sumOf { it.vDoubt },
+            start, rows.sumOf { it.n }, rows.sumOf { it.s }, rows.sumOf { it.v - it.vDoubt }, rows.sumOf { it.q }, rows.sumOf { it.vDoubt },
             (rows.sumOf { it.coverage } / stepMinutes).coerceAtMost(1.0),
             median(hrv.filter { it.startUtcMs >= start && it.startUtcMs < start + stepMs }.mapNotNull { it.rmssdMs }),
             weightedHrMean(rows), rows.mapNotNull { it.hrMinBpm }.minOrNull(), rows.mapNotNull { it.hrMaxBpm }.maxOrNull(),
