@@ -31,6 +31,7 @@ fun PairingScreen(
     onOpenEvents: () -> Unit,
     onOpenBrowse: () -> Unit,
     onOpenReplay: () -> Unit,
+    onOpenBike: () -> Unit,
     annotationPanel: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -54,6 +55,9 @@ fun PairingScreen(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onOpenLive) {
                 Text(stringResource(R.string.live_open))
+            }
+            OutlinedButton(onClick = onOpenBike) {
+                Text(stringResource(R.string.bike_open))
             }
             OutlinedButton(onClick = onOpenSummary) {
                 Text(stringResource(R.string.sum_open))

@@ -726,6 +726,22 @@ Details in §7.5–7.6.
   and the `action` column of `windows.csv` (`docs/ANALYSIS_FORMAT.md`); the console prints a short table. Tested with unit tests
   and on a real night with made-up marks. **Open:** HRV per action (needs P5.5); which viewers get action bands (decide after the
   first week of data); the plots in `analysis/` do not use the new files yet.)
+- [ ] **P5.13 [AI]** **Bicycle rides** (owner, 2026-11-24: rides often for exercise). Main screen button "Bicycle" -> `BikeScreen`: big Start/Stop,
+  heart rate, ECG trace, and during a ride time, distance and speed (GPS, no map). **Start** keeps the screen on (`MainActivity` sets
+  `FLAG_KEEP_SCREEN_ON` while the ride is active, on any screen), starts the recording service if it is not running, and sets the
+  action to **Bicycle**; **Stop** sets it to **Walking** and saves the ride. Both marks go to the session's `annotations.jsonl` like
+  the Action button (time = the press); if no session is recorded the ride is still saved, with `actionMarked: false`.
+  - *Separate database* `workouts.db` (`WorkoutDatabase`, table `workout`: `id`, `startUtcMs`, `endUtcMs`, `type`, `data`), apart from
+    `polar.db`. `type` = "bicycle"; `data` is **free-form JSON text** so new figures or workout types need no migration. Written now:
+    `distanceM`, `avgHr`, `maxHr`, `gps`, `actionMarked`, `updatedUtcMs`. The row is inserted at Start and updated every 15 s, so a
+    killed app leaves the ride without an end time (the list shows "interrupted"). A ride is not resumed after a kill.
+  - *Distance:* `DistanceTracker` in `:core-dsp` (`dsp/workout/WorkoutStats.kt`, tests in `WorkoutStatsTest`): fixes worse than 25 m,
+    jumps above 30 m/s and standing-still jitter are ignored; straight lines between fixes (never longer than the real path).
+  - **Known limitations:** GPS only counts while the app is on the screen (no location foreground service; the screen is kept on for
+    this reason); location permission asked at the first Start (refused = ride saved without distance); no screen to browse or edit
+    old rides yet (the bicycle screen lists the last 5); `app/schemas/.../WorkoutDatabase/1.json` appears on the first build: commit it.
+  - **Built 2026-11-24, not yet compiled or tried on the phone.** **Done when:** a real ride gives a plausible distance (compare with a
+    map app), the screen stayed on, the session shows Bicycle then Walking, and the row is in `workouts.db`.
 - [ ] **P5.9 [YOU]** 1–2 weeks of daily use; keep a short note of anything wrong or annoying.
 
 ### Phase 6 — Hardening (ongoing)

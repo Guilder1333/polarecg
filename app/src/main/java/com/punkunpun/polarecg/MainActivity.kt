@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Rational
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -13,7 +14,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -34,6 +37,7 @@ import com.punkunpun.polarecg.pairing.PairingRoute
 import com.punkunpun.polarecg.permissions.AppPermissions
 import com.punkunpun.polarecg.permissions.PermissionsScreen
 import com.punkunpun.polarecg.summary.SummaryScreen
+import com.punkunpun.polarecg.workout.BikeScreen
 import com.punkunpun.polarecg.ui.theme.PolarECGTheme
 
 class MainActivity : ComponentActivity() {
@@ -118,6 +122,13 @@ class MainActivity : ComponentActivity() {
                 var showEvents by rememberSaveable { mutableStateOf(false) }
                 var showBrowse by rememberSaveable { mutableStateOf(false) }
                 var showConnection by rememberSaveable { mutableStateOf(false) }
+                var showBike by rememberSaveable { mutableStateOf(false) }
+                // While a bicycle ride runs the phone must not turn the screen off, whichever screen is open.
+                val rideActive by (application as PolarApp).workouts.state.collectAsState()
+                DisposableEffect(rideActive.active) {
+                    if (rideActive.active) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+                }
                 // The picker for an action/event: which kind, and when the button was pressed (null kind = closed).
                 var annotateKind by rememberSaveable { mutableStateOf<String?>(null) }
                 var annotatePressedMs by rememberSaveable { mutableStateOf(0L) }
@@ -129,7 +140,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(deepLinkBeatMs) {
                     if (deepLinkBeatMs != 0L) {
                         showLive = false; showReplay = false; showSummary = false; showEvents = false
-                        showConnection = false; showDiagnostics = false; annotateKind = null
+                        showConnection = false; showDiagnostics = false; showBike = false; annotateKind = null
                         showBrowse = true
                     }
                 }
@@ -164,6 +175,12 @@ class MainActivity : ComponentActivity() {
                                     PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build(),
                                 )
                             },
+                        )
+                    } else if (showPairing && showBike) {
+                        BikeScreen(
+                            app = application as PolarApp,
+                            onBack = { showBike = false },
+                            modifier = Modifier.padding(innerPadding),
                         )
                     } else if (showPairing && showEvents) {
                         EventsRoute(
@@ -214,6 +231,7 @@ class MainActivity : ComponentActivity() {
                             onOpenEvents = { showEvents = true },
                             onOpenBrowse = { showBrowse = true },
                             onOpenReplay = { showReplay = true },
+                            onOpenBike = { showBike = true },
                             onAnnotate = onAnnotate,
                             modifier = Modifier.padding(innerPadding),
                         )

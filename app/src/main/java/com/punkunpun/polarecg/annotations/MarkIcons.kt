@@ -7,7 +7,7 @@ import java.time.Instant
 
 private val ACTION_ICONS = mapOf(
     "Sitting" to "🪑", "Standing" to "🧍", "Lying down" to "🛏️", "Walking" to "🚶",
-    "Running" to "🏃", "Workout" to "🏋️", "Eating" to "🍽️", "Sleeping" to "😴",
+    "Running" to "🏃", "Bicycle" to "🚴", "Workout" to "🏋️", "Eating" to "🍽️", "Sleeping" to "😴",
 )
 private val EVENT_ICONS = mapOf(
     "Dizzy" to "😵", "Stress" to "😰", "Palpitations" to "💓", "Chest discomfort" to "😣",

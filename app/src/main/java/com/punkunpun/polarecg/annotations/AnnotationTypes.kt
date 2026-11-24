@@ -6,7 +6,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-private val PRESET_ACTIONS = listOf("Sitting", "Standing", "Lying down", "Walking", "Running", "Workout", "Eating", "Sleeping")
+private val PRESET_ACTIONS = listOf("Sitting", "Standing", "Lying down", "Walking", "Running", "Bicycle", "Workout", "Eating", "Sleeping")
 private val PRESET_EVENTS = listOf("Dizzy", "Stress", "Palpitations", "Chest discomfort", "Coffee", "Felt tired")
 
 /**
