@@ -15,6 +15,8 @@ import com.punkunpun.polarecg.storage.BeatWriter
 import com.punkunpun.polarecg.storage.EventWriter
 import com.punkunpun.polarecg.storage.clipsDir
 import com.punkunpun.polarecg.storage.PolarDatabase
+import com.punkunpun.polarecg.storage.WorkoutDatabase
+import com.punkunpun.polarecg.workout.WorkoutTracker
 import java.io.File
 
 /**
@@ -66,6 +68,12 @@ class PolarApp : Application() {
 
     /** Derived data: beats now, events, HRV and labels later (plan §8). */
     val database by lazy { PolarDatabase.open(this) }
+
+    /** The owner's workouts (rides), a database of its own, apart from [database]. */
+    val workoutDatabase by lazy { WorkoutDatabase.open(this) }
+
+    /** The bicycle ride that may be running: screen on, GPS distance, Bicycle/Walking action marks, saved in [workoutDatabase]. */
+    val workouts by lazy { WorkoutTracker(this) }
 
     /** Saves the live beats into [database] in batches (P5.3); the service starts and finishes it with the pipeline. */
     val beatWriter by lazy { BeatWriter(database.beatDao(), database.summaryDao()) }

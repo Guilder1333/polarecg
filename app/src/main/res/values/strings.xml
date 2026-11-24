@@ -60,6 +60,22 @@
     <string name="diag_gap_line">%1$s → %2$s (%3$s) · %4$s</string>
 
     <string name="live_open">Live</string>
+    <string name="bike_open">Bicycle</string>
+    <string name="bike_title">Bicycle ride</string>
+    <string name="bike_start">Start ride</string>
+    <string name="bike_stop">Stop ride</string>
+    <string name="bike_distance">%1$.2f km</string>
+    <string name="bike_speed">%1$.1f km/h</string>
+    <string name="bike_hint_idle">Start keeps the screen on, counts the distance by GPS (no map) and sets the action to Bicycle. Stop sets it to Walking and saves the ride.</string>
+    <string name="bike_hint_active">The screen stays on while the ride runs. GPS only counts while this app is open on the screen.</string>
+    <string name="bike_no_gps">No location permission: the ride is saved without distance.</string>
+    <string name="bike_gps_wait">Waiting for GPS…</string>
+    <string name="bike_gps_acc">GPS accuracy %1$d m</string>
+    <string name="bike_recent">Recent rides</string>
+    <string name="bike_recent_none">No rides yet.</string>
+    <string name="bike_recent_row">%1$s · %2$s · %3$.2f km%4$s</string>
+    <string name="bike_recent_hr">" · %1$d bpm"</string>
+    <string name="bike_recent_interrupted">" (interrupted)"</string>
     <string name="sum_open">Summary</string>
     <string name="ev_open">Events</string>
     <string name="ev_title">Events</string>

@@ -43,7 +43,7 @@ import com.punkunpun.polarecg.polar.ConnectionState
 import com.punkunpun.polarecg.polar.ECG_RATE_HZ
 import kotlinx.coroutines.delay
 
-private const val WINDOW_SECONDS = 5
+internal const val WINDOW_SECONDS = 5
 private val FPS_OPTIONS = listOf(1, 5, 20, 60)
 private const val DEFAULT_FPS = 20
 private const val MAX_SLIDE_MS = 1_500L // stop sliding if no data arrives (disconnect)
@@ -189,7 +189,7 @@ fun LiveScreen(
  * adapting to the data. [frame] is only read so that bumping it redraws the Canvas.
  */
 @Composable
-private fun EcgTrace(ring: SampleRing, lastFrameNs: LongArray, frame: Int, modifier: Modifier = Modifier) {
+internal fun EcgTrace(ring: SampleRing, lastFrameNs: LongArray, frame: Int, modifier: Modifier = Modifier) {
     val lineColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     Canvas(modifier = modifier) {

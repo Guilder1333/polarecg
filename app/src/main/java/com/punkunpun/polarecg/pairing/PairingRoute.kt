@@ -11,7 +11,7 @@ import com.punkunpun.polarecg.annotations.AnnotationKind
  * recording panel and the annotation buttons. See [ConnectionRoute] for scanning and choosing the strap.
  */
 @Composable
-fun PairingRoute(app: PolarApp, onOpenConnection: () -> Unit, onOpenDiagnostics: () -> Unit, onOpenLive: () -> Unit, onOpenSummary: () -> Unit, onOpenEvents: () -> Unit, onOpenBrowse: () -> Unit, onOpenReplay: () -> Unit, onAnnotate: (AnnotationKind, Long) -> Unit, modifier: Modifier = Modifier) {
+fun PairingRoute(app: PolarApp, onOpenConnection: () -> Unit, onOpenDiagnostics: () -> Unit, onOpenLive: () -> Unit, onOpenSummary: () -> Unit, onOpenEvents: () -> Unit, onOpenBrowse: () -> Unit, onOpenReplay: () -> Unit, onOpenBike: () -> Unit, onAnnotate: (AnnotationKind, Long) -> Unit, modifier: Modifier = Modifier) {
     PairingScreen(
         selectedDeviceId = app.deviceStore.deviceId,
         onOpenConnection = onOpenConnection,
@@ -21,6 +21,7 @@ fun PairingRoute(app: PolarApp, onOpenConnection: () -> Unit, onOpenDiagnostics:
         onOpenEvents = onOpenEvents,
         onOpenBrowse = onOpenBrowse,
         onOpenReplay = onOpenReplay,
+        onOpenBike = onOpenBike,
         annotationPanel = {
             // recording (start/stop, state, raw switch, export) and the action/event buttons
             val deviceId = app.deviceStore.deviceId
