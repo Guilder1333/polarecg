@@ -7,7 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Keeps the beat windows (ECG + beats around one beat) of the beats near the one on the screen, so that Next and Previous show
@@ -30,9 +33,14 @@ class ClipCache<T : Any>(
     private val freshMs: Long = 30_000L,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
-    private class Entry<T : Any>(val result: Deferred<T?>, val at: Long)
+    private class Entry<T : Any>(val result: Deferred<T?>, val at: Long, val started: AtomicBoolean, val urgent: Boolean)
 
     private val lock = Any()
+    // One heavy read at a time: a load holds tens of MB (a night of raw ECG), and the prefetch of 3 neighbours plus the beat on the
+    // screen used to run 4 at once, which ran the phone out of memory.
+    // At most 2 loads at once: the beat on the screen (urgent) and one prefetch. A prefetch never makes the open beat wait.
+    private val loads = Semaphore(2)
+    private val prefetchLoads = Semaphore(1)
     private val entries = LinkedHashMap<Long, Entry<T>>() // insertion order: the oldest first
     private var prefetching: Job? = null
     private var current = Long.MIN_VALUE // the beat on the screen: its window is never dropped, even by a late prefetch of an earlier beat
@@ -40,24 +48,33 @@ class ClipCache<T : Any>(
     /** The screen asks for the window of the beat it is opening: like [clip], and the window is protected from being dropped. */
     fun open(beatUtcMs: Long): Deferred<T?> {
         synchronized(lock) { current = beatUtcMs }
-        return clip(beatUtcMs)
+        return clip(beatUtcMs, urgent = true)
     }
 
     /** The window of [beatUtcMs]: from the cache, from a load already running, or a new load. */
-    fun clip(beatUtcMs: Long): Deferred<T?> = synchronized(lock) {
+    fun clip(beatUtcMs: Long, urgent: Boolean = false): Deferred<T?> = synchronized(lock) {
         val t = now()
-        entries[beatUtcMs]?.let { if (t - it.at <= ttlMs) return it.result else entries.remove(beatUtcMs)?.result?.cancel() }
+        entries[beatUtcMs]?.let {
+            val fresh = t - it.at <= ttlMs
+            // an urgent request must not sit in the prefetch queue behind another load: start it anew
+            val stuckInQueue = urgent && !it.urgent && !it.started.get()
+            if (fresh && !stuckInQueue) return it.result else entries.remove(beatUtcMs)?.result?.cancel()
+        }
+        val started = AtomicBoolean(false)
         val deferred = scope.async(Dispatchers.IO) {
             try {
-                load(beatUtcMs)
+                if (urgent) loads.withPermit { started.set(true); load(beatUtcMs) }
+                else prefetchLoads.withPermit { loads.withPermit { started.set(true); load(beatUtcMs) } }
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                null // an unreadable file is "no ECG" for this beat; the next try (after the TTL) may read it
+            } catch (e: Throwable) {
+                // An unreadable file, or running out of memory (an Error, not an Exception), is "no ECG" for this beat; the next try
+                // (after the TTL) may read it. It must not escape: a failed async cancels the whole parent scope and the screen goes dead.
+                null
             }
         }
         // a window too close to the end of the recording is cut short now and would stay short: use it, do not keep it
-        if (t - beatUtcMs >= freshMs) entries[beatUtcMs] = Entry(deferred, t)
+        if (t - beatUtcMs >= freshMs) entries[beatUtcMs] = Entry(deferred, t, started, urgent)
         deferred
     }
 
